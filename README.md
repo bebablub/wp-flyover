@@ -11,26 +11,27 @@ This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapi
 
 - Animated flyover map (MapLibre GL) with smooth camera
 - Elevation-based route coloring – progressive route changes color based on gradient (flat vs steep sections)
-- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Wind Impact, Wind Rose, and All Data
-- Chart area selection & zoom with reset and synchronized map marker filtering (excludes polar charts)
-- Lazy-loaded chart data with caching for 60% faster initial render on large tracks
-- Video recording – record MP4/WebM videos of the flyover animation with customizable settings
 - Photos on the map (thumbnails + fullscreen on cue) with image overlay support during video recording
-- Privacy mode (hide first/last N km for playback window only)
+- Labels for maximum speed and elevation
 - HUD overlays (speed, distance, elevation, heading) – toggleable
 - Multi-weather heatmap overlays with 4 separate colored layers (snow, rain, fog, clouds) using admin-configurable colors
+- Day/Night overlay with configurable colors
 - Weather visualizations: colored heatmaps, temperature circles, and wind arrows with configurable radius
 - Wind analysis: per-point wind speed/direction, wind impact factor chart, wind rose distribution (16 sectors)
-- Custom styling: inline style.json or vector style URL; OSM raster fallback
-- Configurable defaults (height, zoom, pitch, chart colors, elevation coloring)
-- Labels for maximum speed and elevation
-- Shortcode to embed anywhere with per-shortcode feature overrides
-- REST API + AJAX fallback with caching (2h weather cache)
-- Admin tools: Add New Track page, sortable stats, live preview
-- Backend GPX simplification enabled by default with dynamic targets for large tracks
-- WP-CLI support for batch imports and automation
+- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Wind Impact, Wind Rose, and All Data
+- Chart area selection & zoom with reset and synchronized map marker filtering (excludes polar charts)
+- Video recording – record MP4/WebM videos of the flyover animation with customizable settings
+- Privacy mode (hide first/last N km for playback window only)
 - Dark mode‑friendly UI
+- Admin tools: Add New Track page, sortable stats, live preview
+- Configurable defaults (height, zoom, pitch, chart colors, elevation coloring)
+- Custom styling: inline style.json or vector style URL; OSM raster fallback
+- Backend GPX simplification enabled by default with dynamic targets for large tracks
 - Admin toggle for tile prefetching (reduce third‑party tile requests/quota usage)
+- Lazy-loaded chart data with caching for 60% faster initial render on large tracks
+- Shortcode to embed anywhere with per-shortcode feature overrides
+- WP-CLI support for batch imports and automation
+- REST API + AJAX fallback with caching (2h weather cache)
 
 ### Player UX
 
@@ -44,9 +45,16 @@ This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapi
 
 ## Demo
 
-### Screenshot
-![Flyover GPX in Action](demo/screenshot1.jpg)
-*Interactive map with elevation profile and biometric data visualization*
+### Screenshots
+
+<div align="center">
+  <img src="demo/screenshot1.jpg" alt="Main interface with map and charts" width="30%" />
+  <img src="demo/screenshot2.jpg" alt="Photos on map" width="30%" />
+  <img src="demo/screenshot3.jpg" alt="Weather & Wind analysis" width="30%" />
+  <br />
+  <img src="demo/screenshot4.jpg" alt="Elevation highligted on map" width="30%" />
+  <img src="demo/screenshot5.jpg" alt="Weather overlay" width="30%" />
+</div>
 
 ### Demo Video
 [![Watch the demo video](demo/video1.jpg)](demo/video1.mp4)
@@ -545,6 +553,10 @@ See the unified WP‑CLI section above (Import GPX Files) for the full list of o
 - Weather data is cached server‑side (≈2h) to limit API calls.
 - Chart zoom is unavailable for polar charts (wind rose) by design.
 - Video recording requires a modern browser with MediaRecorder API support.
+
+## Known Bugs
+- All Data Chart is not showing any data anymore
+- Day/Night view (in chart) is not working as expected
 
 ## License
 
