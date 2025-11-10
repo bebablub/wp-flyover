@@ -5,7 +5,7 @@ Upload GPX files and render animated flyover maps with MapLibre and an elevation
 This plugin adds a Track post type, a simple admin uploader, a REST endpoint serving parsed GPX data, and a front‑end player with play/pause controls, progress bar, and a synced elevation chart.
 
 ## Disclaimer
-This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapid prototyping process using AI coding tools. As this approach may lead to fast results it may also have a impact on code quality, security, and maintainability. Further more it was only tested on my own wordpress instance. Use at your own risk but feel free to contribute.
+This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapid prototyping process using AI coding tools. As this approach may lead to fast results it may also have a impact on code quality, security, and maintainability. Further more it was only tested on my own wordpress instance. Use at your own risk but feel free to contribute. See Known Bugs section for more details on problems that are known to exist.
 
 ## Features
 
