@@ -131,114 +131,35 @@ You can paste a complete MapLibre `style.json` into Settings → Flyover GPX →
 - If present, this inline style is used for all players and takes precedence over the `style_url` and raster default.
 - If blank, the player uses `style="vector"` + `style_url="..."` when provided; otherwise it falls back to OSM raster.
 
-Example minimal style JSON with OSM raster source:
+Example minimal style JSON with OSM raster source (only for dev, does not provide all features):
 
 ```json
 {
   "version": 8,
+  "name": "FGPX Raster Minimal",
   "sources": {
     "osm": {
       "type": "raster",
       "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      "tileSize": 256,
-      "maxzoom": 19,
+      "tileSize": 512,
+      "minzoom": 0,
+      "maxzoom": 18,
       "attribution": "© OpenStreetMap contributors"
     }
   },
   "layers": [
-    { "id": "osm", "type": "raster", "source": "osm" }
-  ]
-}
-```
-
-Example style JSON with 3D terrain rendering
-
-```json
-{
-  "version": 8,
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=YOUR_KEY",
-  "sources": {
-    "terrain": {
-      "type": "raster-dem",
-      "url": "https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=YOUR_KEY",
-      "tileSize": 512
-    },
-    "satellite": {
+    { "id": "background", "type": "background", "paint": { "background-color": "#000" } },
+    {
+      "id": "osm",
       "type": "raster",
-      "tiles": [
-        "https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=YOUR_KEY"
-      ],
-      "tileSize": 512
-    },
-    "openmaptiles": {
-      "type": "vector",
-      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=YOUR_KEY"
-    }
-  },
-  "layers": [
-    {
-      "id": "satellite",
-      "type": "raster",
-      "source": "satellite"
-    },
-    {
-      "id": "cycleways",
-      "type": "line",
-      "source": "openmaptiles",
-      "source-layer": "transportation",
-      "filter": [
-        "any",
-        ["==", ["get", "class"], "cycleway"],
-        [
-          "all",
-          ["==", ["get", "class"], "path"],
-          ["in", ["get", "bicycle"], ["literal", ["yes", "designated", "official"]]]
-        ]
-      ],
-      "paint": {
-        "line-color": "#00c853",
-        "line-width": 2
-      }
-    },
-    {
-      "id": "place-labels",
-      "type": "symbol",
-      "source": "openmaptiles",
-      "source-layer": "place",
-      "layout": {
-        "text-field": ["get", "name"],
-        "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
-        "text-size": 14,
-        "text-anchor": "center"
-      },
-      "paint": {
-        "text-color": "#ffffff",
-        "text-halo-color": "#000000",
-        "text-halo-width": 1
-      }
-    },
-    {
-      "id": "water-name-labels",
-      "type": "symbol",
-      "source": "openmaptiles",
-      "source-layer": "water_name",
-      "layout": {
-        "text-field": ["get", "name"],
-        "text-font": ["Open Sans Italic", "Arial Unicode MS Regular"],
-        "text-size": 12,
-        "symbol-placement": "line"
-      },
-      "paint": {
-        "text-color": "#4FC3F7",
-        "text-halo-color": "#000000",
-        "text-halo-width": 0.5
-      }
+      "source": "osm",
+      "paint": { "raster-fade-duration": 0 }
     }
   ]
 }
 ```
 
-Example style for 3D terrain rendering and points of interrest:
+Example style for 3D terrain rendering and points of interrest (for all features):
 
 ```json
 {
@@ -350,36 +271,8 @@ Downstripped raster style (fewest requests, no API key, no labels)
 - Single raster source (OSM), no glyphs/sprites/vector/DEM
 - 512px tiles and maxzoom 18 to reduce the number of tile requests
 - Best choice when you’re hitting MapTiler limits
-
-```json
-{
-  "version": 8,
-  "name": "FGPX Raster Minimal",
-  "sources": {
-    "osm": {
-      "type": "raster",
-      "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      "tileSize": 512,
-      "minzoom": 0,
-      "maxzoom": 18,
-      "attribution": "© OpenStreetMap contributors"
-    }
-  },
-  "layers": [
-    { "id": "background", "type": "background", "paint": { "background-color": "#000" } },
-    {
-      "id": "osm",
-      "type": "raster",
-      "source": "osm",
-      "paint": { "raster-fade-duration": 0 }
-    }
-  ]
-}
-```
-
-Optional: raster basemap + free DEM terrain (more requests; no labels)
 - Adds global DEM (Terrarium encoding) to enable 3D terrain without an API key
-- Limits DEM to maxzoom 12 and keeps 512px raster base to control request volume
+- Limits DEM to maxzoom 12 and keeps 256px raster base to control request volume
 - Note: enabling terrain increases requests versus the minimal style
 
 ```json
@@ -412,60 +305,6 @@ Optional: raster basemap + free DEM terrain (more requests; no labels)
       "type": "raster",
       "source": "osm",
       "paint": { "raster-fade-duration": 0 }
-    }
-  ],
-  "terrain": { "source": "terrain", "exaggeration": 1.0 }
-}
-```
-
-Minimal approach which keeps most of the quota based features
-```json
-{
-  "version": 8,
-  "name": "FGPX Free Mix: OSM + Cycleways + Terrain",
-  "sources": {
-    "basemap": {
-      "type": "raster",
-      "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      "tileSize": 256,
-      "minzoom": 0,
-      "maxzoom": 18,
-      "attribution": "© OpenStreetMap contributors"
-    },
-    "cycleways": {
-      "type": "raster",
-      "tiles": ["https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png"],
-      "tileSize": 256,
-      "minzoom": 0,
-      "maxzoom": 18,
-      "attribution": "Waymarked Trails – © OpenStreetMap contributors"
-    },
-    "terrain": {
-      "type": "raster-dem",
-      "tiles": ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-      "encoding": "terrarium",
-      "tileSize": 256,
-      "minzoom": 0,
-      "maxzoom": 12,
-      "attribution": "© Mapzen, AWS Terrain Tiles"
-    }
-  },
-  "layers": [
-    { "id": "bg", "type": "background", "paint": { "background-color": "#000000" } },
-    {
-      "id": "basemap",
-      "type": "raster",
-      "source": "basemap",
-      "paint": { "raster-fade-duration": 0 }
-    },
-    {
-      "id": "cycleways-overlay",
-      "type": "raster",
-      "source": "cycleways",
-      "paint": {
-        "raster-opacity": 0.85,
-        "raster-fade-duration": 0
-      }
     }
   ],
   "terrain": { "source": "terrain", "exaggeration": 1.0 }
