@@ -68,6 +68,14 @@ This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapi
     <img src="demo/screenshot5.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather overlay</p>
   </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot6.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Admin Panel: Track edit</p>
+  </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot7.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Admin Panel: Plugin settings</p>
+  </div>
 </div>
 
 ### Demo Video
