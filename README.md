@@ -357,31 +357,6 @@ Notes
 - If you need satellite, swap the `tiles` URL under `osm` with a satellite raster provider, but check usage terms/quotas.
 - For the fewest requests overall, use the “Raster Minimal” style and disable tile prefetching in the plugin settings.
 
-## Admin UI
-
-- Tracks → Add New Track: dedicated upload page for creating track posts (simpler than replace workflows)
-- Settings → Flyover GPX: configure defaults (map style/height/zoom/pitch), privacy, HUD, elevation coloring, chart colors, wind & weather, day/night, performance, and debug
-- Tracks list: sortable columns for distance, duration, elevation gain, points; quick actions for Copy Shortcode and Preview Map
-- Track edit screen: “Track Preview” metabox with live rendering of the current settings
-- Backend GPX simplification: enabled by default with intelligent targets; API returns simplified geometry; frontend renders as delivered
-- Tile prefetching: toggle to reduce external map requests; when disabled, MapLibre prefetch is turned off to minimize third-party tile usage
-
-## Front‑end Player
-
-- Controls: Play, Pause, Restart, speed selector (1×, 10×, 25×, 50×, 100×, 250×)
-- Progress bar shows current position along the route.
-- Click the progress bar to seek; camera and chart position update immediately.
-- Elevation chart syncs a vertical cursor (and dot) with route progress.
-- Uses MapLibre GL with an accessible OSM raster default and optional vector style.
-- Optional photo thumbnails on the map; hover enlarges, click opens fullscreen; on playback the photo shows fullscreen for ~3s when its timestamp is reached.
-- Optional privacy window: playback starts after the first N km and ends N km before the finish; photos/overlays follow the playback window; statistics always use full GPX.
-- When backend simplification is enabled, the API returns simplified geometry and includes `"simplified": true`.
-- Chart tabs: Elevation, Biometrics (HR/Cadence), Temperature, Power, Wind Impact, Wind Rose, All Data
-- Chart zoom: click-drag to select an area, release to zoom; reset button appears when zoomed; zoom resets when switching tabs; polar charts (wind rose) skip zoom
-- Performance: lazy data processing per tab with caching; significantly faster initial load on large tracks
-- Wind visualizations: wind impact factor (line), wind speed overlay (dual axis), wind rose (polar area)
-- Multi-weather overlays: 4 separate heatmap layers (snow/rain/fog/clouds) with priority-based filtering and admin-configurable colors; toggle buttons with default visibility configurable per shortcode
-
 ## REST API
 
 - Base: `/wp-json/fgpx/v1`
@@ -438,6 +413,27 @@ Notes
 - Configure “Privacy distance (km)” (default 3). Playback will start after the first N km and finish N km before the end.
 - The map camera, progress line, chart cursor, photo cues, and weather overlays all respect the trimmed window. Stats (distance, time, avg speed, gain) remain computed from the full GPX.
 - Shortcode/CLI can override privacy enablement and distance on a per-embed basis.
+
+## Video Recording
+
+The plugin includes built-in video recording capabilities to create MP4/WebM videos of your flyover animations:
+
+- **Record Button**: Available in the player controls during playback
+- **Format Support**: Automatically detects and uses the best supported format (MP4 H.264, WebM VP9, or WebM VP8)
+- **Image Overlay**: Photos and markers are included in the recorded video
+- **Customizable Settings**: Recording quality and frame rate can be configured
+- **Download**: Completed videos are automatically downloaded to your device
+
+To record a video:
+1. Start playback of your GPX track
+2. Click the record button in the player controls
+3. The video will capture the entire flyover animation
+4. Download begins automatically when recording completes
+
+Notes:
+
+- Recording includes map, route, HUD, chart cursor, and active overlays (photos/weather/day-night)
+- Requires a modern browser with MediaRecorder API; codec availability varies by browser/OS
 
 ## WP‑CLI
 
@@ -540,28 +536,6 @@ flyover-gpx/
     js/front.js
   composer.json
 ```
-
-## Video Recording
-
-The plugin includes built-in video recording capabilities to create MP4/WebM videos of your flyover animations:
-
-- **Record Button**: Available in the player controls during playback
-- **Format Support**: Automatically detects and uses the best supported format (MP4 H.264, WebM VP9, or WebM VP8)
-- **Image Overlay**: Photos and markers are included in the recorded video
-- **Customizable Settings**: Recording quality and frame rate can be configured
-- **Download**: Completed videos are automatically downloaded to your device
-
-To record a video:
-1. Start playback of your GPX track
-2. Click the record button in the player controls
-3. The video will capture the entire flyover animation
-4. Download begins automatically when recording completes
-
-Notes:
-
-- Recording includes map, route, HUD, chart cursor, and active overlays (photos/weather/day-night)
-- Requires a modern browser with MediaRecorder API; codec availability varies by browser/OS
-
 
 ## Limitations & Notes
 
