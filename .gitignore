@@ -1,6 +1,4 @@
 # Composer
-/vendor/
-composer.lock
 composer.phar
 composer-setup.php
 
