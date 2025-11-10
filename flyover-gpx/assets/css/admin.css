@@ -1,0 +1,148 @@
+/**
+ * Admin CSS for Flyover GPX plugin
+ */
+
+/* Loading spinner styles */
+.fgpx-upload-progress {
+    border-left: 4px solid #0073aa;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.fgpx-upload-progress p {
+    margin: 0.5em 0;
+}
+
+/* Progress message styling */
+.fgpx-upload-progress strong {
+    color: #0073aa;
+}
+
+/* Spinner adjustments */
+.button .spinner.is-active {
+    visibility: visible;
+    margin: 0 5px 0 0 !important;
+    float: none !important;
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    top: -1px; /* Fine-tune vertical alignment */
+}
+
+/* Better button alignment when spinner is active */
+.button:has(.spinner.is-active) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Fallback for browsers that don't support :has() */
+.button.fgpx-uploading {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+}
+
+.button.fgpx-uploading .spinner.is-active {
+    margin: 0 !important;
+    position: static;
+    top: auto;
+}
+
+/* Upload form improvements */
+.fgpx-upload-form {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.fgpx-upload-form h3 {
+    margin-top: 0;
+    color: #1d2327;
+}
+
+.fgpx-upload-form .file-input-wrapper {
+    margin: 15px 0;
+}
+
+.fgpx-upload-form input[type="file"] {
+    width: 100%;
+    padding: 8px;
+    border: 2px dashed #c3c4c7;
+    border-radius: 4px;
+    background: #f6f7f7;
+    transition: border-color 0.3s ease;
+}
+
+.fgpx-upload-form input[type="file"]:hover {
+    border-color: #0073aa;
+}
+
+.fgpx-upload-form .submit {
+    margin: 15px 0 0 0;
+}
+
+/* Metabox improvements - replace functionality removed */
+
+/* File validation messages */
+.file-info,
+.file-error {
+    padding: 8px 12px !important;
+    margin: 8px 0 !important;
+    border-radius: 4px;
+}
+
+.file-info {
+    background: #d1eddb;
+    border-left: 4px solid #00a32a;
+    color: #1e4620;
+}
+
+.file-error {
+    background: #f7dede;
+    border-left: 4px solid #d63638;
+    color: #761919;
+}
+
+.file-info p,
+.file-error p {
+    margin: 0 !important;
+    font-size: 13px;
+}
+
+/* Drag and drop styling improvements */
+.fgpx-upload-form input[type="file"]:focus,
+.postbox input[type="file"]:focus {
+    border-color: #0073aa;
+    box-shadow: 0 0 0 1px #0073aa;
+    outline: none;
+}
+
+/* Loading states */
+.fgpx-upload-progress {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Button improvements */
+.button-primary {
+    transition: all 0.2s ease;
+}
+
+/* Responsive improvements */
+@media (max-width: 782px) {
+    .fgpx-upload-form {
+        padding: 15px;
+    }
+    
+    .fgpx-upload-form input[type="file"],
+    .postbox input[type="file"] {
+        font-size: 14px;
+        padding: 10px;
+    }
+}

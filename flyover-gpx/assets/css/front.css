@@ -1,0 +1,237 @@
+.fgpx {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 30px;
+}
+.fgpx .fgpx-map {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 280px;
+  border-radius: 0px;
+  overflow: hidden;
+}
+
+.fgpx .fgpx-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.fgpx .fgpx-controls-left {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.fgpx .fgpx-controls-right {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.fgpx .fgpx-btn {
+  appearance: none;
+  border: 1px solid var(--fgpx-border, #ccc);
+  background: var(--fgpx-btn-bg, #f7f7f7);
+  color: inherit;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.fgpx .fgpx-btn:hover {
+  filter: brightness(0.98);
+}
+.fgpx .fgpx-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.fgpx .fgpx-btn-primary {
+  background: #25ceff;
+  color: #fff;
+  border-color: #25ceff;
+}
+.fgpx .fgpx-btn-record {
+  background: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+.fgpx .fgpx-btn-record:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #c82333;
+}
+.fgpx .fgpx-select {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--fgpx-border, #ccc);
+  background: var(--fgpx-field-bg, #fff);
+  color: inherit;
+  min-width: 0;
+  max-width: 100%;
+  width: auto;
+}
+
+.fgpx .fgpx-progress {
+  position: relative;
+  height: 8px;
+  background: var(--fgpx-progress-bg, #eee);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.fgpx .fgpx-progress-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #ff5500, #ff7a3d);
+  border-radius: 6px;
+}
+
+.fgpx .fgpx-stats-chart {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.fgpx .fgpx-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.fgpx .fgpx-stat {
+  padding: 10px;
+  border: 1px solid var(--fgpx-border, #ddd);
+  border-radius: 0px;
+  background: var(--fgpx-card-bg, #fafafa);
+  text-align: center;
+}
+.fgpx .fgpx-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border: 1px solid var(--fgpx-border, #ddd);
+  border-radius: 0px;
+  background: var(--fgpx-card-bg, #fff);
+  overflow: hidden;
+  padding-top: 10px;
+}
+
+.fgpx .fgpx-spinner {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(1px);
+}
+@media (prefers-color-scheme: dark) {
+  .fgpx .fgpx-spinner {
+    background: rgba(0, 0, 0, 0.35);
+  }
+}
+.fgpx .fgpx-spinner-inner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #25ceff;
+  animation: fgpx-spin 0.9s linear infinite;
+}
+@keyframes fgpx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fgpx .fgpx-error {
+  display: none;
+  padding: 10px;
+  border-radius: 4px;
+  background: #fde8e8;
+  color: #7a0000;
+  border: 1px solid #f5bcbc;
+  z-index: 6;
+}
+@media (prefers-color-scheme: dark) {
+  .fgpx .fgpx-error {
+    background: #3a0d0d;
+    color: #ffdddd;
+    border-color: #5a1d1d;
+  }
+}
+
+/* Optional subtle skeleton while lazy loading */
+.fgpx:not([data-fgpx-ready="1"]) {
+  background: #ffffff linear-gradient(90deg,#ffffff 0%,#f2f2f4 50%,#ffffff 100%);
+  background-size: 800px 100%;
+  animation: fgpxShimmer 2.6s linear infinite;
+}
+
+@keyframes fgpxShimmer {
+  0% { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .fgpx:not([data-fgpx-ready="1"]) {
+    background: #1c1c1c linear-gradient(90deg,#1c1c1c 0%,#222 50%,#1c1c1c 100%);
+  }
+}
+
+/* Dark mode theming */
+@media (prefers-color-scheme: dark) {
+  .fgpx .fgpx-btn {
+    background: #333;
+    border-color: #333;
+    color: #eee;
+  }
+  .fgpx .fgpx-btn-primary {
+    background: #25ceff;
+    border-color: #25ceff;
+  }
+  .fgpx .fgpx-select {
+    /*background: #111;*/
+    border-color: #333;
+    color: #333;
+  }
+  .fgpx .fgpx-progress {
+    background: #333;
+  }
+  .fgpx .fgpx-stat {
+    /*background: #121212;*/
+    border-color: #333;
+  }
+  .fgpx .fgpx-chart-wrap {
+    /*background: #0b0b0b;*/
+    border-color: #333;
+  }
+}
+
+/* Responsive */
+@media (max-width: 680px) {
+  .fgpx .fgpx-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fgpx .fgpx-controls-right { flex-wrap: wrap; }
+  .fgpx .fgpx-select { max-width: 110px; }
+  .fgpx .fgpx-speed-label { display: none; }
+  /* Hide weather overlay buttons on mobile devices for cleaner UI */
+  .fgpx .fgpx-btn-weather,
+  .fgpx .fgpx-btn-temperature,
+  .fgpx .fgpx-btn-wind {
+    display: none !important;
+  }
+  /* Hide chart tabs on mobile devices - show only elevation + speed by default */
+  .fgpx .fgpx-chart-tabs {
+    display: none !important;
+  }
+}
+
+.maplibregl-ctrl-attrib {
+  display: none;
+}
