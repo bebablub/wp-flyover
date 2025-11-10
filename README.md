@@ -562,9 +562,6 @@ Notes:
 - Recording includes map, route, HUD, chart cursor, and active overlays (photos/weather/day-night)
 - Requires a modern browser with MediaRecorder API; codec availability varies by browser/OS
 
-## WP-CLI Support
-
-See the unified WP‑CLI section above (Import GPX Files) for the full list of options and examples.
 
 ## Limitations & Notes
 
