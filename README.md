@@ -42,6 +42,16 @@ This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapi
 - Auto zoom‑out to full bounds at the end; default zoom restored on restart
 - Initial stopped view fits the full track; on Play, the map smoothly zooms in
 
+## Demo
+
+### Screenshot
+![Flyover GPX in Action](demo/screenshot1.jpg)
+*Interactive map with elevation profile and biometric data visualization*
+
+### Demo Video
+[![Watch the demo video](demo/video1.jpg)](demo/video1.mp4)
+*Click the image above to watch the demo video (recorded with plugin internal functionality)*
+
 ## Requirements
 
 - WordPress 6.0+
