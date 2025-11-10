@@ -47,13 +47,27 @@ This plugin was developed as some kind of MVP (Minimum Viable Product) in a rapi
 
 ### Screenshots
 
-<div align="center">
-  <img src="demo/screenshot1.jpg" alt="Main interface with map and charts" width="30%" />
-  <img src="demo/screenshot2.jpg" alt="Photos on map" width="30%" />
-  <img src="demo/screenshot3.jpg" alt="Weather & Wind analysis" width="30%" />
-  <br />
-  <img src="demo/screenshot4.jpg" alt="Elevation highligted on map" width="30%" />
-  <img src="demo/screenshot5.jpg" alt="Weather overlay" width="30%" />
+<div align="center" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin: 20px 0;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot1.jpg" alt="Main interface with map and charts" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Main interface with map and charts</p>
+  </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot2.jpg" alt="Photos on map" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Photos on map</p>
+  </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot3.jpg" alt="Weather & Wind analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather & Wind analysis</p>
+  </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot4.jpg" alt="Elevation highlighted on map" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Elevation highlighted on map</p>
+  </div>
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot5.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather overlay</p>
+  </div>
 </div>
 
 ### Demo Video
