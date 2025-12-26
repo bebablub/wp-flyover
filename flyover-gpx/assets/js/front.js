@@ -4979,13 +4979,14 @@
         ui.chartLegend.appendChild(title);
         
         // Define available data series with their colors and labels
+        // Add null checks for arrays that may not be initialized yet
         var dataSeries = [
           { key: 'elevation', label: 'Elevation', color: chartLineColor, available: true },
-          { key: 'speed', label: 'Speed', color: chartLineColor2, available: useTime && speedPoints.length > 0 },
-          { key: 'heartRate', label: 'Heart Rate', color: chartLineColor3, available: heartRatePoints.length > 0 },
-          { key: 'cadence', label: 'Cadence', color: chartLineColor4, available: cadencePoints.length > 0 },
-          { key: 'temperature', label: 'Temperature', color: chartLineColor5, available: temperaturePoints.length > 0 },
-          { key: 'power', label: 'Power', color: chartLineColor6, available: powerPoints.length > 0 }
+          { key: 'speed', label: 'Speed', color: chartLineColor2, available: useTime && speedPoints && speedPoints.length > 0 },
+          { key: 'heartRate', label: 'Heart Rate', color: chartLineColor3, available: heartRatePoints && heartRatePoints.length > 0 },
+          { key: 'cadence', label: 'Cadence', color: chartLineColor4, available: cadencePoints && cadencePoints.length > 0 },
+          { key: 'temperature', label: 'Temperature', color: chartLineColor5, available: temperaturePoints && temperaturePoints.length > 0 },
+          { key: 'power', label: 'Power', color: chartLineColor6, available: powerPoints && powerPoints.length > 0 }
         ];
         
         // Create checkbox controls for available data series
@@ -5137,6 +5138,15 @@
         // Calculate for start date and end date (if different days)
         var processedDates = [];
         
+        // Check if track starts during night using sun position
+        var sunPosition = window.SunCalc.getPosition(startDate, avgLat, avgLon);
+        var startsAtNight = sunPosition.altitude < 0; // Sun below horizon = night
+        
+        DBG.log('Track start sun position', {
+          altitude: sunPosition.altitude,
+          startsAtNight: startsAtNight
+        });
+        
         // Always process the start date
         var times = window.SunCalc.getTimes(currentDate, avgLat, avgLon);
         processedDates.push(new Date(currentDate));
@@ -5248,7 +5258,16 @@
         }
         
         var sortedPeriods = periods.sort(function(a, b) { return a.timeOffset - b.timeOffset; });
-        DBG.log('Final periods', { count: sortedPeriods.length, periods: sortedPeriods });
+        
+        // If track starts at night but no events found, add a special marker
+        // This handles tracks entirely during night with no sunrise/sunset within range
+        if (startsAtNight && sortedPeriods.length === 0) {
+          // Add a 'nightStart' marker at offset 0 to indicate track starts during night
+          sortedPeriods.push({ type: 'nightStart', timeOffset: 0 });
+          DBG.log('Added nightStart marker for track entirely during night');
+        }
+        
+        DBG.log('Final periods', { count: sortedPeriods.length, periods: sortedPeriods, startsAtNight: startsAtNight });
         return sortedPeriods;
       }
 
@@ -6212,13 +6231,22 @@
         
         // Add day/night visualization plugin if periods are available
         var chartPlugins = [];
-        DBG.log('Chart plugin setup', {
+        // Check daynightEnabled - wp_localize_script may convert boolean to string "1" or ""
+        var isDaynightEnabled = window.FGPX && (FGPX.daynightEnabled === true || FGPX.daynightEnabled === '1' || FGPX.daynightEnabled === 1);
+        
+        DBG.log('Chart plugin setup - ALL CONDITIONS', {
           hasDayNightPeriods: !!(dayNightPeriods && dayNightPeriods.length > 0),
+          dayNightPeriodsExists: !!dayNightPeriods,
+          dayNightPeriodsLength: dayNightPeriods ? dayNightPeriods.length : 0,
           useTime: useTime,
-          periodsCount: dayNightPeriods ? dayNightPeriods.length : 0
+          windowFGPX: !!window.FGPX,
+          daynightEnabledRaw: window.FGPX ? FGPX.daynightEnabled : 'FGPX not defined',
+          daynightEnabledType: window.FGPX ? typeof FGPX.daynightEnabled : 'N/A',
+          isDaynightEnabled: isDaynightEnabled,
+          allConditionsMet: !!(dayNightPeriods && dayNightPeriods.length > 0 && useTime && isDaynightEnabled)
         });
         
-        if (dayNightPeriods && dayNightPeriods.length > 0 && useTime && window.FGPX && FGPX.daynightEnabled) {
+        if (dayNightPeriods && dayNightPeriods.length > 0 && useTime && isDaynightEnabled) {
           DBG.log('Adding day/night chart plugin', { periods: dayNightPeriods });
           chartPlugins.push({
             id: 'dayNightBackground',
@@ -6239,9 +6267,19 @@
               var nightPeriods = [];
               var lastSunset = null;
               
-              // Get track duration for partial night periods
+              // Get track start and duration for partial night periods
+              var trackStart = xScale.min || 0;
               var trackDuration = xScale.max || 0;
               
+              // Check if track starts during night (first event is sunrise or nightStart marker)
+              if (dayNightPeriods.length > 0 && (dayNightPeriods[0].type === 'sunrise' || dayNightPeriods[0].type === 'nightStart')) {
+                // For nightStart marker (entire track during night), cover the whole track
+                if (dayNightPeriods[0].type === 'nightStart') {
+                  nightPeriods.push({ start: trackStart, end: trackDuration });
+                } else {
+                  nightPeriods.push({ start: trackStart, end: dayNightPeriods[0].timeOffset });
+                }
+              }
               
               for (var i = 0; i < dayNightPeriods.length; i++) {
                 var period = dayNightPeriods[i];
@@ -6704,11 +6742,23 @@
                     }
                     
                     // Add night indicator if day/night visualization is enabled and we're in a night period
-                    if (useTime && dayNightPeriods && dayNightPeriods.length > 0 && window.FGPX && FGPX.daynightEnabled) {
+                    var isDaynightEnabledTooltip = window.FGPX && (FGPX.daynightEnabled === true || FGPX.daynightEnabled === '1' || FGPX.daynightEnabled === 1);
+                    if (useTime && dayNightPeriods && dayNightPeriods.length > 0 && isDaynightEnabledTooltip) {
                       // Calculate night periods from dayNightPeriods
                       var nightPeriods = [];
                       var lastSunset = null;
+                      var trackStart = timeOffsets[0] || 0;
                       var trackDuration = timeOffsets[timeOffsets.length - 1] || 0;
+                      
+                      // Check if track starts during night (first event is sunrise or nightStart marker)
+                      if (dayNightPeriods.length > 0 && (dayNightPeriods[0].type === 'sunrise' || dayNightPeriods[0].type === 'nightStart')) {
+                        // For nightStart marker (entire track during night), cover the whole track
+                        if (dayNightPeriods[0].type === 'nightStart') {
+                          nightPeriods.push({ start: trackStart, end: trackDuration });
+                        } else {
+                          nightPeriods.push({ start: trackStart, end: dayNightPeriods[0].timeOffset });
+                        }
+                      }
                       
                       for (var i = 0; i < dayNightPeriods.length; i++) {
                         var period = dayNightPeriods[i];

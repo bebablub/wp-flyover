@@ -548,8 +548,6 @@ flyover-gpx/
 - Video recording requires a modern browser with MediaRecorder API support.
 
 ## Known Bugs
-- All Data Chart is not showing any data anymore
-- Day/Night view (in chart) is not working as expected
 
 ## License
 

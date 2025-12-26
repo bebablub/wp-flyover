@@ -371,6 +371,7 @@ final class Plugin
             // Get asset URLs from AssetManager for lazy loading
             $maplibreJs = AssetManager::getAssetUrl('maplibre-gl-js', 'script');
             $chartJs = AssetManager::getAssetUrl('chartjs', 'script');
+            $suncalcJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js');
             $frontJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js');
             $maplibreCss = AssetManager::getAssetUrl('maplibre-gl-css', 'style');
             $frontCss = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/css/front.css');
@@ -382,6 +383,7 @@ final class Plugin
                 '];window.FGPX.lazyScripts=[' .
                   '"' . esc_js($maplibreJs) . '",' .
                   '"' . esc_js($chartJs) . '",' .
+                  '"' . esc_js($suncalcJs) . '",' .
                   '"' . esc_js($frontJs) . '"' .
                 '];',
                 'after'
