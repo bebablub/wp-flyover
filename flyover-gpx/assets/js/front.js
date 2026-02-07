@@ -94,9 +94,11 @@
    */
   function filenamesMatch(thumbName, fullName) {
     try {
-      // Extract base filenames before extension
-      var thumbBase = thumbName.split('.')[0];
-      var fullBase = fullName.split('.')[0];
+      // Extract base filenames before extension (handle multi-dot filenames like photo.2024.jpg)
+      var thumbDot = thumbName.lastIndexOf('.');
+      var thumbBase = thumbDot > 0 ? thumbName.substring(0, thumbDot) : thumbName;
+      var fullDot = fullName.lastIndexOf('.');
+      var fullBase = fullDot > 0 ? fullName.substring(0, fullDot) : fullName;
       
       // If they're exactly the same, they match
       if (thumbBase === fullBase) {
@@ -2619,7 +2621,7 @@
               var parts = key.split('/'); var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
               for (var i = 0; i < tpls.length; i++) {
                 var url = tileUrlFromTemplate(tpls[i], zt, xt, yt);
-                var p = fetch(url, { mode: 'no-cors', cache: 'force-cache' }).catch(function(){ /* ignore */ });
+                var p = fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){ /* ignore */ });
                 reqs.push(p);
               }
             } catch(_) {}
@@ -4272,7 +4274,7 @@
               var parts = key.split('/'); var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
               for (var i = 0; i < tpls.length; i++) {
                 var url = tileUrlFromTemplate(tpls[i], zt, xt, yt);
-                var p = fetch(url, { mode: 'no-cors', cache: 'force-cache' }).catch(function(){});
+                var p = fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){});
                 reqs.push(p);
               }
             } catch(_) {}
