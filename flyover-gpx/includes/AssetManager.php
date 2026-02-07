@@ -192,6 +192,15 @@ final class AssetManager
 			return true;
 		}
 
+		// Check persistent cache to avoid blocking HTTP requests on every page load
+		$transientKey = 'fgpx_asset_' . \md5($url);
+		$cached = \get_transient($transientKey);
+		if ($cached !== false) {
+			$isAvailable = $cached === '1';
+			self::$availabilityCache[$url] = $isAvailable;
+			return $isAvailable;
+		}
+
 		// Use WordPress HTTP API with short timeout
 		$response = \wp_remote_head($url, [
 			'timeout' => 3,
@@ -200,10 +209,13 @@ final class AssetManager
 		]);
 
 		$isAvailable = !\is_wp_error($response) && \wp_remote_retrieve_response_code($response) === 200;
-		
+
+		// Cache in transient: 1 hour if available, 5 minutes if not (retry sooner on failure)
+		\set_transient($transientKey, $isAvailable ? '1' : '0', $isAvailable ? 3600 : 300);
+
 		// Cache the result for this request
 		self::$availabilityCache[$url] = $isAvailable;
-		
+
 		return $isAvailable;
 	}
 
