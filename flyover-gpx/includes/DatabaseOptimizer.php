@@ -274,10 +274,19 @@ final class DatabaseOptimizer
 			return;
 		}
 
-		// Use ON DUPLICATE KEY UPDATE for efficient upsert
-		$sql = "INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value) VALUES " 
-			 . \implode(', ', $placeholders) 
-			 . " ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value)";
+		// Delete existing rows for these keys first, then insert fresh values.
+		// WordPress postmeta has no unique constraint on (post_id, meta_key),
+		// so ON DUPLICATE KEY UPDATE would silently insert duplicates.
+		$metaKeys = \array_keys($metaData);
+		$keyPlaceholders = \implode(', ', \array_fill(0, \count($metaKeys), '%s'));
+		$deleteParams = \array_merge([$postId], $metaKeys);
+		$wpdb->query($wpdb->prepare(
+			"DELETE FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN ($keyPlaceholders)",
+			$deleteParams
+		));
+
+		$sql = "INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value) VALUES "
+			 . \implode(', ', $placeholders);
 
 		$wpdb->query($wpdb->prepare($sql, $values));
 
