@@ -4590,7 +4590,8 @@
         }); 
       });
       // ESC to close
-      window.addEventListener('keydown', function(e){ 
+      window.addEventListener('keydown', function(e){
+        if (!document.contains(el)) return;
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
             overlayActive = false; 
@@ -8146,14 +8147,17 @@
           }, 300);
         }
         
-        // Add CSS for modal show state
-        var style = document.createElement('style');
-        style.textContent = 
-          '.fgpx-modal-show { opacity: 1 !important; }' +
-          '.fgpx-modal-show > div { transform: scale(1) !important; }' +
-          '.fgpx-preset-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }' +
-          '.fgpx-btn:hover { opacity: 0.9; transform: translateY(-1px); }';
-        document.head.appendChild(style);
+        // Add CSS for modal show state (only once)
+        if (!document.getElementById('fgpx-modal-style')) {
+          var style = document.createElement('style');
+          style.id = 'fgpx-modal-style';
+          style.textContent =
+            '.fgpx-modal-show { opacity: 1 !important; }' +
+            '.fgpx-modal-show > div { transform: scale(1) !important; }' +
+            '.fgpx-preset-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }' +
+            '.fgpx-btn:hover { opacity: 0.9; transform: translateY(-1px); }';
+          document.head.appendChild(style);
+        }
         
         return modal;
       }
@@ -8493,6 +8497,7 @@
       }
 
       window.addEventListener('keydown', function (e) {
+        if (!document.contains(el)) return;
         if (e.code === 'Space') {
           e.preventDefault();
           if (playing) { 
