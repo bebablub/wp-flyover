@@ -24,7 +24,8 @@
             }
             
             // Show file info
-            const fileInfo = $('<div class="file-info notice notice-success inline" style="margin: 5px 0;"><p><strong>Selected:</strong> ' + fileName + ' (' + (fileSize / 1024 / 1024).toFixed(1) + 'MB)</p></div>');
+            const fileInfo = $('<div class="file-info notice notice-success inline" style="margin: 5px 0;"><p></p></div>');
+            fileInfo.find('p').append($('<strong>').text('Selected: ')).append(document.createTextNode(fileName + ' (' + (fileSize / 1024 / 1024).toFixed(1) + 'MB)'));
             $input.after(fileInfo);
             
             return true;
@@ -90,7 +91,7 @@
             }
             
             // Disable the link and show loading state
-            $link.prop('disabled', true);
+            $link.css('pointer-events', 'none').attr('aria-disabled', 'true');
             const originalText = $link.text();
             $link.text('Enriching...');
             
@@ -159,7 +160,7 @@
                 complete: function() {
                     // Re-enable the link after a delay
                     setTimeout(function() {
-                        $link.prop('disabled', false);
+                        $link.css('pointer-events', '').removeAttr('aria-disabled');
                         if ($link.text() === 'Enriching...') {
                             $link.text(originalText);
                         }
@@ -176,7 +177,8 @@
         type = type || 'info';
         const noticeClass = 'notice notice-' + type + ' is-dismissible';
         
-        const $notice = $('<div class="' + noticeClass + '"><p>' + message + '</p></div>');
+        const $notice = $('<div class="' + noticeClass + '"><p></p></div>');
+        $notice.find('p').text(message);
         
         // Insert after .wrap h1 or at the top of .wrap
         const $wrap = $('.wrap');
