@@ -4405,8 +4405,11 @@
         return new Promise(function(resolve) {
           try {
             overlay.style.opacity = '0';
-            var done = function(ev){ 
-              if (ev && ev.propertyName && ev.propertyName !== 'opacity') return; 
+            var doneFired = false;
+            var done = function(ev){
+              if (ev && ev.propertyName && ev.propertyName !== 'opacity') return;
+              if (doneFired) return;
+              doneFired = true; 
               overlay.style.display = 'none'; 
               overlayImg.src = ''; 
               overlayCaption.textContent = ''; 
@@ -6245,6 +6248,10 @@
           DBG.log('Adding day/night chart plugin', { periods: dayNightPeriods });
           chartPlugins.push({
             id: 'dayNightBackground',
+            beforeDestroy: function() {
+              var tt = document.getElementById('daynight-tooltip');
+              if (tt) { tt.remove(); }
+            },
             afterDatasetsDraw: function(chart) { // Draw after datasets but before position marker
               var ctx = chart.ctx;
               var chartArea = chart.chartArea;
@@ -7169,9 +7176,6 @@
                 if (window.__fgpxLastDayNightState !== nightOpacity) {
                   DBG.log('Day/night state changed:', window.__fgpxLastDayNightState, '->', nightOpacity, 'at offset:', currentTimeOffset);
                   
-                  // Apply easing function for smoother transitions
-                  var easedOpacity = nightOpacity * nightOpacity * (3 - 2 * nightOpacity); // smoothstep
-                  
                   // Ensure layer exists before updating
                   var overlayLayer = map.getLayer('fgpx-daynight-overlay');
                   if (!overlayLayer) {
@@ -7181,7 +7185,7 @@
                       var bounds = map.getBounds();
                       var overlayPolygon = {
                         type: 'Feature',
-                        properties: { nightOpacity: easedOpacity },
+                        properties: { nightOpacity: nightOpacity },
                         geometry: {
                           type: 'Polygon',
                           coordinates: [[
@@ -7243,7 +7247,7 @@
                   var bounds = map.getBounds();
                   var overlayPolygon = {
                     type: 'Feature',
-                    properties: { nightOpacity: easedOpacity },
+                    properties: { nightOpacity: nightOpacity },
                     geometry: {
                       type: 'Polygon',
                       coordinates: [[
@@ -7268,7 +7272,7 @@
                         ['linear'],
                         ['to-number', ['get', 'nightOpacity']],
                         0, 0,
-                        1, targetOpacity * easedOpacity
+                        1, targetOpacity * nightOpacity
                       ]);
                     }
                   } catch (paintError) {

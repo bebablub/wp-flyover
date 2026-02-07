@@ -6,8 +6,6 @@
     console.debug('[FGPX] Lazy loader script started');
   }
   
-  function once(fn){ var done=false; return function(){ if(!done){ done=true; try{ fn(); }catch(e){ if(window.FGPX && window.FGPX.debugLogging) console.warn('[FGPX]', e);} } }; }
-
   function loadStyles(urls){
     return Promise.all((urls||[]).map(function(u){
       return new Promise(function(res){
