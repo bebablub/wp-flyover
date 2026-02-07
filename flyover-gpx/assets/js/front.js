@@ -1005,17 +1005,10 @@
       map.on('rotateend', function(){ clearUserInteractingSoon(); });
     } catch(_) {}
 
-    // Vector URL style: try once; no global error-based fallback to avoid mid-run style resets
+    // Vector URL style: constructor already applied styleUrl via initialStyle;
+    // check once for buildings layer to adjust pitch
     if (!inlineStyle && style === 'vector' && styleUrl) {
-      // URL vector style path
-      try {
-        map.setStyle(styleUrl);
-      } catch (err) {
-        DBG.warn('Failed to set vector style; falling back to OSM raster', err);
-        map.setStyle(buildOSMRasterStyle());
-      }
-      // Enhance vector: optionally bump pitch if buildings layer exists
-      map.on('styledata', function () {
+      map.once('styledata', function () {
         try {
           var hasBuildings = false;
           var st = map.getStyle();
