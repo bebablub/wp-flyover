@@ -291,7 +291,9 @@ final class Rest
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
         $hostPostForCache = (int) $request->get_param('host_post');
-        $cache_key = 'fgpx_json_v2_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_wind_' . $windAnalysisEnabled;
+        $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
+        $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
+        $cache_key = 'fgpx_json_v2_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
 
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -384,7 +386,7 @@ final class Rest
 
         // Performance monitoring: track response size for optimization effectiveness
         $responseSize = \strlen(\json_encode($decodedGeo));
-        if ($originalPoints > 1000) {
+        if (isset($originalPoints) && $originalPoints > 1000) {
             ErrorHandler::debug('REST response size monitoring', [
                 'track_id' => $id,
                 'original_points' => isset($originalPoints) ? $originalPoints : 'unknown',
@@ -802,13 +804,19 @@ final class Rest
                 } else { continue; }
                 $rel = preg_replace('/-\d+x\d+(?=\.[a-zA-Z]{3,4}$)/', '', $rel);
                 $candidate = rtrim($basedir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel);
-                if (!is_readable($candidate)) { continue; }
-                $meta = \wp_read_image_metadata($candidate);
+                // Security hardening: normalize path and ensure it's inside uploads basedir; reject traversal
+                $realBase = realpath($basedir);
+                $realCand = $candidate !== '' ? realpath($candidate) : false;
+                if ($realBase === false || $realCand === false) { continue; }
+                if (strpos($realCand, $realBase) !== 0) { continue; }
+                if (strpos($rel, '..') !== false) { continue; }
+                if (!is_readable($realCand)) { continue; }
+                $meta = \wp_read_image_metadata($realCand);
                 $lat = isset($meta['latitude']) ? (float) $meta['latitude'] : null;
                 $lon = isset($meta['longitude']) ? (float) $meta['longitude'] : null;
                 $createdTs = isset($meta['created_timestamp']) ? (int) $meta['created_timestamp'] : null;
                 if (($lat === null || $lon === null) && function_exists('exif_read_data')) {
-                    $ex = @exif_read_data($candidate, 'EXIF', true, false);
+                    $ex = @exif_read_data($realCand, 'EXIF', true, false);
                     if (is_array($ex) && isset($ex['GPS'])) {
                         $gps = $ex['GPS'];
                         $lat = isset($gps['GPSLatitude'], $gps['GPSLatitudeRef']) ? self::exif_gps_to_float($gps['GPSLatitude'], $gps['GPSLatitudeRef']) : $lat;
