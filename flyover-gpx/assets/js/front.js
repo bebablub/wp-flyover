@@ -5533,11 +5533,11 @@
               }
               return 0;
             } else if (tabType === 'temperature') {
-              if (temperaturePoints.length > 0 && index < temperaturePoints.length) {
+              if (temperaturePoints && temperaturePoints.length > 0 && index < temperaturePoints.length) {
                 return temperaturePoints[index] ? temperaturePoints[index].y : 0;
               }
             } else if (tabType === 'power') {
-              if (powerPoints.length > 0 && index < powerPoints.length) {
+              if (powerPoints && powerPoints.length > 0 && index < powerPoints.length) {
                 return powerPoints[index] ? powerPoints[index].y : 0;
               }
             } else if (tabType === 'windimpact') {
@@ -5554,15 +5554,15 @@
               // For All Data tab, use first visible dataset
               if (chartDataVisibility.elevation) {
                 return (typeof coords[index][2] === 'number') ? coords[index][2] : 0;
-              } else if (chartDataVisibility.speed && useTime && speedPoints.length > 0 && index < speedPoints.length) {
+              } else if (chartDataVisibility.speed && useTime && speedPoints && speedPoints.length > 0 && index < speedPoints.length) {
                 return speedPoints[index] ? speedPoints[index].y : 0;
-              } else if (chartDataVisibility.heartRate && heartRatePoints.length > 0 && index < heartRatePoints.length) {
+              } else if (chartDataVisibility.heartRate && heartRatePoints && heartRatePoints.length > 0 && index < heartRatePoints.length) {
                 return heartRatePoints[index] ? heartRatePoints[index].y : 0;
-              } else if (chartDataVisibility.cadence && cadencePoints.length > 0 && index < cadencePoints.length) {
+              } else if (chartDataVisibility.cadence && cadencePoints && cadencePoints.length > 0 && index < cadencePoints.length) {
                 return cadencePoints[index] ? cadencePoints[index].y : 0;
-              } else if (chartDataVisibility.temperature && temperaturePoints.length > 0 && index < temperaturePoints.length) {
+              } else if (chartDataVisibility.temperature && temperaturePoints && temperaturePoints.length > 0 && index < temperaturePoints.length) {
                 return temperaturePoints[index] ? temperaturePoints[index].y : 0;
-              } else if (chartDataVisibility.power && powerPoints.length > 0 && index < powerPoints.length) {
+              } else if (chartDataVisibility.power && powerPoints && powerPoints.length > 0 && index < powerPoints.length) {
                 return powerPoints[index] ? powerPoints[index].y : 0;
               }
             }
@@ -6094,16 +6094,11 @@
           
           // Configure scales - always include all scales but hide unused ones
           scales.y = { title: { display: chartDataVisibility.elevation, text: 'Elevation (m)' }, ticks: { precision: 0 }, display: chartDataVisibility.elevation };
-          scales.y2 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.speed, text: 'Speed (km/h)' }, ticks: { precision: 0 }, display: chartDataVisibility.speed && speedPoints && speedPoints.length > 0 };
+          scales.y2 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.speed, text: 'Speed (km/h)' }, ticks: { precision: 0 }, display: chartDataVisibility.speed && useTime && speedPoints && speedPoints.length > 0 };
           scales.y3 = { position: 'left', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.heartRate, text: 'HR (bpm)' }, ticks: { precision: 0 }, display: chartDataVisibility.heartRate && heartRatePoints && heartRatePoints.length > 0 };
           scales.y4 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.cadence, text: 'Cadence (rpm)' }, ticks: { precision: 0 }, display: chartDataVisibility.cadence && cadencePoints && cadencePoints.length > 0 };
           scales.y5 = { position: 'left', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.temperature, text: 'Temp (°C)' }, ticks: { precision: 1 }, display: chartDataVisibility.temperature && temperaturePoints && temperaturePoints.length > 0 };
           scales.y6 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.power, text: 'Power (W)' }, ticks: { precision: 0 }, display: chartDataVisibility.power && powerPoints && powerPoints.length > 0 };
-          scales.y2 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.speed, text: 'Speed (km/h)' }, ticks: { precision: 0 }, display: chartDataVisibility.speed && useTime && speedPoints.length > 0 };
-          scales.y3 = { position: 'left', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.heartRate, text: 'HR (bpm)' }, ticks: { precision: 0 }, display: chartDataVisibility.heartRate && heartRatePoints.length > 0 };
-          scales.y4 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.cadence, text: 'Cadence (rpm)' }, ticks: { precision: 0 }, display: chartDataVisibility.cadence && cadencePoints.length > 0 };
-          scales.y5 = { position: 'left', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.temperature, text: 'Temp (°C)' }, ticks: { precision: 1 }, display: chartDataVisibility.temperature && temperaturePoints.length > 0 };
-          scales.y6 = { position: 'right', grid: { drawOnChartArea: false }, title: { display: chartDataVisibility.power, text: 'Power (W)' }, ticks: { precision: 0 }, display: chartDataVisibility.power && powerPoints.length > 0 };
         } else {
           // Unknown tab type - fallback to elevation with area chart
           // Calculate gradients for elevation coloring (reuse existing logic)
@@ -6160,7 +6155,7 @@
           }
           
           // Speed line chart (added first for background)
-          if (useTime && speedPoints.length > 0) {
+          if (useTime && speedPoints && speedPoints.length > 0) {
             datasets.push({ 
               label: 'Speed (km/h)', 
               data: speedPoints, 
