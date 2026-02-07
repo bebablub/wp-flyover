@@ -1123,8 +1123,12 @@
       
       if (privacyEnabled) {
         try {
-          var startIdx = windowStartIdx;
-          var endIdx = windowEndIdx;
+          var lo = 0, hi = cumDist.length - 1;
+          while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < privacyStartD) lo = mid + 1; else hi = mid; }
+          var startIdx = Math.max(0, lo - 1);
+          lo = 0; hi = cumDist.length - 1;
+          while (lo < hi) { var mid2 = (lo + hi) >>> 1; if (cumDist[mid2] < privacyEndD) lo = mid2 + 1; else hi = mid2; }
+          var endIdx = Math.max(startIdx + 1, lo);
           var pStart = positionAtDistance(privacyStartD);
           var pEnd = positionAtDistance(privacyEndD);
           var segBase = baseCoords.slice(startIdx, endIdx + 1);
