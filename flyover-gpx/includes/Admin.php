@@ -1235,11 +1235,6 @@ final class Admin
 	\wp_enqueue_script('maplibre-gl-js');
 	\wp_enqueue_script('chartjs');
 	\wp_enqueue_script('fgpx-front');
-    // Avoid rendering during REST/AJAX requests (e.g., block editor save) to prevent output/noise
-    if ((\defined('REST_REQUEST') && REST_REQUEST) || (\defined('DOING_AJAX') && DOING_AJAX)) {
-        echo '<p>' . \esc_html__('Preview is unavailable during save operations.', 'flyover-gpx') . '</p>';
-        return;
-    }
 	$options = Options::getAll();
 	$defStyle = $options['fgpx_default_style'];
 	$defStyleUrl = $options['fgpx_default_style_url'];

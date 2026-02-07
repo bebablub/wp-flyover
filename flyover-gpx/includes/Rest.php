@@ -9,10 +9,6 @@ if (!\defined('ABSPATH')) {
 }
 use WP_REST_Response;
 
-if (!\defined('ABSPATH')) {
-    exit;
-}
-
 /**
  * REST API endpoints for Flyover GPX.
  */
