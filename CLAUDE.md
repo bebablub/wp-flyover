@@ -9,14 +9,51 @@ Flyover GPX is a WordPress plugin that lets users upload GPX files and render th
 ## Setup & Commands
 
 ```bash
-# Install dependencies (from plugin directory)
-cd flyover-gpx && composer install --no-interaction --no-dev
+# Install all dependencies including dev (from plugin directory)
+cd flyover-gpx && composer update --no-interaction --prefer-dist
 
-# Production install (same, no dev deps exist yet)
-composer install --no-dev
+# Run unit tests
+vendor/bin/phpunit          # or: composer test
+
+# PHP syntax lint (all plugin files)
+composer lint
+
+# Production install (no dev deps, for deployment)
+composer install --no-dev --optimize-autoloader
 ```
 
-There is no build step, test suite, or linter configured. JavaScript and CSS are served directly without transpilation or minification.
+There is no frontend build step. JavaScript and CSS are served directly without transpilation or minification.
+
+## Testing
+
+```
+flyover-gpx/
+  phpunit.xml.dist           PHPUnit 9 config (bootstrap + testdox)
+  tests/
+    bootstrap.php            defines ABSPATH + get_option() stub
+    Unit/
+      OptionsTest.php        Options class: defaults, keys, types, cache, getForFrontend() contract
+      VersionConsistencyTest.php  version strings consistent + semver format
+```
+
+`tests/bootstrap.php` stubs only `get_option()` — enough to test `Options` without WordPress. Add further stubs there when testing additional classes.
+
+## CI / CD
+
+### GitHub Actions — `.github/workflows/`
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| `ci.yml` | push / PR → `main` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) |
+| `release.yml` | push tag `v*.*.*` | tests → prod composer install → ZIP → GitHub Release |
+
+### Releasing a version
+
+```bash
+git tag v1.0.4 && git push origin v1.0.4
+```
+
+The release workflow runs the full test suite, builds `flyover-gpx-{version}.zip` (no tests/, no dev vendor), and attaches it to a new GitHub Release with auto-generated release notes.
 
 ## Architecture
 
