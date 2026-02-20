@@ -6491,29 +6491,54 @@
             
             canvas.addEventListener('mouseup', function(e) {
               if (!isMouseDown || !state.isSelecting) return;
-              
+
               isMouseDown = false;
               canvas.style.cursor = 'default';
-              
+
               var rect = canvas.getBoundingClientRect();
               var endX = e.clientX - rect.left;
-              
+
               // Constrain to chart area
               var chartArea = chart.chartArea;
               endX = Math.max(chartArea.left, Math.min(chartArea.right, endX));
-              
+
               // Check if selection is meaningful (minimum 10 pixels)
               if (Math.abs(endX - startX) > 10) {
                 applyChartZoom(chart, Math.min(startX, endX), Math.max(startX, endX));
+              } else {
+                // Single click — seek playback to clicked position
+                var xScale = chart.scales.x;
+                if (xScale) {
+                  var xValue = xScale.getValueForPixel(endX);
+                  var range = xScale.max - xScale.min;
+                  if (range > 0) {
+                    var frac = (xValue - xScale.min) / range;
+                    seekToFraction(Math.max(0, Math.min(1, frac)));
+                  }
+                }
               }
-              
+
               // Reset selection state
               state.isSelecting = false;
               state.selectionStart = null;
               state.selectionEnd = null;
               chart.update('none');
             });
-            
+
+            // Show pointer cursor when hovering the chart area (indicates click-to-seek)
+            canvas.addEventListener('mousemove', function(e) {
+              if (state.isSelecting) return; // crosshair already set during drag
+              var rect = canvas.getBoundingClientRect();
+              var x = e.clientX - rect.left;
+              var y = e.clientY - rect.top;
+              var chartArea = chart.chartArea;
+              if (chartArea && x >= chartArea.left && x <= chartArea.right && y >= chartArea.top && y <= chartArea.bottom) {
+                canvas.style.cursor = 'pointer';
+              } else {
+                canvas.style.cursor = 'default';
+              }
+            });
+
             // Cancel selection on mouse leave
             canvas.addEventListener('mouseleave', function() {
               if (state.isSelecting) {
@@ -6521,9 +6546,9 @@
                 state.isSelecting = false;
                 state.selectionStart = null;
                 state.selectionEnd = null;
-                canvas.style.cursor = 'default';
                 chart.update('none');
               }
+              canvas.style.cursor = 'default';
             });
           },
           afterDraw: function(chart) {
