@@ -39,6 +39,7 @@ final class Options
 
 		// Privacy & Features
 		'fgpx_photos_enabled' => '0',
+		'fgpx_gpx_download_enabled' => '0',
 		'fgpx_privacy_enabled' => '0',
 		'fgpx_privacy_km' => '3',
 		'fgpx_hud_enabled' => '1',

@@ -240,6 +240,9 @@ final class Rest
         // AJAX fallback for environments blocking /wp-json
         \add_action('wp_ajax_fgpx_track', [$this, 'ajax_get_track']);
         \add_action('wp_ajax_nopriv_fgpx_track', [$this, 'ajax_get_track']);
+        // GPX file download
+        \add_action('wp_ajax_fgpx_download_gpx', [$this, 'ajax_download_gpx']);
+        \add_action('wp_ajax_nopriv_fgpx_download_gpx', [$this, 'ajax_download_gpx']);
     }
 
     /**
@@ -885,6 +888,52 @@ final class Rest
 
         header('Cache-Control: public, max-age=300');
         \wp_send_json($data, 200);
+    }
+
+    /**
+     * Serve the original GPX file as a download.
+     * Validates nonce, post visibility, and file path before streaming.
+     */
+    public function ajax_download_gpx(): void
+    {
+        $id    = (int) ($_GET['id'] ?? 0);
+        $nonce = (string) ($_GET['nonce'] ?? '');
+
+        if ($id <= 0 || !\wp_verify_nonce($nonce, 'fgpx_download_gpx_' . $id)) {
+            \wp_die('Invalid request', '', ['response' => 403]);
+        }
+
+        $post = \get_post($id);
+        if (!$post || $post->post_type !== 'fgpx_track') {
+            \wp_die('Not found', '', ['response' => 404]);
+        }
+        if ($post->post_status !== 'publish' && !\current_user_can('read_post', $id)) {
+            \wp_die('Forbidden', '', ['response' => 403]);
+        }
+
+        $filePath = (string) \get_post_meta($id, 'fgpx_file_path', true);
+        if ($filePath === '') {
+            \wp_die('File not found', '', ['response' => 404]);
+        }
+
+        // Resolve real path and ensure it is inside the uploads directory
+        $uploadsDir = \wp_upload_dir();
+        $realBase   = \realpath((string) ($uploadsDir['basedir'] ?? ''));
+        $realPath   = \realpath($filePath);
+        if ($realBase === false || $realPath === false || \strpos($realPath, $realBase) !== 0) {
+            \wp_die('Forbidden', '', ['response' => 403]);
+        }
+        if (!\is_readable($realPath)) {
+            \wp_die('File not found', '', ['response' => 404]);
+        }
+
+        $filename = \basename($realPath);
+        \header('Content-Type: application/gpx+xml');
+        \header('Content-Disposition: attachment; filename="' . \addslashes($filename) . '"');
+        \header('Content-Length: ' . \filesize($realPath));
+        \header('Cache-Control: no-store');
+        \readfile($realPath);
+        exit;
     }
 }
 

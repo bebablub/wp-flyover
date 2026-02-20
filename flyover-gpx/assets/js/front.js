@@ -412,6 +412,17 @@
       }
     }
     right.appendChild(createEl('span', 'fgpx-speed-label', I18N.speed || 'Speed')); right.appendChild(speedSel);
+    if (window.FGPX && FGPX.gpxDownloadUrl) {
+      var btnDownload = document.createElement('a');
+      btnDownload.className = 'fgpx-btn';
+      btnDownload.href = FGPX.gpxDownloadUrl;
+      btnDownload.download = '';
+      btnDownload.textContent = '\u2B07\uFE0E'; // ⬇ without emoji variation
+      btnDownload.setAttribute('title', 'Download GPX');
+      btnDownload.setAttribute('aria-label', 'Download GPX');
+      btnDownload.style.textDecoration = 'none';
+      right.appendChild(btnDownload);
+    }
     controls.appendChild(left); controls.appendChild(progressWrap); controls.appendChild(right);
 
     var statsChart = createEl('div', 'fgpx-stats-chart');

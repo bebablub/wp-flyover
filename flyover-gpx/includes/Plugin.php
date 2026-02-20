@@ -295,6 +295,7 @@ final class Plugin
 
         // Resolve feature toggles
         $photosEnabledFinal = $resolveBooleanAttr((string) ($atts['photos_enabled'] ?? ''), $options['fgpx_photos_enabled']);
+        $gpxDownloadFinal   = $resolveBooleanAttr((string) ($atts['gpx_download'] ?? ''), $options['fgpx_gpx_download_enabled']);
         $weatherVisibleByDefaultFinal = $resolveBooleanAttr((string) ($atts['weather_visible_by_default'] ?? ''), $options['fgpx_weather_visible_by_default']);
         $windAnalysisEnabledFinal = $resolveBooleanAttr((string) ($atts['wind_analysis_enabled'] ?? ''), $options['fgpx_wind_analysis_enabled']);
         $daynightEnabledFinal = $resolveBooleanAttr((string) ($atts['daynight_enabled'] ?? ''), $options['fgpx_daynight_enabled']);
@@ -308,6 +309,16 @@ final class Plugin
         $prefetchEnabled = $options['fgpx_prefetch_enabled'] === '1';
         $debugLogging = $options['fgpx_debug_logging'] === '1';
         $debugWeatherData = $options['fgpx_debug_weather_data'] === '1';
+
+        // Generate GPX download URL if enabled and file exists
+        $gpxDownloadUrl = '';
+        if ($gpxDownloadFinal && $trackId !== '') {
+            $filePath = (string) \get_post_meta((int) $trackId, 'fgpx_file_path', true);
+            if ($filePath !== '' && \is_readable($filePath)) {
+                $dlNonce        = \wp_create_nonce('fgpx_download_gpx_' . $trackId);
+                $gpxDownloadUrl = \esc_url_raw(\admin_url('admin-ajax.php') . '?action=fgpx_download_gpx&id=' . $trackId . '&nonce=' . $dlNonce);
+            }
+        }
 
         $restBase = \esc_url_raw(\site_url('/wp-json/fgpx/v1'));
         global $post;
@@ -362,6 +373,7 @@ final class Plugin
                 'elevGainM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
             ],
             'deferViewport' => $lazyViewportEnabled,
+            'gpxDownloadUrl' => $gpxDownloadUrl,
         ];
 
         $localizeHandle = $lazyViewportEnabled ? 'fgpx-lazy' : 'fgpx-front';

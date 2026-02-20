@@ -344,6 +344,7 @@ final class Admin
 		$defPitch = $options['fgpx_default_pitch'];
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
+		$gpxDownloadEnabled = $options['fgpx_gpx_download_enabled'];
 		$privacyEnabled = $options['fgpx_privacy_enabled'];
 		$privacyKm = $options['fgpx_privacy_km'];
 		$hudEnabled = $options['fgpx_hud_enabled'];
@@ -518,6 +519,10 @@ final class Admin
 		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Can be overridden per embed via shortcode attribute gpx_download="1" or gpx_download="0".', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_privacy_enabled">' . \esc_html__('Enable privacy mode', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_privacy_enabled" name="fgpx_privacy_enabled" value="1"' . ($privacyEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Hide first/last N km from playback (stats unaffected)', 'flyover-gpx') . '</label>';
@@ -1521,6 +1526,7 @@ final class Admin
 		// Use type-safe validation helpers for boolean values
 		\update_option('fgpx_show_labels', $this->getValidBool('fgpx_show_labels') ? '1' : '0', true);
 		\update_option('fgpx_photos_enabled', $this->getValidBool('fgpx_photos_enabled') ? '1' : '0', true);
+		\update_option('fgpx_gpx_download_enabled', $this->getValidBool('fgpx_gpx_download_enabled') ? '1' : '0', true);
 		\update_option('fgpx_hud_enabled', $this->getValidBool('fgpx_hud_enabled') ? '1' : '0', true);
 		\update_option('fgpx_privacy_enabled', $this->getValidBool('fgpx_privacy_enabled') ? '1' : '0', true);
 		\update_option('fgpx_backend_simplify_enabled', $this->getValidBool('fgpx_backend_simplify_enabled') ? '1' : '0', true);
