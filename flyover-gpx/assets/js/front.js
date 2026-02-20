@@ -984,6 +984,7 @@
       localIdeographFontFamily: 'sans-serif'
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
+    map.addControl(new window.maplibregl.FullscreenControl({ container: el }));
 
     DBG.log('map created', { prefetchEnabled: prefetchEnabled, defaultZoom: defaultZoomSetting });
 
