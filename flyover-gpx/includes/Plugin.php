@@ -14,6 +14,11 @@ if (!\defined('ABSPATH')) {
 final class Plugin
 {
     /**
+     * Per-page instance counter for unique container IDs.
+     */
+    private static int $instanceCounter = 0;
+
+    /**
      * Register WordPress hooks.
      */
     public function register(): void
@@ -117,7 +122,11 @@ final class Plugin
     {
         // Get all options in a single cached call
         $options = Options::getAll();
-        
+
+        self::$instanceCounter++;
+        $isFirstInstance = self::$instanceCounter === 1;
+        $containerId = $isFirstInstance ? 'fgpx-app' : 'fgpx-app-' . self::$instanceCounter;
+
         $defaults = [
             'id' => '',
             'style' => $options['fgpx_default_style'],
@@ -377,91 +386,137 @@ final class Plugin
         ];
 
         $localizeHandle = $lazyViewportEnabled ? 'fgpx-lazy' : 'fgpx-front';
-        \wp_localize_script($localizeHandle, 'FGPX', $localized);
 
-        if ($lazyViewportEnabled) {
-            // Get asset URLs from AssetManager for lazy loading
-            $maplibreJs = AssetManager::getAssetUrl('maplibre-gl-js', 'script');
-            $chartJs = AssetManager::getAssetUrl('chartjs', 'script');
-            $suncalcJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js');
-            $frontJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js');
-            $maplibreCss = AssetManager::getAssetUrl('maplibre-gl-css', 'style');
-            $frontCss = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/css/front.css');
+        if ($isFirstInstance) {
+            \wp_localize_script($localizeHandle, 'FGPX', $localized);
+
+            if ($lazyViewportEnabled) {
+                // Get asset URLs from AssetManager for lazy loading
+                $maplibreJs = AssetManager::getAssetUrl('maplibre-gl-js', 'script');
+                $chartJs = AssetManager::getAssetUrl('chartjs', 'script');
+                $suncalcJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js');
+                $frontJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js');
+                $maplibreCss = AssetManager::getAssetUrl('maplibre-gl-css', 'style');
+                $frontCss = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/css/front.css');
+                \wp_add_inline_script(
+                    'fgpx-lazy',
+                    'window.FGPX=window.FGPX||{};window.FGPX.lazyStyles=[' .
+                      '"' . esc_js($maplibreCss) . '",' .
+                      '"' . esc_js($frontCss) . '"' .
+                    '];window.FGPX.lazyScripts=[' .
+                      '"' . esc_js($maplibreJs) . '",' .
+                      '"' . esc_js($chartJs) . '",' .
+                      '"' . esc_js($suncalcJs) . '",' .
+                      '"' . esc_js($frontJs) . '"' .
+                    '];',
+                    'after'
+                );
+            }
+
             \wp_add_inline_script(
-                'fgpx-lazy',
-                'window.FGPX=window.FGPX||{};window.FGPX.lazyStyles=[' .
-                  '"' . esc_js($maplibreCss) . '",' .
-                  '"' . esc_js($frontCss) . '"' .
-                '];window.FGPX.lazyScripts=[' .
-                  '"' . esc_js($maplibreJs) . '",' .
-                  '"' . esc_js($chartJs) . '",' .
-                  '"' . esc_js($suncalcJs) . '",' .
-                  '"' . esc_js($frontJs) . '"' .
-                '];',
+                $localizeHandle,
+                'window.FGPX=window.FGPX||{};window.FGPX.prefetchEnabled=' . ($prefetchEnabled ? 'true' : 'false') . ';',
+                'before'
+            );
+
+            // Get elevation coloring settings (using resolved values)
+            $elevationColoring = $elevationColoringEnabledFinal ? '1' : '0';
+            $elevationColorFlat = $elevationColorFlatFinal;
+            $elevationColorSteep = $elevationColorSteepFinal;
+            $elevationThresholdMin = $options['fgpx_elevation_threshold_min'];
+            $elevationThresholdMax = $options['fgpx_elevation_threshold_max'];
+            $weatherEnabled = $options['fgpx_weather_enabled'];
+            $weatherOpacity = $options['fgpx_weather_opacity'];
+            $weatherVisibleByDefault = $weatherVisibleByDefaultFinal ? '1' : '0';
+            $daynightVisibleByDefault = $daynightVisibleByDefaultFinal ? '1' : '0';
+            $weatherHeatmapZoom0 = $options['fgpx_weather_heatmap_zoom0'];
+            $weatherHeatmapZoom9 = $options['fgpx_weather_heatmap_zoom9'];
+            $weatherHeatmapZoom12 = $options['fgpx_weather_heatmap_zoom12'];
+            $weatherHeatmapZoom14 = $options['fgpx_weather_heatmap_zoom14'];
+            $weatherHeatmapZoom15 = $options['fgpx_weather_heatmap_zoom15'];
+
+            // Multi-weather visualization settings
+            $weatherPriorityOrder = $options['fgpx_weather_priority_order'];
+            $weatherFogThreshold = $options['fgpx_weather_fog_threshold'];
+            $weatherColorSnow = $options['fgpx_weather_color_snow'];
+            $weatherColorRain = $options['fgpx_weather_color_rain'];
+            $weatherColorFog = $options['fgpx_weather_color_fog'];
+            $weatherColorClouds = $options['fgpx_weather_color_clouds'];
+
+            \wp_add_inline_script(
+                $localizeHandle,
+                '(function(v){window.FGPX=window.FGPX||{};for(var k in v){if(Object.prototype.hasOwnProperty.call(v,k)){window.FGPX[k]=v[k];}}})( {' .
+                  'debugLogging:' . ($debugLogging ? 'true' : 'false') . ',' .
+                  'prefetchEnabled:' . ($prefetchEnabled ? 'true' : 'false') . ',' .
+                  'elevationColoring:' . ($elevationColoring === '1' ? 'true' : 'false') . ',' .
+                  'elevationColorFlat:"' . \esc_js($elevationColorFlat) . '",' .
+                  'elevationColorSteep:"' . \esc_js($elevationColorSteep) . '",' .
+                  'elevationThresholdMin:"' . \esc_js($elevationThresholdMin) . '",' .
+                  'elevationThresholdMax:"' . \esc_js($elevationThresholdMax) . '",' .
+                  'weatherEnabled:' . ($weatherEnabled === '1' ? 'true' : 'false') . ',' .
+                  'weatherOpacity:' . \floatval($weatherOpacity) . ',' .
+                  'weatherVisibleByDefault:' . ($weatherVisibleByDefault === '1' ? 'true' : 'false') . ',' .
+                  'daynightVisibleByDefault:' . ($daynightVisibleByDefault === '1' ? 'true' : 'false') . ',' .
+                  'weatherHeatmapRadius:{' .
+                    'zoom0:' . \intval($weatherHeatmapZoom0) . ',' .
+                    'zoom9:' . \intval($weatherHeatmapZoom9) . ',' .
+                    'zoom12:' . \intval($weatherHeatmapZoom12) . ',' .
+                    'zoom14:' . \intval($weatherHeatmapZoom14) . ',' .
+                    'zoom15:' . \intval($weatherHeatmapZoom15) .
+                  '},' .
+                  'weatherPriorityOrder:"' . \esc_js($weatherPriorityOrder) . '",' .
+                  'weatherFogThreshold:' . \floatval($weatherFogThreshold) . ',' .
+                  'weatherColorSnow:"' . \esc_js($weatherColorSnow) . '",' .
+                  'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
+                  'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
+                  'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '"' .
+                '} );',
+                'after'
+            );
+        } else {
+            // Subsequent instances: store per-instance config in window.FGPX.instances[id]
+            $instanceKey = \esc_js($containerId);
+            \wp_add_inline_script(
+                $localizeHandle,
+                'window.FGPX=window.FGPX||{};' .
+                'window.FGPX.instances=window.FGPX.instances||{};' .
+                'window.FGPX.instances["' . $instanceKey . '"]={' .
+                  'chartColor:"' . \esc_js($options['fgpx_chart_color']) . '",' .
+                  'chartColor2:"' . \esc_js($speedChartColorFinal) . '",' .
+                  'chartColorHr:"' . \esc_js($options['fgpx_chart_color_hr']) . '",' .
+                  'chartColorCad:"' . \esc_js($cadenceChartColorFinal) . '",' .
+                  'chartColorTemp:"' . \esc_js($temperatureChartColorFinal) . '",' .
+                  'chartColorPower:"' . \esc_js($powerChartColorFinal) . '",' .
+                  'chartColorWindImpact:"' . \esc_js($windImpactChartColorFinal) . '",' .
+                  'chartColorWindRose:"' . \esc_js($windRoseChartColorFinal) . '",' .
+                  'windRoseColorNorth:"' . \esc_js($windRoseColorNorthFinal) . '",' .
+                  'windRoseColorSouth:"' . \esc_js($windRoseColorSouthFinal) . '",' .
+                  'windRoseColorEast:"' . \esc_js($windRoseColorEastFinal) . '",' .
+                  'windRoseColorWest:"' . \esc_js($windRoseColorWestFinal) . '",' .
+                  'daynightEnabled:' . ($daynightEnabledFinal ? 'true' : 'false') . ',' .
+                  'daynightMapEnabled:' . ($daynightMapEnabledFinal ? 'true' : 'false') . ',' .
+                  'daynightMapColor:"' . \esc_js($daynightMapColorFinal) . '",' .
+                  'daynightMapOpacity:' . \floatval($options['fgpx_daynight_map_opacity']) . ',' .
+                  'defaultSpeed:' . $defaultSpeedFinal . ',' .
+                  'showLabels:' . ($showLabelsFinal ? 'true' : 'false') . ',' .
+                  'photosEnabled:' . ($photosEnabledFinal ? 'true' : 'false') . ',' .
+                  'privacyEnabled:' . ($privacyEnabledFinal ? 'true' : 'false') . ',' .
+                  'privacyKm:' . \floatval($privacyKmFinal) . ',' .
+                  'hudEnabled:' . ($hudEnabledFinal ? 'true' : 'false') . ',' .
+                  'elevationColoring:' . ($elevationColoringEnabledFinal ? 'true' : 'false') . ',' .
+                  'elevationColorFlat:"' . \esc_js($elevationColorFlatFinal) . '",' .
+                  'elevationColorSteep:"' . \esc_js($elevationColorSteepFinal) . '",' .
+                  'elevationThresholdMin:"' . \esc_js($options['fgpx_elevation_threshold_min']) . '",' .
+                  'elevationThresholdMax:"' . \esc_js($options['fgpx_elevation_threshold_max']) . '",' .
+                  'weatherEnabled:' . ($options['fgpx_weather_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'weatherOpacity:' . \floatval($options['fgpx_weather_opacity']) . ',' .
+                  'weatherVisibleByDefault:' . ($weatherVisibleByDefaultFinal ? 'true' : 'false') . ',' .
+                  'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
+                  'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '"' .
+                '};',
                 'after'
             );
         }
-
-        \wp_add_inline_script(
-            $localizeHandle,
-            'window.FGPX=window.FGPX||{};window.FGPX.prefetchEnabled=' . ($prefetchEnabled ? 'true' : 'false') . ';',
-            'before'
-        );
-
-        // Get elevation coloring settings (using resolved values)
-        $elevationColoring = $elevationColoringEnabledFinal ? '1' : '0';
-        $elevationColorFlat = $elevationColorFlatFinal;
-        $elevationColorSteep = $elevationColorSteepFinal;
-        $elevationThresholdMin = $options['fgpx_elevation_threshold_min'];
-        $elevationThresholdMax = $options['fgpx_elevation_threshold_max'];
-        $weatherEnabled = $options['fgpx_weather_enabled'];
-        $weatherOpacity = $options['fgpx_weather_opacity'];
-        $weatherVisibleByDefault = $weatherVisibleByDefaultFinal ? '1' : '0';
-        $daynightVisibleByDefault = $daynightVisibleByDefaultFinal ? '1' : '0';
-        $weatherHeatmapZoom0 = $options['fgpx_weather_heatmap_zoom0'];
-        $weatherHeatmapZoom9 = $options['fgpx_weather_heatmap_zoom9'];
-        $weatherHeatmapZoom12 = $options['fgpx_weather_heatmap_zoom12'];
-        $weatherHeatmapZoom14 = $options['fgpx_weather_heatmap_zoom14'];
-        $weatherHeatmapZoom15 = $options['fgpx_weather_heatmap_zoom15'];
-        
-        // Multi-weather visualization settings
-        $weatherPriorityOrder = $options['fgpx_weather_priority_order'];
-        $weatherFogThreshold = $options['fgpx_weather_fog_threshold'];
-        $weatherColorSnow = $options['fgpx_weather_color_snow'];
-        $weatherColorRain = $options['fgpx_weather_color_rain'];
-        $weatherColorFog = $options['fgpx_weather_color_fog'];
-        $weatherColorClouds = $options['fgpx_weather_color_clouds'];
-
-        \wp_add_inline_script(
-            $localizeHandle,
-            '(function(v){window.FGPX=window.FGPX||{};for(var k in v){if(Object.prototype.hasOwnProperty.call(v,k)){window.FGPX[k]=v[k];}}})( {' .
-              'debugLogging:' . ($debugLogging ? 'true' : 'false') . ',' .
-              'prefetchEnabled:' . ($prefetchEnabled ? 'true' : 'false') . ',' .
-              'elevationColoring:' . ($elevationColoring === '1' ? 'true' : 'false') . ',' .
-              'elevationColorFlat:"' . \esc_js($elevationColorFlat) . '",' .
-              'elevationColorSteep:"' . \esc_js($elevationColorSteep) . '",' .
-              'elevationThresholdMin:"' . \esc_js($elevationThresholdMin) . '",' .
-              'elevationThresholdMax:"' . \esc_js($elevationThresholdMax) . '",' .
-              'weatherEnabled:' . ($weatherEnabled === '1' ? 'true' : 'false') . ',' .
-              'weatherOpacity:' . \floatval($weatherOpacity) . ',' .
-              'weatherVisibleByDefault:' . ($weatherVisibleByDefault === '1' ? 'true' : 'false') . ',' .
-              'daynightVisibleByDefault:' . ($daynightVisibleByDefault === '1' ? 'true' : 'false') . ',' .
-              'weatherHeatmapRadius:{' .
-                'zoom0:' . \intval($weatherHeatmapZoom0) . ',' .
-                'zoom9:' . \intval($weatherHeatmapZoom9) . ',' .
-                'zoom12:' . \intval($weatherHeatmapZoom12) . ',' .
-                'zoom14:' . \intval($weatherHeatmapZoom14) . ',' .
-                'zoom15:' . \intval($weatherHeatmapZoom15) .
-              '},' .
-              'weatherPriorityOrder:"' . \esc_js($weatherPriorityOrder) . '",' .
-              'weatherFogThreshold:' . \floatval($weatherFogThreshold) . ',' .
-              'weatherColorSnow:"' . \esc_js($weatherColorSnow) . '",' .
-              'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
-              'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
-              'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '"' .
-            '} );',
-            'after'
-        );
 
         // Enqueue custom CSS from settings, if any
         $customCss = $options['fgpx_custom_css'];
@@ -472,7 +527,7 @@ final class Plugin
             \wp_add_inline_style($handle, $customCss);
         }
 
-        $idAttr = 'fgpx-app';
+        $idAttr = $containerId;
         $styleAttr = 'height:' . $height;
         $dataStyleUrlAttr = $styleUrl !== '' ? $styleUrl : '';
 

@@ -91,15 +91,15 @@
     return; 
   }
 
-  var target = document.querySelector('.fgpx');
-  if (!target) { 
+  var targets = document.querySelectorAll('.fgpx');
+  if (!targets.length) {
     if (window.FGPX && window.FGPX.debugLogging) {
       console.debug('[FGPX] No .fgpx element found, loading immediately');
     }
-    immediate(); 
-    return; 
+    immediate();
+    return;
   }
-  
+
   if (window.FGPX && window.FGPX.debugLogging) {
     console.debug('[FGPX] Setting up IntersectionObserver for lazy loading');
   }
@@ -122,5 +122,7 @@
     });
   }, { rootMargin: '200px 0px 200px 0px', threshold: 0.01 });
 
-  obs.observe(target);
+  for (var i = 0; i < targets.length; i++) {
+    obs.observe(targets[i]);
+  }
 })();

@@ -327,7 +327,8 @@
     };
   }
 
-  function buildLayout(container) {
+  function buildLayout(container, FGPX) {
+    FGPX = FGPX || window.FGPX;
     container.innerHTML = '';
     var spinner = createEl('div', 'fgpx-spinner');
     spinner.innerHTML = '<div class="fgpx-spinner-inner"></div>';
@@ -510,17 +511,18 @@
     };
   }
 
-  function init() {
-    var el = document.getElementById('fgpx-app');
+  function initContainer(el) {
     if (!el || typeof window.maplibregl === 'undefined' || typeof window.Chart === 'undefined' || typeof window.FGPX === 'undefined') {
       return;
     }
+    var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
+    var FGPX = Object.assign({}, window.FGPX, instCfg);
 
     var trackId = el.getAttribute('data-track-id');
     var style = el.getAttribute('data-style') || 'raster';
     var styleUrl = el.getAttribute('data-style-url');
 
-    var ui = buildLayout(el);
+    var ui = buildLayout(el, FGPX);
     ui.spinner.style.display = 'flex';
     ui.error.style.display = 'none';
 
@@ -8713,9 +8715,10 @@
         windowSunCalc: typeof window.SunCalc,
         SunCalcExists: !!window.SunCalc
       });
-      
-      if (typeof init === 'function') {
-        init();
+
+      var containers = document.querySelectorAll('.fgpx');
+      for (var i = 0; i < containers.length; i++) {
+        initContainer(containers[i]);
       }
     } catch(e) {
       DBG.warn('Initialization error:', e);
