@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # -----------------------------------------------------------------------
+  # 1. PHP syntax check across the supported PHP version range
+  # -----------------------------------------------------------------------
+  php-lint:
+    name: PHP Lint (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.1', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Check PHP syntax (all plugin files except vendor)
+        run: |
+          find flyover-gpx -name "*.php" -not -path "*/vendor/*" \
+            | sort \
+            | xargs -L1 php -l
+
+  # -----------------------------------------------------------------------
+  # 2. PHPUnit unit tests
+  # -----------------------------------------------------------------------
+  unit-tests:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    needs: php-lint          # only run if lint passes
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Install Composer dependencies (including dev)
+        working-directory: flyover-gpx
+        # composer update resolves require-dev even when composer.lock
+        # does not yet include PHPUnit (e.g. first run after adding it).
+        run: composer update --no-interaction --prefer-dist
+
+      - name: Run PHPUnit
+        working-directory: flyover-gpx
+        run: vendor/bin/phpunit
+
+  # -----------------------------------------------------------------------
+  # 3. JavaScript syntax check (no npm install required)
+  # -----------------------------------------------------------------------
+  js-syntax:
+    name: JS Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate JavaScript syntax with node --check
+        run: |
+          for f in flyover-gpx/assets/js/*.js; do
+            echo -n "  $f ... "
+            node --check "$f" && echo "OK" || exit 1
+          done

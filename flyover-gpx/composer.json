@@ -6,10 +6,22 @@
     "php": ">=7.4",
     "sibyx/phpgpx": "^1.3"
   },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5"
+  },
   "autoload": {
     "psr-4": {
       "FGpx\\": "includes/"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "FGpx\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "lint": "find . -name '*.php' -not -path './vendor/*' | xargs -L1 php -l"
   }
 }
 

@@ -1,0 +1,102 @@
+name: Release
+
+# Trigger: push a SemVer tag, e.g.  git tag v1.0.3 && git push origin v1.0.3
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+
+  release:
+    name: Test → Package → Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      # -------------------------------------------------------------------
+      # Step 1 — run the full test suite (fail fast before packaging)
+      # -------------------------------------------------------------------
+      - name: Install Composer dependencies (including dev)
+        working-directory: flyover-gpx
+        run: composer update --no-interaction --prefer-dist
+
+      - name: Run PHPUnit
+        working-directory: flyover-gpx
+        run: vendor/bin/phpunit
+
+      - name: Check PHP syntax
+        run: |
+          find flyover-gpx -name "*.php" -not -path "*/vendor/*" \
+            | sort \
+            | xargs -L1 php -l
+
+      # -------------------------------------------------------------------
+      # Step 2 — rebuild vendor with production dependencies only
+      # -------------------------------------------------------------------
+      - name: Install production-only Composer dependencies
+        working-directory: flyover-gpx
+        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+
+      # -------------------------------------------------------------------
+      # Step 3 — build the installable WordPress plugin ZIP
+      #
+      # ZIP layout (WordPress standard):
+      #   flyover-gpx/
+      #     flyover-gpx.php
+      #     includes/
+      #     assets/
+      #     vendor/          ← production deps only
+      #     ...
+      #
+      # Excluded from the ZIP:
+      #   tests/             developer tooling
+      #   phpunit.xml.dist   developer tooling
+      #   vendor/*/tests/    test suites inside vendored packages
+      # -------------------------------------------------------------------
+      - name: Build plugin ZIP
+        id: build
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP_FILE="flyover-gpx-${VERSION}.zip"
+
+          # Stage a clean copy so the ZIP root is flyover-gpx/
+          STAGING="/tmp/plugin-release"
+          mkdir -p "${STAGING}/flyover-gpx"
+          cp -r flyover-gpx/. "${STAGING}/flyover-gpx/"
+
+          # Remove developer-only artefacts from the staged copy
+          rm -rf "${STAGING}/flyover-gpx/tests"
+          rm -f  "${STAGING}/flyover-gpx/phpunit.xml.dist"
+
+          # Remove test directories that vendored packages may include
+          find "${STAGING}/flyover-gpx/vendor" -type d \
+            \( -name "tests" -o -name "test" -o -name "Tests" -o -name "Test" \) \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          # Pack
+          cd "${STAGING}"
+          zip -r "${GITHUB_WORKSPACE}/${ZIP_FILE}" flyover-gpx/
+
+          echo "zip_file=${ZIP_FILE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+
+      # -------------------------------------------------------------------
+      # Step 4 — create the GitHub Release and attach the ZIP
+      # -------------------------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Flyover GPX v${{ steps.build.outputs.version }}"
+          files: ${{ steps.build.outputs.zip_file }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
