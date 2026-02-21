@@ -9,14 +9,20 @@ Flyover GPX is a WordPress plugin that lets users upload GPX files and render th
 ## Setup & Commands
 
 ```bash
-# Install all dependencies including dev (from plugin directory)
+# Install PHP dev dependencies (from plugin directory)
 cd flyover-gpx && composer update --no-interaction --prefer-dist
 
-# Run unit tests
+# Run PHPUnit tests
 vendor/bin/phpunit          # or: composer test
 
 # PHP syntax lint (all plugin files)
 composer lint
+
+# Install JS dev dependencies
+cd flyover-gpx && npm ci
+
+# Run Jest tests
+npm test
 
 # Production install (no dev deps, for deployment)
 composer install --no-dev --optimize-autoloader
@@ -29,14 +35,22 @@ There is no frontend build step. JavaScript and CSS are served directly without 
 ```
 flyover-gpx/
   phpunit.xml.dist           PHPUnit 9 config (bootstrap + testdox)
+  package.json               Jest 29 + jest-environment-jsdom
+  jest.config.js             testEnvironment: jsdom, setupFiles: tests/js/setup.js
   tests/
     bootstrap.php            defines ABSPATH + get_option() stub
     Unit/
       OptionsTest.php        Options class: defaults, keys, types, cache, getForFrontend() contract
       VersionConsistencyTest.php  version strings consistent + semver format
+    js/
+      setup.js               global IntersectionObserver mock
+      fgpx-lazy.test.js      8 tests: bootstrap modes, IO setup, deferred triggering
+      front-boot.test.js     8 tests: boot registration, _bootDone guard, eager no-crash
 ```
 
-`tests/bootstrap.php` stubs only `get_option()` — enough to test `Options` without WordPress. Add further stubs there when testing additional classes.
+**PHP tests**: `tests/bootstrap.php` stubs only `get_option()` — enough to test `Options` without WordPress. Add further stubs there when testing additional classes.
+
+**JS tests**: IIFE scripts are loaded via `fs.readFileSync` + `eval()` into the jsdom global context. `lazyStyles: []` / `lazyScripts: []` make the async Promise chain resolve in two microtask ticks (`await Promise.resolve()` twice). The `IntersectionObserver` mock in `setup.js` exposes `_callback` so tests can simulate viewport intersection events.
 
 ## CI / CD
 
@@ -44,7 +58,7 @@ flyover-gpx/
 
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
-| `ci.yml` | push / PR → `main` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) |
+| `ci.yml` | push / PR → `main` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) → `js-tests` (Jest, Node 20) |
 | `release.yml` | push tag `v*.*.*` | tests → prod composer install → ZIP → GitHub Release |
 
 ### Releasing a version

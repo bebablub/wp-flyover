@@ -79,3 +79,26 @@ jobs:
             echo -n "  $f ... "
             node --check "$f" && echo "OK" || exit 1
           done
+
+  # -----------------------------------------------------------------------
+  # 4. Jest unit tests for frontend JavaScript
+  # -----------------------------------------------------------------------
+  js-tests:
+    name: Jest (frontend)
+    runs-on: ubuntu-latest
+    needs: js-syntax          # only run if syntax check passes
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install npm dependencies
+        working-directory: flyover-gpx
+        run: npm ci
+
+      - name: Run Jest test suite
+        working-directory: flyover-gpx
+        run: npm test -- --ci
