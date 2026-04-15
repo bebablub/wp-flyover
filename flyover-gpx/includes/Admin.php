@@ -1513,7 +1513,13 @@ final class Admin
 		\update_option('fgpx_custom_css', $css, true);
 		if (isset($_POST['fgpx_default_style'])) { \update_option('fgpx_default_style', sanitize_text_field((string) $_POST['fgpx_default_style']), true); }
 		if (isset($_POST['fgpx_default_style_url'])) { \update_option('fgpx_default_style_url', esc_url_raw((string) $_POST['fgpx_default_style_url']), true); }
-		if (isset($_POST['fgpx_default_style_json'])) { \update_option('fgpx_default_style_json', (string) wp_unslash($_POST['fgpx_default_style_json']), true); }
+		if (isset($_POST['fgpx_default_style_json'])) {
+			$rawJson = (string) wp_unslash($_POST['fgpx_default_style_json']);
+			$trimmed = \trim($rawJson);
+			if ($trimmed === '' || (\json_decode($trimmed) !== null && \json_last_error() === JSON_ERROR_NONE)) {
+				\update_option('fgpx_default_style_json', $trimmed, true);
+			}
+		}
 		if (isset($_POST['fgpx_default_height'])) { \update_option('fgpx_default_height', sanitize_text_field((string) $_POST['fgpx_default_height']), true); }
 		// Use type-safe validation helpers for numeric values
 		$zoom = $this->getValidInt('fgpx_default_zoom', 11, 1, 20);
@@ -2574,7 +2580,7 @@ final class Admin
 	 * @param array $geojson GeoJSON array (passed by reference to add wind data)
 	 * @return bool Success/failure
 	 */
-	private static function interpolateWindDataForTrack(int $postId, array &$geojson): bool
+	public static function interpolateWindDataForTrack(int $postId, array &$geojson): bool
 	{
 		// Check if wind analysis is enabled
 		$options = Options::getAll();

@@ -8,14 +8,14 @@
  * Plugin Name: Flyover GPX
  * Description: Upload GPX files and render animated flyover maps with MapLibre and an elevation chart.
  * Version: 1.0.3
- * Author: Benjamin Barinka and ChatGPT5
+ * Author: Benjamin Barinka
  * Requires PHP: 7.4
  * Requires at least: 6.0
  * Text Domain: flyover-gpx
  * 
  * @package FlyoverGPX
  * @version 1.0.3
- * @author Benjamin Barinka and ChatGPT5
+ * @author Benjamin Barinka
  * @license GPL-2.0+
  * @since 1.0.3
  */
@@ -120,4 +120,14 @@ require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line int
         $cli = new CLI();
         $cli->register();
     }
+});
+
+/**
+ * Clean up plugin transients on deactivation.
+ */
+\register_deactivation_hook(FGPX_FILE, static function (): void {
+    global $wpdb;
+    $wpdb->query(
+        "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_fgpx\\_asset\\_%' OR option_name LIKE '_transient_timeout_fgpx\\_asset\\_%'"
+    );
 });

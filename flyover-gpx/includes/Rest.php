@@ -929,7 +929,11 @@ final class Rest
 
         $filename = \basename($realPath);
         \header('Content-Type: application/gpx+xml');
-        \header('Content-Disposition: attachment; filename="' . \addslashes($filename) . '"');
+        if (\preg_match('/^[a-zA-Z0-9._-]+$/', $filename)) {
+            \header('Content-Disposition: attachment; filename="' . $filename . '"');
+        } else {
+            \header("Content-Disposition: attachment; filename*=UTF-8''" . \rawurlencode($filename));
+        }
         \header('Content-Length: ' . \filesize($realPath));
         \header('Cache-Control: no-store');
         \readfile($realPath);

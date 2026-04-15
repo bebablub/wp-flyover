@@ -162,6 +162,12 @@
     return roundedLat + ',' + roundedLon;
   }
 
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
   function createEl(tag, className, text) {
     var el = document.createElement(tag);
     if (className) el.className = className;
@@ -735,7 +741,7 @@
         container.innerHTML = '<div class="fgpx-no-data-message" style="padding: 20px; text-align: center; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; margin: 20px 0;">' +
           '<h3 style="color: #666; margin: 0 0 10px 0;">No Route Data Available</h3>' +
           '<p style="color: #888; margin: 0;">This track does not have GPS coordinate data yet. ' +
-          (payload && payload.name ? 'Upload a GPX file to "' + payload.name + '" to display the route.' : 'Please upload a GPX file to display the route.') +
+          (payload && payload.name ? 'Upload a GPX file to \u201c' + escapeHtml(payload.name) + '\u201d to display the route.' : 'Please upload a GPX file to display the route.') +
           '</p></div>';
       }
       return;
@@ -997,7 +1003,7 @@
       localIdeographFontFamily: 'sans-serif'
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
-    map.addControl(new window.maplibregl.FullscreenControl({ container: el }));
+    map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
 
     DBG.log('map created', { prefetchEnabled: prefetchEnabled, defaultZoom: defaultZoomSetting });
 
@@ -4007,7 +4013,12 @@
       };
       
       VideoRecorder.prototype.cleanupOverlayCanvas = function() {
-        // Simple cleanup
+        if (this.compositeCanvas) {
+          this.compositeCanvas.width = 0;
+          this.compositeCanvas.height = 0;
+          this.compositeCanvas = null;
+          this.compositeCtx = null;
+        }
         DBG.log('Recording cleanup completed');
       };
       
@@ -4608,7 +4619,7 @@
       });
       // ESC to close
       window.addEventListener('keydown', function(e){
-        if (!document.contains(el)) return;
+        if (!document.contains(root)) return;
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
             overlayActive = false; 
@@ -7395,13 +7406,15 @@
                 }
               }
               
-              // Remove excess segments if we have fewer segments now
+              // Remove excess segments only if we have fewer segments now
               var currentSegmentCount = window.__fgpxProgressSegments.length || 0;
-              for (var removeIdx = segments.length; removeIdx < currentSegmentCount; removeIdx++) {
-                try {
-                  map.removeLayer('fgpx-progress-segment-' + removeIdx);
-                  map.removeSource('fgpx-progress-segment-' + removeIdx);
-                } catch(_) {}
+              if (segments.length < currentSegmentCount) {
+                for (var removeIdx = segments.length; removeIdx < currentSegmentCount; removeIdx++) {
+                  try {
+                    map.removeLayer('fgpx-progress-segment-' + removeIdx);
+                    map.removeSource('fgpx-progress-segment-' + removeIdx);
+                  } catch(_) {}
+                }
               }
               
               // Update segment tracking
@@ -7538,7 +7551,6 @@
         } catch(_) {}
         if (chartCooldown >= 0.08) { 
           chart.update('none'); 
-          chart.draw(); // Force redraw to update cursor visibility during playback
           chartCooldown = 0; 
         }
 
@@ -8540,7 +8552,7 @@
       }
 
       window.addEventListener('keydown', function (e) {
-        if (!document.contains(el)) return;
+        if (!document.contains(root)) return;
         if (e.code === 'Space') {
           e.preventDefault();
           if (playing) { 
@@ -8656,7 +8668,6 @@
             }
           }
           chart.update('none');
-          chart.draw(); // Force redraw to update cursor visibility based on zoom state
         } catch (_) {}
         // Preserve playback state when seeking - don't auto-start if was paused
         // Only auto-play if we were already playing or if this is the first play

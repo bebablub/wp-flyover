@@ -161,6 +161,13 @@ final class CLI
 		// Enrich with weather data if enabled
 		\FGpx\Admin::enrichWithWeather($postId, $parse['geojson']);
 
+		// Interpolate wind data if enabled (after weather enrichment, matching web upload behavior)
+		$geojsonArray = \json_decode((string) \get_post_meta($postId, 'fgpx_geojson', true), true);
+		if (\is_array($geojsonArray)) {
+			\FGpx\Admin::interpolateWindDataForTrack($postId, $geojsonArray);
+			\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
+		}
+
 		\WP_CLI::success('Track imported. ID: ' . (int) $postId);
 
 		$host = (int) (\WP_CLI\Utils\get_flag_value($assoc_args, 'post', 0) ?? 0);

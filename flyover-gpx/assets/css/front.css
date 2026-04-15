@@ -45,6 +45,11 @@
 .fgpx .fgpx-btn:hover {
   filter: brightness(0.98);
 }
+.fgpx .fgpx-btn:focus-visible,
+.fgpx .fgpx-select:focus-visible {
+  outline: 2px solid #25ceff;
+  outline-offset: 2px;
+}
 .fgpx .fgpx-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -127,6 +132,7 @@
   justify-content: center;
   z-index: 5;
   background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(1px);
   backdrop-filter: blur(1px);
 }
 @media (prefers-color-scheme: dark) {

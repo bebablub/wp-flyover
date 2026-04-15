@@ -123,6 +123,7 @@ Parameters:
 - `hud` (optional): Toggle the live HUD overlay (speed/distance/elevation/heading). Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 - `elevation_coloring` (optional): Enable/disable elevation-based route coloring for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 - `speed` (optional): Override default playback speed for this embed. Example: `speed="50"`. Defaults to admin setting.
+- `gpx_download` (optional): Show/hide the GPX download button for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 
 Additional per-shortcode overrides (all optional, defaulting to admin settings):
 
@@ -151,6 +152,7 @@ Examples:
 [flyover_gpx id="123" privacy="true" privacy_km="2.5"]
 [flyover_gpx id="123" hud="false"]
 [flyover_gpx id="123" elevation_coloring="true" speed="75"]
+[flyover_gpx id="123" gpx_download="true"]
 [flyover_gpx id="123" show_labels="true" speed_chart_color="#1976d2" power_chart_color="#059669"]
 [flyover_gpx id="123" wind_analysis_enabled="true" wind_impact_chart_color="#ff6b35" wind_rose_chart_color="#4ecdc4"]
 ```
@@ -158,7 +160,7 @@ Examples:
 Notes:
 
 - If a vector `style_url` fails to load, the player falls back to OSM raster tiles.
-- The container element id is fixed to `fgpx-app` (one instance per page is supported).
+- Multiple instances per page are supported. The first container uses `fgpx-app`, additional embeds use `fgpx-app-N`.
 - Disabling tile prefetching sets MapLibre’s `prefetchZoomDelta` to 0 and skips prewarm to minimize extra requests.
 
 ### Inline Style JSON (Admin)

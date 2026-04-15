@@ -210,8 +210,8 @@ final class AssetManager
 
 		$isAvailable = !\is_wp_error($response) && \wp_remote_retrieve_response_code($response) === 200;
 
-		// Cache in transient: 1 hour if available, 5 minutes if not (retry sooner on failure)
-		\set_transient($transientKey, $isAvailable ? '1' : '0', $isAvailable ? 3600 : 300);
+		// Cache in transient: 24 hours if available, 5 minutes if not (retry sooner on failure)
+		\set_transient($transientKey, $isAvailable ? '1' : '0', $isAvailable ? 86400 : 300);
 
 		// Cache the result for this request
 		self::$availabilityCache[$url] = $isAvailable;
