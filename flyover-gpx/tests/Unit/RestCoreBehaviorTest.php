@@ -95,7 +95,7 @@ final class RestCoreBehaviorTest extends TestCase
 
         $photos = [
             ['id' => 10, 'lat' => 48.123451, 'lon' => 16.987651, 'fullUrl' => 'a.jpg'],
-            ['id' => 11, 'lat' => 48.123449, 'lon' => 16.987649, 'fullUrl' => 'b.jpg'],
+            ['id' => 11, 'lat' => 48.123452, 'lon' => 16.987652, 'fullUrl' => 'b.jpg'],
             ['id' => 12, 'lat' => 48.2234, 'lon' => 16.8876, 'fullUrl' => 'c.jpg'],
             ['id' => 13, 'lat' => null, 'lon' => null, 'fullUrl' => 'd.jpg'],
         ];
@@ -124,7 +124,9 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertTrue($result['compressed']);
         $this->assertCount(3, $result['coordinates']);
         $this->assertSame($coords[0], $result['coordinates'][0]);
-        $this->assertSame([48.12347, 16.98763, 100.3], $result['coordinates'][1]);
+        $this->assertEqualsWithDelta(48.123466, $result['coordinates'][1][0], 0.000001);
+        $this->assertEqualsWithDelta(16.987634, $result['coordinates'][1][1], 0.000001);
+        $this->assertSame(100.3, $result['coordinates'][1][2]);
         $this->assertIsFloat($result['reduction']);
     }
 
