@@ -344,6 +344,7 @@ final class Plugin
             'chartColorCad' => $cadenceChartColorFinal,
             'chartColorTemp' => $temperatureChartColorFinal,
             'chartColorPower' => $powerChartColorFinal,
+            'ftp' => (int) $options['fgpx_ftp'],
             'chartColorWindImpact' => $windImpactChartColorFinal,
             'chartColorWindRose' => $windRoseChartColorFinal,
             'windRoseColorNorth' => $windRoseColorNorthFinal,
@@ -487,6 +488,7 @@ final class Plugin
                   'chartColorCad:"' . \esc_js($cadenceChartColorFinal) . '",' .
                   'chartColorTemp:"' . \esc_js($temperatureChartColorFinal) . '",' .
                   'chartColorPower:"' . \esc_js($powerChartColorFinal) . '",' .
+                  'ftp:' . \intval($options['fgpx_ftp']) . ',' .
                   'chartColorWindImpact:"' . \esc_js($windImpactChartColorFinal) . '",' .
                   'chartColorWindRose:"' . \esc_js($windRoseChartColorFinal) . '",' .
                   'windRoseColorNorth:"' . \esc_js($windRoseColorNorthFinal) . '",' .

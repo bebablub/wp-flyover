@@ -108,6 +108,115 @@ final class Rest
     }
 
     /**
+     * Estimate power values from route geometry and timing if no real GPX power is present.
+     *
+     * @param array<int,array{0:float,1:float,2?:float}> $coords
+     * @param array<int,mixed> $timestamps
+     * @param array<int,mixed> $cumDist
+     * @return array<int,float>
+     */
+    private static function estimate_powers(array $coords, array $timestamps, array $cumDist, float $systemWeightKg): array
+    {
+        $count = count($coords);
+        if ($count === 0) {
+            return [];
+        }
+
+        $mass = max(40.0, min(200.0, $systemWeightKg));
+        $g = 9.81;
+        $cRR = 0.004;
+        $cDA = 0.32;
+        $rho = 1.2;
+        $defaultSpeed = 6.5; // ~23.4 km/h fallback
+        $lastSpeed = $defaultSpeed;
+
+        $powers = array_fill(0, $count, 0.0);
+
+        for ($i = 1; $i < $count; $i++) {
+            $dist = 0.0;
+            if (isset($cumDist[$i], $cumDist[$i - 1]) && is_numeric($cumDist[$i]) && is_numeric($cumDist[$i - 1])) {
+                $dist = max(0.0, (float) $cumDist[$i] - (float) $cumDist[$i - 1]);
+            }
+
+            $dt = 0.0;
+            if (isset($timestamps[$i], $timestamps[$i - 1]) && is_string($timestamps[$i]) && is_string($timestamps[$i - 1])) {
+                $t1 = strtotime($timestamps[$i]);
+                $t0 = strtotime($timestamps[$i - 1]);
+                if ($t1 !== false && $t0 !== false) {
+                    $dt = max(0.0, (float) ($t1 - $t0));
+                }
+            }
+
+            $speed = $lastSpeed;
+            if ($dist > 0.0 && $dt > 0.0) {
+                $speed = $dist / $dt;
+            } elseif ($dist > 0.0) {
+                $speed = $defaultSpeed;
+            }
+            $speed = max(0.0, min(30.0, $speed));
+            $lastSpeed = $speed > 0.0 ? $speed : $lastSpeed;
+
+            $ele0 = isset($coords[$i - 1][2]) && is_numeric($coords[$i - 1][2]) ? (float) $coords[$i - 1][2] : 0.0;
+            $ele1 = isset($coords[$i][2]) && is_numeric($coords[$i][2]) ? (float) $coords[$i][2] : $ele0;
+            $grade = $dist > 0.0 ? (($ele1 - $ele0) / $dist) : 0.0;
+            $grade = max(-0.25, min(0.25, $grade));
+
+            $rolling = $cRR * $mass * $g;
+            $gravity = $mass * $g * $grade;
+            $aero = 0.5 * $cDA * $rho * $speed * $speed;
+            $power = ($rolling + $gravity + $aero) * $speed;
+            $powers[$i] = max(0.0, min(2000.0, round($power, 1)));
+        }
+
+        if ($count > 1) {
+            $powers[0] = $powers[1];
+        }
+
+        return $powers;
+    }
+
+    /**
+     * Ensure geojson has usable power data, estimating if necessary.
+     *
+     * @param array<string,mixed>|null $decodedGeo
+     * @return array{geojson: array<string,mixed>|null, estimatedPower: bool}
+     */
+    private static function ensurePowerDataWithEstimate(?array $decodedGeo, float $systemWeightKg): array
+    {
+        if (!is_array($decodedGeo) || !isset($decodedGeo['coordinates']) || !is_array($decodedGeo['coordinates'])) {
+            return ['geojson' => $decodedGeo, 'estimatedPower' => false];
+        }
+
+        $props = isset($decodedGeo['properties']) && is_array($decodedGeo['properties']) ? $decodedGeo['properties'] : [];
+        $powers = isset($props['powers']) && is_array($props['powers']) ? $props['powers'] : [];
+
+        $hasRealPower = false;
+        foreach ($powers as $p) {
+            if (is_numeric($p) && (float) $p > 0.0) {
+                $hasRealPower = true;
+                break;
+            }
+        }
+
+        if ($hasRealPower) {
+            return ['geojson' => $decodedGeo, 'estimatedPower' => false];
+        }
+
+        $timestamps = isset($props['timestamps']) && is_array($props['timestamps']) ? $props['timestamps'] : [];
+        $cumDist = isset($props['cumulativeDistance']) && is_array($props['cumulativeDistance']) ? $props['cumulativeDistance'] : [];
+        $coords = $decodedGeo['coordinates'];
+
+        $estimated = self::estimate_powers($coords, $timestamps, $cumDist, $systemWeightKg);
+        if (!empty($estimated)) {
+            $props['powers'] = $estimated;
+            $decodedGeo['properties'] = $props;
+            return ['geojson' => $decodedGeo, 'estimatedPower' => true];
+        }
+
+        return ['geojson' => $decodedGeo, 'estimatedPower' => false];
+    }
+
+    /**
      * Simplify with Ramer–Douglas–Peucker to approximately target points,
      * mirroring the frontend approach (binary-search tolerance).
      * Returns array of kept indices.
@@ -292,7 +401,7 @@ final class Rest
         $hostPostForCache = (int) $request->get_param('host_post');
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
-        $cache_key = 'fgpx_json_v2_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
 
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -394,6 +503,11 @@ final class Rest
                 'simplification_enabled' => $simplifyEnabled
             ]);
         }
+
+        $systemWeightKg = (float) \get_option('fgpx_system_weight_kg', '75');
+        $powerEstimation = self::ensurePowerDataWithEstimate($decodedGeo, $systemWeightKg);
+        $decodedGeo = $powerEstimation['geojson'];
+        $estimatedPower = $powerEstimation['estimatedPower'];
 
         // Attempt to collect attached photos (images) with EXIF GPS/time
         $photos = [];
@@ -582,6 +696,7 @@ final class Rest
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
+            'estimatedPower' => $estimatedPower,
             'weather' => \is_array($decodedWeather) ? $decodedWeather : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummaryRest) ? $decodedWeatherSummaryRest : null,
         ];
@@ -622,7 +737,7 @@ final class Rest
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
         
-        $cache_key = 'fgpx_json_v2_' . $id . '_' . $modified . '_hp_' . $hostPost . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPost . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
             header('Cache-Control: public, max-age=300');
@@ -699,6 +814,11 @@ final class Rest
                 }
             }
         }
+
+        $systemWeightKg = (float) \get_option('fgpx_system_weight_kg', '75');
+        $powerEstimation = self::ensurePowerDataWithEstimate($decodedGeo, $systemWeightKg);
+        $decodedGeo = $powerEstimation['geojson'];
+        $estimatedPower = $powerEstimation['estimatedPower'];
 
         // Photos from host post (if provided), with fallbacks
         $photos = [];
@@ -879,6 +999,7 @@ final class Rest
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
+            'estimatedPower' => $estimatedPower,
             'weather' => \is_array($decodedWeatherAjax) ? $decodedWeatherAjax : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummary) ? $decodedWeatherSummary : null,
         ];

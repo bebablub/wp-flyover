@@ -356,6 +356,8 @@ final class Admin
 		$chartColorCad = $options['fgpx_chart_color_cad'];
 		$chartColorTemp = $options['fgpx_chart_color_temp'];
 		$chartColorPower = $options['fgpx_chart_color_power'];
+		$ftp = $options['fgpx_ftp'];
+		$systemWeightKg = $options['fgpx_system_weight_kg'];
 		$chartColorWindImpact = $options['fgpx_chart_color_wind_impact'];
 		$chartColorWindRose = $options['fgpx_chart_color_wind_rose'];
 		$prefetchEnabled = $options['fgpx_prefetch_enabled'];
@@ -481,6 +483,14 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_chart_color_power">' . \esc_html__('Power chart color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color_power" name="fgpx_chart_color_power" value="' . \esc_attr($chartColorPower) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_ftp">' . \esc_html__('FTP (W)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_ftp" name="fgpx_ftp" class="small-text" min="100" max="500" step="1" value="' . \esc_attr($ftp) . '" />';
+		echo '<p class="description">' . \esc_html__('Functional Threshold Power used for power zones (default 250 W).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_system_weight_kg">' . \esc_html__('System weight (kg)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_system_weight_kg" name="fgpx_system_weight_kg" class="small-text" min="40" max="200" step="0.1" value="' . \esc_attr($systemWeightKg) . '" />';
+		echo '<p class="description">' . \esc_html__('Total rider + bike + gear weight used for estimated power when GPX has no power data.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_chart_color_wind_impact">' . \esc_html__('Wind impact chart color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color_wind_impact" name="fgpx_chart_color_wind_impact" value="' . \esc_attr($chartColorWindImpact) . '" />';
@@ -917,8 +927,10 @@ final class Admin
 		// Purge new v2 cache key variants
 		$modified = (string) \get_post_field('post_modified_gmt', (int) $postId);
 		$cache_key_v2_prefix = 'fgpx_json_v2_' . (int) $postId . '_' . $modified;
+		$cache_key_v3_prefix = 'fgpx_json_v3_' . (int) $postId . '_' . $modified;
 		// Best-effort: delete exact keys used (host_post and simplify component can vary)
 		\delete_transient($cache_key_v2_prefix . '_hp_0_simp_0');
+		\delete_transient($cache_key_v3_prefix . '_hp_0_simp_0');
 
 		// Check if we should redirect to edit page (from Add New Track page)
 		$redirectToEdit = isset($_POST['redirect_to_edit']) && $_POST['redirect_to_edit'] === '1';
@@ -1550,6 +1562,8 @@ final class Admin
 		\update_option('fgpx_chart_color_cad', $this->getValidColor('fgpx_chart_color_cad', '#7c3aed'), true);
 		\update_option('fgpx_chart_color_temp', $this->getValidColor('fgpx_chart_color_temp', '#f59e0b'), true);
 		\update_option('fgpx_chart_color_power', $this->getValidColor('fgpx_chart_color_power', '#059669'), true);
+		\update_option('fgpx_ftp', (string) $this->getValidInt('fgpx_ftp', 250, 100, 500), true);
+		\update_option('fgpx_system_weight_kg', (string) $this->getValidFloat('fgpx_system_weight_kg', 75.0, 40.0, 200.0), true);
 		\update_option('fgpx_chart_color_wind_impact', $this->getValidColor('fgpx_chart_color_wind_impact', '#ff6b35'), true);
 		\update_option('fgpx_chart_color_wind_rose', $this->getValidColor('fgpx_chart_color_wind_rose', '#4ecdc4'), true);
 		if (isset($_POST['fgpx_wind_rose_color_north'])) { \update_option('fgpx_wind_rose_color_north', \sanitize_hex_color($_POST['fgpx_wind_rose_color_north']), true); }
@@ -2943,12 +2957,18 @@ final class Admin
 			// Legacy format (backward compatibility)
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500',
 			
 			// With weather status only (older format)
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1',
 			
 			// With weather + wind (current format)
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0',
@@ -2959,6 +2979,14 @@ final class Admin
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_1',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_1',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1',
 		];
 		
 		foreach ($patterns as $pattern) {

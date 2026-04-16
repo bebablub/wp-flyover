@@ -60,6 +60,8 @@ final class Options
 		'fgpx_chart_color_cad' => '#7c3aed',
 		'fgpx_chart_color_temp' => '#f59e0b',
 		'fgpx_chart_color_power' => '#059669',
+		'fgpx_ftp' => '250',
+		'fgpx_system_weight_kg' => '75',
 
 		// Chart Colors - Wind Analysis
 		'fgpx_chart_color_wind_impact' => '#ff6b35',
@@ -235,6 +237,7 @@ final class Options
 			'chartColorCad' => $options['fgpx_chart_color_cad'],
 			'chartColorTemp' => $options['fgpx_chart_color_temp'],
 			'chartColorPower' => $options['fgpx_chart_color_power'],
+			'ftp' => (int) $options['fgpx_ftp'],
 			'chartColorWindImpact' => $options['fgpx_chart_color_wind_impact'],
 			'chartColorWindRose' => $options['fgpx_chart_color_wind_rose'],
 			

@@ -15,7 +15,8 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Day/Night overlay with configurable colors
 - Weather visualizations: colored heatmaps, temperature circles, and wind arrows with configurable radius
 - Wind analysis: per-point wind speed/direction, wind impact factor chart, wind rose distribution (16 sectors)
-- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Wind Impact, Wind Rose, and All Data
+- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Power Zones, Wind Impact, Wind Rose, and All Data
+- Power fallback model: if GPX has no power stream, backend estimates power and the frontend displays an "Estimated power" indicator
 - Chart area selection & zoom with reset and synchronized map marker filtering (excludes polar charts)
 - Video recording – record MP4/WebM videos of the flyover animation with customizable settings
 - Privacy mode (hide first/last N km for playback window only)
@@ -390,6 +391,7 @@ Notes
   "bounds": [minLon, minLat, maxLon, maxLat],
   "points_count": 12345,
   "simplified": true,
+  "estimatedPower": true,
   "photos": [
     {
       "id": 49785,
@@ -405,6 +407,8 @@ Notes
   ]
 }
 ```
+
+`estimatedPower` is `true` when power values were computed on the backend (instead of read from the GPX stream).
 
 ## Privacy Mode
 

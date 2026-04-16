@@ -169,6 +169,7 @@ final class OptionsTest extends TestCase
         $required = [
             'chartColor', 'chartColor2', 'chartColorHr',
             'chartColorCad', 'chartColorTemp', 'chartColorPower',
+            'ftp',
             'chartColorWindImpact', 'chartColorWindRose',
             'windRoseColorNorth', 'windRoseColorSouth',
             'windRoseColorEast', 'windRoseColorWest',
@@ -201,6 +202,7 @@ final class OptionsTest extends TestCase
         $this->assertIsInt($f['defaultZoom'],              'defaultZoom must be int');
         $this->assertIsInt($f['defaultPitch'],             'defaultPitch must be int');
         $this->assertIsInt($f['backendSimplifyTarget'],    'backendSimplifyTarget must be int');
+        $this->assertIsInt($f['ftp'],                      'ftp must be int');
 
         // Floats / numbers
         $this->assertIsFloat($f['daynightMapOpacity'],     'daynightMapOpacity must be float');

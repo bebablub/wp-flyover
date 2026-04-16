@@ -441,7 +441,7 @@
     stats.appendChild(statDist); stats.appendChild(statTime); stats.appendChild(statAvg); stats.appendChild(statGain);
     
     // Tab variables
-    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabWindImpact, tabWindRose, tabAll;
+    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll;
     
     // Show no data message in chart area (will be defined in startPlayer with proper chart reference)
     // var showNoDataMessage = null; // Removed - will be defined globally in startPlayer
@@ -472,6 +472,9 @@
     tabPower = createEl('button', 'fgpx-chart-tab');
     tabPower.textContent = 'Power';
     tabPower.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
+    tabPowerZones = createEl('button', 'fgpx-chart-tab');
+    tabPowerZones.textContent = 'Power Zones';
+    tabPowerZones.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabWindImpact = createEl('button', 'fgpx-chart-tab');
     tabWindImpact.textContent = 'Wind Impact';
     tabWindImpact.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
@@ -485,6 +488,7 @@
     chartTabs.appendChild(tabBiometrics);
     chartTabs.appendChild(tabTemperature);
     chartTabs.appendChild(tabPower);
+    chartTabs.appendChild(tabPowerZones);
     chartTabs.appendChild(tabWindImpact);
     chartTabs.appendChild(tabWindRose);
     chartTabs.appendChild(tabAll);
@@ -512,7 +516,7 @@
       controls: { btnPlay: btnPlay, btnPause: btnPause, btnRestart: btnRestart, btnRecord: btnRecord, btnWeather: btnWeather, btnTemperature: btnTemperature, btnWind: btnWind, btnDayNight: btnDayNight, speedSel: speedSel, progressBar: progressBar }, 
       stats: { dist: statDist, time: statTime, avg: statAvg, gain: statGain }, 
       canvas: canvas,
-      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll },
+      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll },
       chartLegend: chartLegend
     };
   }
@@ -540,7 +544,7 @@
       var hostPost = (window.FGPX && FGPX.hostPostId) ? String(FGPX.hostPostId) : '0';
       var simplify = (window.FGPX && FGPX.backendSimplify) ? '1' : '0';
       var target = (window.FGPX && FGPX.backendSimplifyTarget) ? String(FGPX.backendSimplifyTarget) : '1200';
-      return 'fgpx_cache_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target;
+      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target;
     }
 
     function getCachedData() {
@@ -1681,25 +1685,8 @@
                      Math.min(...temperatures) + '-' + Math.max(...temperatures) + ' °C)');
             }
             
-            // Add realistic power data if not present
             if (!hasPowers) {
-              var powers = [];
-              var basePower = 180 + Math.random() * 120; // Base power 180-300 watts
-              var currentPower = basePower;
-              
-              for (var i = 0; i < timestamps.length; i++) {
-                // Simulate realistic power variations
-                var variation = (Math.random() - 0.5) * 40; // ±20W variation
-                var effort = Math.sin(i / timestamps.length * Math.PI * 6) * 50; // Simulate intervals/hills
-                var fatigue = (i / timestamps.length) * -30; // Gradual fatigue over time
-                
-                currentPower = Math.max(80, Math.min(500, basePower + effort + fatigue + variation));
-                powers.push(Math.round(currentPower));
-              }
-              
-              props.powers = powers;
-              DBG.log('DEBUG: Added realistic power data (' + powers.length + ' points, range: ' + 
-                     Math.min(...powers) + '-' + Math.max(...powers) + ' watts)');
+              DBG.log('DEBUG: No GPX power values in payload; backend estimation should provide power data when available.');
             }
           }
         } catch (e) {
@@ -1725,6 +1712,7 @@
         cadence: null,
         temperature: null,
         power: null,
+        powerZones: null,
         windSpeed: null,
         windImpact: null,
         windDirection: null,
@@ -1775,6 +1763,12 @@
             chartDataCache.power = (Array.isArray(powers)) ? xVals.map(function(x, idx) {
               return { x: x, y: powers[idx] || 0 };
             }).filter(function(p) { return p.y > 0; }) : [];
+            break;
+
+          case 'powerZones':
+            chartDataCache.powerZones = (Array.isArray(powers)) ? powers.filter(function(v) {
+              return typeof v === 'number' && v > 0;
+            }) : [];
             break;
             
           case 'windSpeed':
@@ -4761,10 +4755,17 @@
         var moveS = stats.moving_time_s != null ? stats.moving_time_s : (totalDuration != null ? totalDuration : 0);
         var avgKmh = stats.average_speed_m_s != null ? (stats.average_speed_m_s * 3.6) : (moveS > 0 ? (km / (moveS / 3600)) : 0);
         var gain = stats.elevation_gain_m != null ? stats.elevation_gain_m : 0;
+        var usesEstimatedPower = !!(payload && payload.estimatedPower);
         ui.stats.dist.innerHTML = '<strong>' + formatNumber(km, 2) + '</strong> km';
         ui.stats.time.innerHTML = '<strong>' + formatTime(moveS) + '</strong> time';
         ui.stats.avg.innerHTML = '<strong>' + formatNumber(avgKmh, 1) + '</strong> km/h';
         ui.stats.gain.innerHTML = '<strong>' + Math.round(gain) + '</strong> m gain';
+        if (usesEstimatedPower && ui.tabs && ui.tabs.tabPower && ui.tabs.tabPowerZones) {
+          ui.tabs.tabPower.textContent = 'Power ~';
+          ui.tabs.tabPowerZones.textContent = 'Power Zones ~';
+          ui.tabs.tabPower.setAttribute('title', 'Power data is estimated from speed, slope, and configured system weight.');
+          ui.tabs.tabPowerZones.setAttribute('title', 'Power zones are based on estimated power data.');
+        }
         
         // Update splash stats display
         try {
@@ -4903,6 +4904,11 @@
             return {
               power: powerPoints || getChartData('power')
             };
+          case 'powerzones':
+            return {
+              power: powerPoints || getChartData('power'),
+              powerZones: getChartData('powerZones')
+            };
           case 'windimpact':
             return {
               windSpeed: windSpeedPoints || getChartData('windSpeed'),
@@ -4952,8 +4958,8 @@
         DBG.log('Switching to tab', { tabType: tabType });
         currentChartTab = tabType;
         
-        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll];
-        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'windimpact', 'windrose', 'all'];
+        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll];
+        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all'];
         
         tabElements.forEach(function(tab, index) {
           if (tabTypes[index] === tabType) {
@@ -5057,6 +5063,7 @@
       ui.tabs.tabBiometrics.addEventListener('click', function() { window.switchChartTab('biometrics'); });
       ui.tabs.tabTemperature.addEventListener('click', function() { window.switchChartTab('temperature'); });
       ui.tabs.tabPower.addEventListener('click', function() { window.switchChartTab('power'); });
+      ui.tabs.tabPowerZones.addEventListener('click', function() { window.switchChartTab('powerzones'); });
       ui.tabs.tabWindImpact.addEventListener('click', function() { window.switchChartTab('windimpact'); });
       ui.tabs.tabWindRose.addEventListener('click', function() { window.switchChartTab('windrose'); });
       ui.tabs.tabAll.addEventListener('click', function() { window.switchChartTab('all'); });
@@ -5475,6 +5482,20 @@
                 yAxisID: 'y' 
               };
             }
+          } else if (tabType === 'powerzones') {
+            positionDataset = {
+              label: 'Position',
+              data: [{ x: xVals[0], y: 0 }],
+              pointRadius: 0,
+              pointHoverRadius: 0,
+              pointBorderWidth: 0,
+              pointBorderColor: '#fff',
+              borderWidth: 0,
+              showLine: false,
+              backgroundColor: 'transparent',
+              pointBackgroundColor: 'transparent',
+              yAxisID: 'y'
+            };
           } else if (tabType === 'windimpact') {
             if (windImpactPoints && windImpactPoints.length > 0) {
               positionDataset = { 
@@ -5564,6 +5585,8 @@
               if (powerPoints && powerPoints.length > 0 && index < powerPoints.length) {
                 return powerPoints[index] ? powerPoints[index].y : 0;
               }
+            } else if (tabType === 'powerzones') {
+              return 0;
             } else if (tabType === 'windimpact') {
               if (windImpactPoints && windImpactPoints.length > 0 && index < windImpactPoints.length) {
                 return windImpactPoints[index] ? windImpactPoints[index].y : 0;
@@ -5743,6 +5766,99 @@
             // No power data available - show message
             return showNoDataMessageLocal('No power data available for this track.');
           }
+        } else if (tabType === 'powerzones') {
+          var zonePowers = getChartData('powerZones');
+          if (zonePowers && zonePowers.length > 0) {
+            var ftp = (window.FGPX && isFinite(Number(FGPX.ftp))) ? Number(FGPX.ftp) : 250;
+            ftp = Math.max(100, Math.min(500, ftp));
+
+            var zoneDefs = [
+              { label: 'Z1 Recovery', min: 0, max: 0.55 },
+              { label: 'Z2 Endurance', min: 0.55, max: 0.75 },
+              { label: 'Z3 Tempo', min: 0.75, max: 0.90 },
+              { label: 'Z4 Threshold', min: 0.90, max: 1.05 },
+              { label: 'Z5 VO2 Max', min: 1.05, max: 1.20 },
+              { label: 'Z6 Anaerobic', min: 1.20, max: Infinity }
+            ];
+
+            var zoneSeconds = [0, 0, 0, 0, 0, 0];
+            var avgStepSec = 1;
+            if (Array.isArray(timeOffsets) && timeOffsets.length > 1) {
+              var totalStep = 0;
+              var stepCount = 0;
+              for (var ti = 1; ti < timeOffsets.length; ti++) {
+                var step = Number(timeOffsets[ti]) - Number(timeOffsets[ti - 1]);
+                if (isFinite(step) && step > 0) {
+                  totalStep += step;
+                  stepCount++;
+                }
+              }
+              if (stepCount > 0) {
+                avgStepSec = Math.max(1, totalStep / stepCount);
+              }
+            }
+
+            for (var pi = 0; pi < zonePowers.length; pi++) {
+              var ratio = zonePowers[pi] / ftp;
+              for (var zi = 0; zi < zoneDefs.length; zi++) {
+                if (ratio >= zoneDefs[zi].min && ratio < zoneDefs[zi].max) {
+                  zoneSeconds[zi] += avgStepSec;
+                  break;
+                }
+              }
+            }
+
+            var zoneLabels = zoneDefs.map(function(z, idx) {
+              var minW = Math.round(z.min * ftp);
+              var maxW = z.max === Infinity ? '∞' : String(Math.round(z.max * ftp));
+              return z.label + ' (' + minW + '-' + maxW + 'W)';
+            });
+
+            var zoneMinutes = zoneSeconds.map(function(v) {
+              return Math.round((v / 60) * 10) / 10;
+            });
+
+            chart = new Chart(ui.canvas, {
+              type: 'bar',
+              data: {
+                labels: zoneLabels,
+                datasets: [{
+                  label: 'Time in Zone (min)',
+                  data: zoneMinutes,
+                  backgroundColor: [
+                    'rgba(16,185,129,0.55)',
+                    'rgba(34,197,94,0.55)',
+                    'rgba(250,204,21,0.55)',
+                    'rgba(251,146,60,0.55)',
+                    'rgba(239,68,68,0.55)',
+                    'rgba(153,27,27,0.55)'
+                  ],
+                  borderColor: chartLineColor6,
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        return context.parsed.y.toFixed(1) + ' min';
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  x: { title: { display: true, text: 'Power Zones (% FTP)' } },
+                  y: { beginAtZero: true, title: { display: true, text: 'Time (minutes)' } }
+                }
+              }
+            });
+            return;
+          }
+          return showNoDataMessageLocal('No power data available for power zones.');
         } else if (tabType === 'windimpact') {
           // Wind Impact tab
           if ((windImpactPoints && windImpactPoints.length > 0) || (windSpeedPoints && windSpeedPoints.length > 0)) {
