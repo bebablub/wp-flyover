@@ -14,6 +14,9 @@
   min-height: 280px;
   border-radius: 0px;
   overflow: hidden;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .fgpx .fgpx-controls {
@@ -122,6 +125,8 @@
   background: var(--fgpx-card-bg, #fff);
   overflow: hidden;
   padding-top: 10px;
+  contain: layout paint style;
+  isolation: isolate;
 }
 
 .fgpx .fgpx-spinner {
