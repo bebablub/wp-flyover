@@ -2461,7 +2461,7 @@ final class Admin
 
 					// Distance, moving time, elevation gain
 					if ($prev !== null) {
-						$d = $this->haversine($prev['lon'], $prev['lat'], $lon, $lat);
+						$d = self::haversine($prev['lon'], $prev['lat'], $lon, $lat);
 						$totalDistance += $d;
 
 						$dt = ($time !== null && $prev['time'] !== null) ? max(0, $time - $prev['time']) : 0;
@@ -2580,7 +2580,7 @@ final class Admin
 	/**
 	 * Great-circle distance in meters using Haversine formula.
 	 */
-	private function haversine(float $lon1, float $lat1, float $lon2, float $lat2): float
+	private static function haversine(float $lon1, float $lat1, float $lon2, float $lat2): float
 	{
 		$earth = 6371000.0;
 		$dLat = deg2rad($lat2 - $lat1);
