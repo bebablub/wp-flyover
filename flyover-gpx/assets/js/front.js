@@ -2388,15 +2388,9 @@
             },
             paint: {
               'fill-color': window.FGPX.daynightMapColor || '#000080',
-              'fill-opacity': [
-                'interpolate',
-                ['linear'],
-                ['to-number', ['get', 'nightOpacity']],
-                0, 0,
-                1, parseFloat(window.FGPX.daynightMapOpacity) || 0.4
-              ],
+              'fill-opacity': 0,
               'fill-opacity-transition': {
-                duration: 300,
+                duration: 2000,
                 delay: 0
               }
             }
@@ -7198,212 +7192,60 @@
         }
         currentPosLngLat = pos;
 
-        // Day/night overlay update - only when crossing transition points
+        // Day/night overlay update — sets static fill-opacity via setPaintProperty.
+        // MapLibre's fill-opacity-transition handles smooth fading.
+        // Layer visibility is controlled solely by the toggle button.
         if (window.FGPX && FGPX.daynightMapEnabled) {
           try {
-            var overlaySrc = map.getSource('fgpx-daynight-overlay');
-            if (overlaySrc && Array.isArray(timeOffsets) && dayNightPeriods) {
-              // Get current time offset based on progress
-              var timeIdx = Math.floor(p * (timeOffsets.length - 1));
-              var currentTimeOffset = timeOffsets[timeIdx] || 0;
+            if (Array.isArray(timeOffsets) && dayNightPeriods && dayNightPeriods.length > 0 && map.getLayer('fgpx-daynight-overlay')) {
+              // Use distance-based binary search to find current time offset (matches chart cursor)
+              var dnLo = 0, dnHi = cumDist.length - 1;
+              while (dnLo < dnHi) { var dnMid = (dnLo + dnHi) >>> 1; if (cumDist[dnMid] < d) dnLo = dnMid + 1; else dnHi = dnMid; }
+              var currentTimeOffset = timeOffsets[Math.max(0, dnLo)] || 0;
               
-              // Initialize tracking variables if not exists
               if (typeof window.__fgpxLastDayNightState === 'undefined') {
                 window.__fgpxLastDayNightState = null;
-                window.__fgpxLastTransitionCheck = -1;
               }
               
-              // Only recalculate if we've moved significantly or state is unknown
-              var shouldUpdate = (window.__fgpxLastDayNightState === null || 
-                                Math.abs(currentTimeOffset - window.__fgpxLastTransitionCheck) > 60); // Check every minute
+              // Determine if we are in a night period
+              var sortedPeriods = dayNightPeriods.slice().sort(function(a, b) { return a.timeOffset - b.timeOffset; });
+              var isInNightPeriod = false;
+              var firstPeriod = sortedPeriods[0];
               
-              // Also check if we crossed any transition points
-              if (!shouldUpdate && dayNightPeriods && dayNightPeriods.length > 0) {
-                var lastCheck = window.__fgpxLastTransitionCheck;
-                for (var t = 0; t < dayNightPeriods.length; t++) {
-                  var transition = dayNightPeriods[t];
-                  // Check if we crossed this transition point since last check
-                  if ((lastCheck < transition.timeOffset && currentTimeOffset >= transition.timeOffset) ||
-                      (lastCheck > transition.timeOffset && currentTimeOffset <= transition.timeOffset)) {
-                    shouldUpdate = true;
-                    DBG.log('Crossed day/night transition:', transition.type, 'at offset:', transition.timeOffset);
+              if (currentTimeOffset < firstPeriod.timeOffset) {
+                isInNightPeriod = (firstPeriod.type === 'sunrise' || firstPeriod.type === 'nightStart');
+              } else {
+                var lastTransition = null;
+                for (var i = 0; i < sortedPeriods.length; i++) {
+                  if (sortedPeriods[i].timeOffset <= currentTimeOffset) {
+                    lastTransition = sortedPeriods[i];
+                  } else {
                     break;
                   }
                 }
+                if (lastTransition) {
+                  isInNightPeriod = (lastTransition.type === 'sunset' || lastTransition.type === 'nightStart');
+                }
               }
               
-              if (shouldUpdate) {
-                // Determine night opacity using pre-calculated periods - robust edge case handling
-                var nightOpacity = 0; // Default to day
-                
-                if (dayNightPeriods && dayNightPeriods.length > 0) {
-                  // Sort periods by timeOffset to ensure correct order
-                  var sortedPeriods = dayNightPeriods.slice().sort(function(a, b) { 
-                    return a.timeOffset - b.timeOffset; 
-                  });
-                  
-                  var isInNightPeriod = false;
-                  
-                  // Handle edge case: track starts before any transitions (assume day unless proven night)
-                  var firstPeriod = sortedPeriods[0];
-                  if (currentTimeOffset < firstPeriod.timeOffset) {
-                    // If first transition is sunrise, we start in night
-                    // If first transition is sunset, we start in day
-                    isInNightPeriod = (firstPeriod.type === 'sunrise');
-                  } else {
-                    // Find the most recent transition before current time
-                    var lastTransition = null;
-                    for (var i = 0; i < sortedPeriods.length; i++) {
-                      if (sortedPeriods[i].timeOffset <= currentTimeOffset) {
-                        lastTransition = sortedPeriods[i];
-                      } else {
-                        break; // Periods are sorted, so we can break early
-                      }
-                    }
-                    
-                    if (lastTransition) {
-                      // If last transition was sunset, we're in night
-                      // If last transition was sunrise, we're in day
-                      isInNightPeriod = (lastTransition.type === 'sunset');
-                    } else {
-                      // No transitions before current time, assume day
-                      isInNightPeriod = false;
-                    }
-                  }
-                  
-                  // Handle edge case: track extends beyond all transitions
-                  var lastPeriod = sortedPeriods[sortedPeriods.length - 1];
-                  if (currentTimeOffset > lastPeriod.timeOffset) {
-                    // State depends on the last transition type
-                    isInNightPeriod = (lastPeriod.type === 'sunset');
-                  }
-                  
-                  nightOpacity = isInNightPeriod ? 1 : 0;
-                  
-                  // Debug logging for edge cases
-                  if (currentTimeOffset < firstPeriod.timeOffset || currentTimeOffset > lastPeriod.timeOffset) {
-                    DBG.log('Edge case detected:', {
-                      currentTimeOffset: currentTimeOffset,
-                      firstPeriod: firstPeriod,
-                      lastPeriod: lastPeriod,
-                      isInNightPeriod: isInNightPeriod,
-                      reason: currentTimeOffset < firstPeriod.timeOffset ? 'before_first_transition' : 'after_last_transition'
-                    });
-                  }
+              var nightOpacity = isInNightPeriod ? 1 : 0;
+              
+              // Update paint property when state changes — transition handles smooth fade
+              if (window.__fgpxLastDayNightState !== nightOpacity) {
+                DBG.log('Day/night state changed:', window.__fgpxLastDayNightState, '->', nightOpacity, 'at offset:', currentTimeOffset);
+                var targetOpacity = parseFloat(window.FGPX.daynightMapOpacity) || 0.4;
+                // On seek (null state), apply instantly without transition
+                if (window.__fgpxLastDayNightState === null) {
+                  map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity-transition', { duration: 0, delay: 0 });
+                  map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
+                  // Restore transition for future smooth fades
+                  setTimeout(function() {
+                    try { map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity-transition', { duration: 2000, delay: 0 }); } catch(_) {}
+                  }, 50);
+                } else {
+                  map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
                 }
-                
-                // Only update if state actually changed
-                if (window.__fgpxLastDayNightState !== nightOpacity) {
-                  DBG.log('Day/night state changed:', window.__fgpxLastDayNightState, '->', nightOpacity, 'at offset:', currentTimeOffset);
-                  
-                  // Ensure layer exists before updating
-                  var overlayLayer = map.getLayer('fgpx-daynight-overlay');
-                  if (!overlayLayer) {
-                    DBG.warn('Day/night overlay layer missing! Attempting to recreate...');
-                    try {
-                      // Create a full viewport polygon for the night overlay
-                      var bounds = map.getBounds();
-                      var overlayPolygon = {
-                        type: 'Feature',
-                        properties: { nightOpacity: nightOpacity },
-                        geometry: {
-                          type: 'Polygon',
-                          coordinates: [[
-                            [bounds.getWest(), bounds.getNorth()],
-                            [bounds.getEast(), bounds.getNorth()],
-                            [bounds.getEast(), bounds.getSouth()],
-                            [bounds.getWest(), bounds.getSouth()],
-                            [bounds.getWest(), bounds.getNorth()]
-                          ]]
-                        }
-                      };
-                      
-                      var overlayData = { type: 'FeatureCollection', features: [overlayPolygon] };
-                      
-                      // Check if source exists first
-                      var existingSource = map.getSource('fgpx-daynight-overlay');
-                      if (!existingSource) {
-                        map.addSource('fgpx-daynight-overlay', { type: 'geojson', data: overlayData });
-                        DBG.log('Recreated overlay source');
-                      } else {
-                        existingSource.setData(overlayData);
-                        DBG.log('Updated existing overlay source');
-                      }
-                      
-                      // Add the layer if it doesn't exist
-                      if (!map.getLayer('fgpx-daynight-overlay')) {
-                        map.addLayer({
-                          id: 'fgpx-daynight-overlay',
-                          type: 'fill',
-                          source: 'fgpx-daynight-overlay',
-                          layout: { 'visibility': (!!(window.FGPX && FGPX.daynightVisibleByDefault)) ? 'visible' : 'none' },
-                          paint: {
-                            'fill-color': window.FGPX.daynightMapColor || '#000080',
-                            'fill-opacity': [
-                              'interpolate',
-                              ['linear'],
-                              ['to-number', ['get', 'nightOpacity']],
-                              0, 0,
-                              1, parseFloat(window.FGPX.daynightMapOpacity) || 0.4
-                            ],
-                            'fill-opacity-transition': {
-                              duration: 300,
-                              delay: 0
-                            }
-                          }
-                        }, map.getLayer('fgpx-point-circle') ? 'fgpx-point-circle' : undefined);
-                        DBG.log('Recreated overlay layer');
-                      }
-                      
-                      // Verify recreation
-                      overlayLayer = map.getLayer('fgpx-daynight-overlay');
-                      DBG.log('Layer recreation result:', !!overlayLayer);
-                    } catch (recreateError) {
-                      DBG.warn('Failed to recreate overlay layer:', recreateError);
-                    }
-                  }
-                  
-                  // Update the overlay data
-                  var bounds = map.getBounds();
-                  var overlayPolygon = {
-                    type: 'Feature',
-                    properties: { nightOpacity: nightOpacity },
-                    geometry: {
-                      type: 'Polygon',
-                      coordinates: [[
-                        [bounds.getWest(), bounds.getNorth()],
-                        [bounds.getEast(), bounds.getNorth()],
-                        [bounds.getEast(), bounds.getSouth()],
-                        [bounds.getWest(), bounds.getSouth()],
-                        [bounds.getWest(), bounds.getNorth()]
-                      ]]
-                    }
-                  };
-                  
-                  var overlayData = { type: 'FeatureCollection', features: [overlayPolygon] };
-                  overlaySrc.setData(overlayData);
-                  
-                  // Apply smooth paint property transitions only if layer exists
-                  try {
-                    if (map.getLayer('fgpx-daynight-overlay')) {
-                      var targetOpacity = parseFloat(window.FGPX.daynightMapOpacity) || 0.4;
-                      map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', [
-                        'interpolate',
-                        ['linear'],
-                        ['to-number', ['get', 'nightOpacity']],
-                        0, 0,
-                        1, targetOpacity * nightOpacity
-                      ]);
-                    }
-                  } catch (paintError) {
-                    DBG.warn('Failed to update paint property smoothly:', paintError);
-                  }
-                  
-                  // Update tracking variables
-                  window.__fgpxLastDayNightState = nightOpacity;
-                }
-                
-                window.__fgpxLastTransitionCheck = currentTimeOffset;
+                window.__fgpxLastDayNightState = nightOpacity;
               }
             }
           } catch (e) {
@@ -8543,65 +8385,13 @@
             
             if (overlayLayer) {
               if (daynightVisible) {
-                // Show layer with smooth fade-in
+                // Show layer — current night/day opacity is already set by updateVisuals
                 map.setLayoutProperty('fgpx-daynight-overlay', 'visibility', 'visible');
-                
-                // Animate opacity from 0 to target opacity
-                var targetOpacity = parseFloat(window.FGPX.daynightMapOpacity) || 0.4;
-                var steps = 20;
-                var duration = 300; // 300ms transition
-                var stepDuration = duration / steps;
-                
-                for (var i = 0; i <= steps; i++) {
-                  (function(step) {
-                    setTimeout(function() {
-                      var progress = step / steps;
-                      var currentOpacity = progress * targetOpacity;
-                      
-                      // Update the fill-opacity paint property with smooth interpolation
-                      map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', [
-                        'interpolate',
-                        ['linear'],
-                        ['to-number', ['get', 'nightOpacity']],
-                        0, 0,
-                        1, currentOpacity
-                      ]);
-                    }, step * stepDuration);
-                  })(i);
-                }
-                
-                DBG.log('Started fade-in animation to opacity:', targetOpacity);
+                DBG.log('Day/night overlay shown');
               } else {
-                // Fade out smoothly then hide
-                var currentOpacity = parseFloat(window.FGPX.daynightMapOpacity) || 0.4;
-                var steps = 20;
-                var duration = 300; // 300ms transition
-                var stepDuration = duration / steps;
-                
-                for (var i = 0; i <= steps; i++) {
-                  (function(step) {
-                    setTimeout(function() {
-                      var progress = step / steps;
-                      var opacity = currentOpacity * (1 - progress);
-                      
-                      // Update the fill-opacity paint property
-                      map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', [
-                        'interpolate',
-                        ['linear'],
-                        ['to-number', ['get', 'nightOpacity']],
-                        0, 0,
-                        1, opacity
-                      ]);
-                      
-                      // Hide layer after fade-out completes
-                      if (step === steps) {
-                        map.setLayoutProperty('fgpx-daynight-overlay', 'visibility', 'none');
-                      }
-                    }, step * stepDuration);
-                  })(i);
-                }
-                
-                DBG.log('Started fade-out animation from opacity:', currentOpacity);
+                // Hide layer
+                map.setLayoutProperty('fgpx-daynight-overlay', 'visibility', 'none');
+                DBG.log('Day/night overlay hidden');
               }
               
               // Verify the change
@@ -8675,7 +8465,6 @@
         
         // Force a deterministic day/night recompute on seek
         window.__fgpxLastDayNightState = null;
-        window.__fgpxLastTransitionCheck = -1;
         
         // Clear photo state when seeking to allow photos to be shown again
         // This fixes the issue where photos weren't shown when seeking backward
