@@ -97,7 +97,7 @@ jobs:
 
       - name: Install npm dependencies
         working-directory: flyover-gpx
-        run: npm ci
+        run: npm install
 
       - name: Run Jest test suite
         working-directory: flyover-gpx

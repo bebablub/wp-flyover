@@ -19,7 +19,7 @@ vendor/bin/phpunit          # or: composer test
 composer lint
 
 # Install JS dev dependencies
-cd flyover-gpx && npm ci
+cd flyover-gpx && npm install
 
 # Run Jest tests
 npm test
