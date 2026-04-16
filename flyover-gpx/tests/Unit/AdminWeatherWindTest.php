@@ -76,6 +76,32 @@ final class AdminWeatherWindTest extends TestCase
         $this->assertSame(90.0, $result);
     }
 
+    public function test_wind_interpolation_returns_null_when_no_valid_feature_exists(): void
+    {
+        $method = new ReflectionMethod(Admin::class, 'interpolateWindValueForPoint');
+        $method->setAccessible(true);
+
+        $weatherFeatures = [
+            [
+                'geometry' => ['coordinates' => [0.01, 0.0]],
+                'properties' => [
+                    'time_unix' => 3600,
+                    'wind_speed_kmh' => null,
+                ],
+            ],
+            [
+                'geometry' => [],
+                'properties' => [
+                    'time_unix' => 3600,
+                ],
+            ],
+        ];
+
+        $result = $method->invoke(null, $weatherFeatures, 0.0, 0.0, 3600, 'wind_speed_kmh');
+
+        $this->assertNull($result);
+    }
+
     public function test_weather_fetch_limits_unique_coordinate_buckets_to_fifty(): void
     {
         $remoteCalls = [];
