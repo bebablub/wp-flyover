@@ -137,7 +137,18 @@ final class CLI
 		}
 
 		$title = (string) (\WP_CLI\Utils\get_flag_value($assoc_args, 'title', '') ?? '');
-		if ($title === '') { $title = (string) wp_basename($destPath); }
+		if ($title === '') {
+			$fileName = sanitize_file_name((string) wp_basename($destPath));
+			$cleanTitle = $fileName;
+			if (preg_match('/^fgpx_[a-f0-9]+\.[a-f0-9]+-(.+)$/', $cleanTitle, $matches)) {
+				$cleanTitle = $matches[1];
+			}
+			if (str_ends_with($cleanTitle, '.gpx')) {
+				$cleanTitle = substr($cleanTitle, 0, -4);
+			}
+			$cleanTitle = str_replace('_', ' ', $cleanTitle);
+			$title = trim($cleanTitle);
+		}
 
 		$postId = wp_insert_post([
 			'post_title' => $title,
@@ -281,6 +292,10 @@ final class CLI
 		$coordinates = [];
 		$timestamps = [];
 		$cumulative = [];
+		$heartRates = [];
+		$cadences = [];
+		$temperatures = [];
+		$powers = [];
 		$pointsCount = 0;
 		$totalDistance = 0.0; // meters
 		$totalElevationGain = 0.0;
@@ -295,6 +310,17 @@ final class CLI
 					$lat = (float) $point->latitude; $lon = (float) $point->longitude;
 					$eleNullable = $point->elevation !== null ? (float) $point->elevation : null;
 					$time = $point->time ? (int) $point->time->getTimestamp() : null;
+					$heartRate = null;
+					$cadence = null;
+					$temperature = null;
+					$power = null;
+					if ($point->extensions && $point->extensions->trackPointExtension) {
+						$ext = $point->extensions->trackPointExtension;
+						$heartRate = $ext->hr ?? $ext->heartRate ?? null;
+						$cadence = $ext->cad ?? $ext->cadence ?? null;
+						$temperature = $ext->aTemp ?? $ext->avgTemperature ?? null;
+						$power = $ext->power ?? $ext->watts ?? null;
+					}
 					if ($lat < $minLat) { $minLat = $lat; } if ($lat > $maxLat) { $maxLat = $lat; }
 					if ($lon < $minLon) { $minLon = $lon; } if ($lon > $maxLon) { $maxLon = $lon; }
 					if ($eleNullable !== null) { if ($minElev === null || $eleNullable < $minElev) { $minElev = $eleNullable; } if ($maxElev === null || $eleNullable > $maxElev) { $maxElev = $eleNullable; } }
@@ -303,11 +329,14 @@ final class CLI
 						$totalDistance += $d;
 						$dt = ($time !== null && $prev['time'] !== null) ? max(0, $time - $prev['time']) : 0;
 						if ($dt > 0) { $speed = $d / $dt; if ($speed > 0.5) { $movingTime += $dt; } }
-						$gainThreshold = 0.5; if ($eleNullable !== null && $prev['ele'] !== null) { $deltaElev = $eleNullable - (float) $prev['ele']; if ($deltaElev > $gainThreshold) { $totalElevationGain += $deltaElev; } }
 					}
 					$coordinates[] = [$lon, $lat, $eleNullable !== null ? $eleNullable : 0.0];
 					$timestamps[] = $time !== null ? gmdate('c', $time) : null;
 					$cumulative[] = (float) $totalDistance;
+					$heartRates[] = $heartRate;
+					$cadences[] = $cadence;
+					$temperatures[] = $temperature;
+					$powers[] = $power;
 					$pointsCount++;
 					$prev = ['lat' => $lat, 'lon' => $lon, 'ele' => $eleNullable, 'time' => $time];
 					$rawElevations[] = $eleNullable;
@@ -315,12 +344,64 @@ final class CLI
 			}
 		}
 
+		if ($pointsCount === 0) {
+			return null;
+		}
+
+		// Compute total elevation gain with smoothing over raw elevations.
+		if (!empty($rawElevations)) {
+			$filled = [];
+			$last = null;
+			foreach ($rawElevations as $e) {
+				if ($e === null) {
+					$filled[] = $last !== null ? $last : 0.0;
+				} else {
+					$filled[] = $e;
+					$last = $e;
+				}
+			}
+
+			$win = 7;
+			$half = intdiv($win, 2);
+			$smoothed = [];
+			$N = count($filled);
+			for ($i = 0; $i < $N; $i++) {
+				$start = max(0, $i - $half);
+				$end = min($N - 1, $i + $half);
+				$seg = array_slice($filled, $start, $end - $start + 1);
+				sort($seg);
+				$mid = intdiv(count($seg), 2);
+				$smoothed[$i] = $seg[$mid];
+			}
+
+			$totalElevationGain = 0.0;
+			$segmentGain = 0.0;
+			$climbThreshold = 3.0;
+			for ($i = 1; $i < $N; $i++) {
+				$delta = $smoothed[$i] - $smoothed[$i - 1];
+				if ($delta > 0) {
+					$segmentGain += $delta;
+				} else if ($delta < 0) {
+					if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
+					$segmentGain = 0.0;
+				}
+			}
+			if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
+		}
+
 		$avgSpeed = $movingTime > 0 ? $totalDistance / $movingTime : 0.0;
 		$bounds = [$minLon, $minLat, $maxLon, $maxLat];
 		$geojson = [
 			'type' => 'LineString',
 			'coordinates' => $coordinates,
-			'properties' => ['timestamps' => $timestamps, 'cumulativeDistance' => $cumulative],
+			'properties' => [
+				'timestamps' => $timestamps,
+				'cumulativeDistance' => $cumulative,
+				'heartRates' => $heartRates,
+				'cadences' => $cadences,
+				'temperatures' => $temperatures,
+				'powers' => $powers,
+			],
 		];
 		$stats = [
 			'total_distance_m' => $totalDistance,
