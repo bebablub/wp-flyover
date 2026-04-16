@@ -1857,6 +1857,7 @@ final class Admin
 		$weatherPoints = [];
 		$uniqueCoords = [];
 		$coordToSamples = [];
+		$maxUniqueCoords = 50;
 
 		// Deduplicate coordinates by rounding to 0.1 degree grid
 		foreach ($samples as $sample) {
@@ -1871,9 +1872,9 @@ final class Admin
 			$coordToSamples[$coordKey][] = $sample;
 		}
 
-		// Limit to max 20 unique coordinates to avoid API abuse
-		if (count($uniqueCoords) > 20) {
-			$uniqueCoords = array_slice($uniqueCoords, 0, 20, true);
+		// Limit unique coordinates to keep API usage bounded while covering long routes better.
+		if (count($uniqueCoords) > $maxUniqueCoords) {
+			$uniqueCoords = array_slice($uniqueCoords, 0, $maxUniqueCoords, true);
 		}
 
 		// Determine date range
@@ -1919,7 +1920,8 @@ final class Admin
 						'properties' => [
 							// Existing properties
 							'rain_mm' => $rainMm,
-							'temperature_c' => $temperature, // Keep 80m for wind calculations
+							// Keep the legacy 80m field for compatibility; 2m ambient temperature is also stored below.
+							'temperature_c' => $temperature,
 							'wind_speed_kmh' => $windSpeed,
 							'wind_direction_deg' => $windDirection,
 							// NEW: Multi-weather properties
@@ -2718,10 +2720,10 @@ final class Admin
 	{
 		$bestMatch = null;
 		$bestScore = PHP_FLOAT_MAX;
-		$checkedFeatures = 0;
+		$distanceScaleKm = 25.0;
+		$timeScaleHours = 3.0;
 
 		foreach ($weatherFeatures as $feature) {
-			$checkedFeatures++;
 			if (!isset($feature['geometry']['coordinates']) || !isset($feature['properties'][$property])) {
 				// Skip features without required data
 				continue;
@@ -2736,12 +2738,14 @@ final class Admin
 				continue;
 			}
 
-			// Calculate distance and time difference
-			$distance = sqrt(pow($lon - $fLon, 2) + pow($lat - $fLat, 2)); // Simple distance
-			$timeDiff = abs($timestamp - $fTime);
+			// Combine proper geodetic distance with time difference using comparable normalized scales.
+			$distanceKm = self::haversine($lon, $lat, (float) $fLon, (float) $fLat) / 1000.0;
+			$timeHours = abs($timestamp - (int) $fTime) / 3600.0;
 
-			// Weighted score (distance in degrees * 1000 + time in hours)
-			$score = ($distance * 1000) + ($timeDiff / 3600);
+			$score = sqrt(
+				pow($distanceKm / $distanceScaleKm, 2) +
+				pow($timeHours / $timeScaleHours, 2)
+			);
 
 			if ($score < $bestScore) {
 				$bestScore = $score;
@@ -3049,10 +3053,8 @@ final class Admin
 					self::interpolateWindDataForTrack((int) $post_id, $geojsonArray);
 					// Store final geojson with wind data
 					\update_post_meta((int) $post_id, 'fgpx_geojson', \wp_json_encode($geojsonArray));
-					// Invalidate cache for this post
-					$modified = (string) \get_post_field('post_modified_gmt', (int) $post_id);
-					$cache_key_v2_prefix = 'fgpx_json_v2_' . (int) $post_id . '_' . $modified;
-					\delete_transient($cache_key_v2_prefix . '_hp_0_simp_0');
+					// Invalidate response cache variants for this post.
+					$this->clear_all_track_caches((int) $post_id);
 				}
 				$processed++;
 			} else {
@@ -3111,10 +3113,8 @@ final class Admin
 				self::interpolateWindDataForTrack($post_id, $geojsonArray);
 				// Store final geojson with wind data
 				\update_post_meta($post_id, 'fgpx_geojson', \wp_json_encode($geojsonArray));
-				// Invalidate cache for this post
-				$modified = (string) \get_post_field('post_modified_gmt', $post_id);
-				$cache_key_v2_prefix = 'fgpx_json_v2_' . $post_id . '_' . $modified;
-				\delete_transient($cache_key_v2_prefix . '_hp_0_simp_0');
+				// Invalidate response cache variants for this post.
+				$this->clear_all_track_caches($post_id);
 			}
 			\wp_send_json_success(['message' => 'Weather data enriched successfully']);
 		} else {

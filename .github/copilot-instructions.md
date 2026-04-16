@@ -39,6 +39,7 @@ composer install --no-dev --optimize-autoloader
 - When extending PHP unit tests that touch WordPress functions, add stubs in `flyover-gpx/tests/bootstrap.php`.
 - JS tests execute IIFE scripts in jsdom via `eval()`. Keep tests aligned with that loading model.
 - Do not forget to update the AJAX endpoint alongside with the REST endpoint
+- Do not break anything, take care of cache, take care that already uploaded tracks are correctly shown with changes, take care of backward compatibility
 
 ## Testing Expectations
 - For PHP changes: run `composer lint` and `composer test`.

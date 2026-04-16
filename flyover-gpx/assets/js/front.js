@@ -1329,6 +1329,10 @@
       var weatherEnabled = !!(window.FGPX && FGPX.weatherEnabled);
       var weatherOpacity = (window.FGPX && isFinite(Number(FGPX.weatherOpacity))) ? Number(FGPX.weatherOpacity) : 0.7;
       var weatherData = (payload && payload.weather) ? payload.weather : null;
+      // Explicit product policy: temperature and wind overlays are disabled on mobile.
+      var isMobileOverlayDisabled = window.innerWidth <= 680;
+      var temperatureVisible = false;
+      var windVisible = false;
       
       // ========== DEBUG WEATHER DATA ==========
       // Add debug weather data when enabled in admin settings
@@ -2101,7 +2105,7 @@
                 minzoom: 12,
                 filter: ['!=', ['get', 'wind_speed_kmh'], null], // Only show points with wind data
                 layout: {
-                  'visibility': 'none', // Start hidden
+                  'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
                   'icon-image': [
                     'case',
                     ['!=', ['get', 'wind_speed_kmh'], null],
@@ -2199,7 +2203,7 @@
                   minzoom: 12,
                   filter: ['!=', ['get', 'wind_speed_kmh'], null],
                   layout: {
-                    'visibility': 'none',
+                    'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
                     'icon-image': [
                       'case',
                       ['!=', ['get', 'wind_speed_kmh'], null],
@@ -2247,7 +2251,7 @@
                 minzoom: 12,
                 filter: ['!=', ['get', 'wind_speed_kmh'], null], // Only show points with wind data
                 layout: {
-                  'visibility': 'none', // Start hidden
+                  'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
                   'text-field': [
                     'case',
                     ['!=', ['get', 'wind_speed_kmh'], null],
@@ -2321,6 +2325,34 @@
           DBG.log('FGPX.daynightMapEnabled:', FGPX.daynightMapEnabled);
           DBG.log('FGPX.daynightMapColor:', FGPX.daynightMapColor);
           DBG.log('FGPX.daynightMapOpacity:', FGPX.daynightMapOpacity);
+
+          // Set an initial day/night state for paused initial view.
+          var initialNightOpacity = 0;
+          try {
+            if (typeof window.SunCalc !== 'undefined' && Array.isArray(timestamps) && timestamps.length > 0 && Array.isArray(coords) && coords.length > 0) {
+              var startProgress = privacyEnabled ? privacyStartP : 0;
+              var startIdx = Math.max(0, Math.min(timestamps.length - 1, Math.floor(startProgress * (timestamps.length - 1))));
+              // Find nearest valid timestamp around start index.
+              var tsIdx = startIdx;
+              var scan = 0;
+              while (scan < timestamps.length && !timestamps[tsIdx]) {
+                tsIdx = (startIdx + scan) % timestamps.length;
+                scan++;
+              }
+              if (timestamps[tsIdx]) {
+                var dt0 = new Date(timestamps[tsIdx]);
+                var lon0 = (coords[tsIdx] && typeof coords[tsIdx][0] === 'number') ? coords[tsIdx][0] : coords[0][0];
+                var lat0 = (coords[tsIdx] && typeof coords[tsIdx][1] === 'number') ? coords[tsIdx][1] : coords[0][1];
+                if (!isNaN(dt0.getTime()) && isFinite(lon0) && isFinite(lat0)) {
+                  var pos0 = window.SunCalc.getPosition(dt0, lat0, lon0);
+                  initialNightOpacity = (pos0 && pos0.altitude < 0) ? 1 : 0;
+                }
+              }
+            }
+          } catch (e) {
+            DBG.warn('Failed to compute initial day/night state:', e);
+            initialNightOpacity = 0;
+          }
           
           // Create a full viewport polygon for the night overlay
           var bounds = map.getBounds();
@@ -2328,7 +2360,7 @@
           
           var overlayPolygon = {
             type: 'Feature',
-            properties: { nightOpacity: 0 }, // Start with 0 opacity (day)
+            properties: { nightOpacity: initialNightOpacity },
             geometry: {
               type: 'Polygon',
               coordinates: [[
@@ -5144,7 +5176,7 @@
           lastTime: new Date(timestampArray[lastIdx])
         });
         
-        // Calculate for date range
+        // Calculate for full date range (all days spanned by the track)
         var startDate = new Date(timestampArray[firstIdx]);
         var endDate = new Date(timestampArray[lastIdx]);
         var startLat = coordinates[firstIdx][1];
@@ -5158,20 +5190,12 @@
         
         DBG.log('Average coordinates', { avgLat: avgLat, avgLon: avgLon });
         
-        // Calculate for each day in the range, using actual track dates
-        var currentDate = new Date(startDate);
-        // Keep the original time instead of setting to midnight
-        
         DBG.log('Date range calculation', {
           startDate: startDate,
           endDate: endDate,
-          currentDate: new Date(currentDate),
           trackStartTime: timestampArray[firstIdx],
           trackEndTime: timestampArray[lastIdx]
         });
-        
-        // Calculate for start date and end date (if different days)
-        var processedDates = [];
         
         // Check if track starts during night using sun position
         var sunPosition = window.SunCalc.getPosition(startDate, avgLat, avgLon);
@@ -5182,114 +5206,42 @@
           startsAtNight: startsAtNight
         });
         
-        // Always process the start date
-        var times = window.SunCalc.getTimes(currentDate, avgLat, avgLon);
-        processedDates.push(new Date(currentDate));
-        
-        DBG.log('SunCalc times for start date', {
-          date: new Date(currentDate),
-          sunrise: times.sunrise,
-          sunset: times.sunset,
-          sunriseValid: !isNaN(times.sunrise.getTime()),
-          sunsetValid: !isNaN(times.sunset.getTime())
-        });
-        
-        if (!isNaN(times.sunrise.getTime()) && !isNaN(times.sunset.getTime())) {
-          // Convert to elapsed time offsets (seconds from track start)
-          var trackStartTime = new Date(timestampArray[firstIdx]).getTime();
-          var sunriseOffset = (times.sunrise.getTime() - trackStartTime) / 1000;
-          var sunsetOffset = (times.sunset.getTime() - trackStartTime) / 1000;
-          
-          // Only include periods that fall within the track time range
-          var trackDuration = (new Date(timestampArray[lastIdx]).getTime() - new Date(timestampArray[firstIdx]).getTime()) / 1000;
-          
-          DBG.log('Time offset calculations for start date', {
-            date: new Date(currentDate),
-            sunriseTime: times.sunrise,
-            sunsetTime: times.sunset,
-            trackStartTime: trackStartTime,
-            sunriseOffset: sunriseOffset,
-            sunsetOffset: sunsetOffset,
-            trackDuration: trackDuration,
-            sunriseInRange: sunriseOffset >= 0 && sunriseOffset <= trackDuration,
-            sunsetInRange: sunsetOffset >= 0 && sunsetOffset <= trackDuration
-          });
-          
-          if (sunriseOffset >= 0 && sunriseOffset <= trackDuration) {
-            periods.push({
-              type: 'sunrise',
-              timeOffset: sunriseOffset,
-              time: times.sunrise
-            });
-            DBG.log('Added sunrise', { date: currentDate, timeOffset: sunriseOffset });
-          }
-          
-          if (sunsetOffset >= 0 && sunsetOffset <= trackDuration) {
-            periods.push({
-              type: 'sunset',
-              timeOffset: sunsetOffset, 
-              time: times.sunset
-            });
-            DBG.log('Added sunset', { date: currentDate, timeOffset: sunsetOffset });
-          }
-        }
-        
-        // If track spans multiple days, also process the end date
-        var endDateOnly = new Date(endDate);
-        endDateOnly.setHours(0, 0, 0, 0);
-        var startDateOnly = new Date(startDate);
-        startDateOnly.setHours(0, 0, 0, 0);
-        
-        if (endDateOnly.getTime() !== startDateOnly.getTime()) {
-          times = window.SunCalc.getTimes(endDate, avgLat, avgLon);
-          
-          DBG.log('SunCalc times for end date', {
-            date: new Date(endDate),
+        var trackStartTime = new Date(timestampArray[firstIdx]).getTime();
+        var trackDuration = (new Date(timestampArray[lastIdx]).getTime() - new Date(timestampArray[firstIdx]).getTime()) / 1000;
+        var startDay = new Date(startDate);
+        startDay.setHours(0, 0, 0, 0);
+        var endDay = new Date(endDate);
+        endDay.setHours(0, 0, 0, 0);
+
+        var dayCursor = new Date(startDay);
+        while (dayCursor.getTime() <= endDay.getTime()) {
+          var dayForCalc = new Date(dayCursor);
+          dayForCalc.setHours(12, 0, 0, 0);
+          var times = window.SunCalc.getTimes(dayForCalc, avgLat, avgLon);
+
+          DBG.log('SunCalc times for date', {
+            date: new Date(dayCursor),
             sunrise: times.sunrise,
             sunset: times.sunset,
             sunriseValid: !isNaN(times.sunrise.getTime()),
             sunsetValid: !isNaN(times.sunset.getTime())
           });
-          
+
           if (!isNaN(times.sunrise.getTime()) && !isNaN(times.sunset.getTime())) {
-            // Convert to elapsed time offsets (seconds from track start)
-            var trackStartTime = new Date(timestampArray[firstIdx]).getTime();
             var sunriseOffset = (times.sunrise.getTime() - trackStartTime) / 1000;
             var sunsetOffset = (times.sunset.getTime() - trackStartTime) / 1000;
-            
-            // Only include periods that fall within the track time range
-            var trackDuration = (new Date(timestampArray[lastIdx]).getTime() - new Date(timestampArray[firstIdx]).getTime()) / 1000;
-            
-            DBG.log('Time offset calculations for end date', {
-              date: new Date(endDate),
-              sunriseTime: times.sunrise,
-              sunsetTime: times.sunset,
-              trackStartTime: trackStartTime,
-              sunriseOffset: sunriseOffset,
-              sunsetOffset: sunsetOffset,
-              trackDuration: trackDuration,
-              sunriseInRange: sunriseOffset >= 0 && sunriseOffset <= trackDuration,
-              sunsetInRange: sunsetOffset >= 0 && sunsetOffset <= trackDuration
-            });
-            
+
             if (sunriseOffset >= 0 && sunriseOffset <= trackDuration) {
-              periods.push({
-                type: 'sunrise',
-                timeOffset: sunriseOffset,
-                time: times.sunrise
-              });
-              DBG.log('Added sunrise', { date: endDate, timeOffset: sunriseOffset });
+              periods.push({ type: 'sunrise', timeOffset: sunriseOffset, time: times.sunrise });
+              DBG.log('Added sunrise', { date: new Date(dayCursor), timeOffset: sunriseOffset });
             }
-            
             if (sunsetOffset >= 0 && sunsetOffset <= trackDuration) {
-              periods.push({
-                type: 'sunset',
-                timeOffset: sunsetOffset, 
-                time: times.sunset
-              });
-              DBG.log('Added sunset', { date: endDate, timeOffset: sunsetOffset });
+              periods.push({ type: 'sunset', timeOffset: sunsetOffset, time: times.sunset });
+              DBG.log('Added sunset', { date: new Date(dayCursor), timeOffset: sunsetOffset });
             }
           }
+
+          dayCursor.setDate(dayCursor.getDate() + 1);
         }
         
         var sortedPeriods = periods.sort(function(a, b) { return a.timeOffset - b.timeOffset; });
@@ -8422,11 +8374,14 @@
         });
 
         // Temperature toggle handler
-        var temperatureVisible = false;
         ui.controls.btnTemperature.style.opacity = '0.5';
-        ui.controls.btnTemperature.setAttribute('title', 'Show Temperature Overlay');
+        ui.controls.btnTemperature.setAttribute('title', isMobileOverlayDisabled ? 'Temperature overlay is disabled on mobile' : 'Show Temperature Overlay');
         
         ui.controls.btnTemperature.addEventListener('click', function () {
+          if (isMobileOverlayDisabled) {
+            DBG.log('Temperature overlay toggle ignored: disabled on mobile');
+            return;
+          }
           temperatureVisible = !temperatureVisible;
           
           try {
@@ -8451,11 +8406,14 @@
         });
 
         // Wind toggle handler
-        var windVisible = false;
         ui.controls.btnWind.style.opacity = '0.5';
-        ui.controls.btnWind.setAttribute('title', 'Show Wind Overlay');
+        ui.controls.btnWind.setAttribute('title', isMobileOverlayDisabled ? 'Wind overlay is disabled on mobile' : 'Show Wind Overlay');
         
         ui.controls.btnWind.addEventListener('click', function () {
+          if (isMobileOverlayDisabled) {
+            DBG.log('Wind overlay toggle ignored: disabled on mobile');
+            return;
+          }
           windVisible = !windVisible;
           
           try {
@@ -8515,7 +8473,7 @@
                   minzoom: 12,
                   filter: ['!=', ['get', 'wind_speed_kmh'], null],
                   layout: {
-                    'visibility': windVisible ? 'visible' : 'none',
+                    'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
                     'icon-image': [
                       'case',
                       ['!=', ['get', 'wind_speed_kmh'], null],
@@ -8715,11 +8673,9 @@
           progress = f;
         }
         
-        // Force day/night overlay update when seeking
-        if (typeof window.__fgpxDayNightForceUpdate !== 'undefined') {
-          window.__fgpxDayNightForceUpdate = true;
-          DBG.log('=== SEEKING: Force update flag set for day/night overlay ===');
-        }
+        // Force a deterministic day/night recompute on seek
+        window.__fgpxLastDayNightState = null;
+        window.__fgpxLastTransitionCheck = -1;
         
         // Clear photo state when seeking to allow photos to be shown again
         // This fixes the issue where photos weren't shown when seeking backward
@@ -8758,13 +8714,15 @@
         appliedBearing = null;
         bearing = null;
         setProgressBar(progress);
-        DBG.log('=== SEEKING: About to call updateVisuals with progress:', progress, 'Force flag:', window.__fgpxDayNightForceUpdate);
+        DBG.log('=== SEEKING: About to call updateVisuals with progress:', progress);
         updateVisuals(progress);
         try {
           // Move camera immediately to marker
           if (currentPosLngLat && Array.isArray(currentPosLngLat)) {
             cameraCenter = currentPosLngLat.slice(0,2);
             map.jumpTo({ center: cameraCenter });
+            // Re-apply visuals once after jump so day/night polygon uses the new viewport bounds.
+            updateVisuals(progress);
           }
           // Update chart cursor explicitly
           if (useTime && Array.isArray(timeOffsets)) {
