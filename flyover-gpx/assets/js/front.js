@@ -6972,7 +6972,9 @@
         appliedBearing = null;
         updateVisuals(progress);
         setProgressBar(progress);
-        chart.update('none');
+        if (chart) {
+          chart.update('none');
+        }
         fitMapToBounds(0);
         firstPlayZoomPending = true;
         // Reset photo triggers
@@ -7549,7 +7551,7 @@
             }
           }
         } catch(_) {}
-        if (chartCooldown >= 0.08) { 
+        if (chartCooldown >= 0.08 && chart) { 
           chart.update('none'); 
           chartCooldown = 0; 
         }
@@ -8666,8 +8668,8 @@
                 break;
               }
             }
+            chart.update('none');
           }
-          chart.update('none');
         } catch (_) {}
         // Preserve playback state when seeking - don't auto-start if was paused
         // Only auto-play if we were already playing or if this is the first play
