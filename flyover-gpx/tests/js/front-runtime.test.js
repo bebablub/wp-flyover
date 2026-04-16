@@ -39,7 +39,22 @@ function baseFGPX(overrides = {}) {
   );
 }
 
+function mockRejectedFetch(message) {
+  const fetchMock = jest.fn().mockRejectedValue(new Error(message));
+  global.fetch = fetchMock;
+  window.fetch = fetchMock;
+  return fetchMock;
+}
+
 describe('front.js runtime minimal regressions', () => {
+  let originalGlobalFetch;
+  let originalWindowFetch;
+
+  beforeAll(() => {
+    originalGlobalFetch = global.fetch;
+    originalWindowFetch = window.fetch;
+  });
+
   beforeEach(() => {
     document.body.innerHTML = '';
     delete window.FGPX;
@@ -50,15 +65,18 @@ describe('front.js runtime minimal regressions', () => {
     jest.restoreAllMocks();
   });
 
+  afterAll(() => {
+    global.fetch = originalGlobalFetch;
+    window.fetch = originalWindowFetch;
+  });
+
   test('boot is idempotent (_bootDone prevents duplicate init work)', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="42"></div>';
 
     window.maplibregl = {};
     window.Chart = function ChartStub() {};
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockRejectedValue(new Error('network down'));
+    const fetchMock = mockRejectedFetch('network down');
 
     window.FGPX = baseFGPX();
     loadFront();
@@ -83,7 +101,7 @@ describe('front.js runtime minimal regressions', () => {
     window.maplibregl = {};
     window.Chart = function ChartStub() {};
 
-    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
+    mockRejectedFetch('network down');
 
     window.FGPX = baseFGPX({
       instances: {
@@ -114,9 +132,7 @@ describe('front.js runtime minimal regressions', () => {
     window.maplibregl = {};
     window.Chart = function ChartStub() {};
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockRejectedValue(new Error('network down'));
+    const fetchMock = mockRejectedFetch('network down');
 
     window.FGPX = baseFGPX({
       ajaxUrl: null,
@@ -143,9 +159,7 @@ describe('front.js runtime minimal regressions', () => {
     window.maplibregl = {};
     window.Chart = function ChartStub() {};
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockRejectedValue(new Error('network down'));
+    const fetchMock = mockRejectedFetch('network down');
 
     window.FGPX = baseFGPX();
     loadFront();
@@ -167,7 +181,7 @@ describe('front.js runtime minimal regressions', () => {
     window.maplibregl = {};
     window.Chart = function ChartStub() {};
 
-    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
+    mockRejectedFetch('network down');
 
     window.FGPX = baseFGPX({
       i18n: { failedLoad: 'Failed to load track:' },
