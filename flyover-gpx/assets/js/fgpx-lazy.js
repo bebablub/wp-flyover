@@ -49,6 +49,15 @@
     
     var styles = window.FGPX.lazyStyles || [];
     var scripts = window.FGPX.lazyScripts || [];
+
+    // Fast path: nothing to lazy-load (common in tests and lightweight setups).
+    if (!styles.length && !scripts.length) {
+      if (window.FGPX && typeof window.FGPX.boot === 'function') {
+        window.FGPX.boot();
+      }
+      return;
+    }
+
     loadStyles(styles)
       .then(function(){ return loadScriptsSequential(scripts); })
       .then(function(){
