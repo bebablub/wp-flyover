@@ -88,8 +88,9 @@ describe('front.js runtime minimal regressions', () => {
 
     await flushAsync();
 
-    // Only one init run should happen, therefore one REST attempt.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Only one init run should happen. With rejected fetch, that run triggers
+    // REST first and then the AJAX fallback.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(window.FGPX._bootDone).toBe(true);
   });
 
