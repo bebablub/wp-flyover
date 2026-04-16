@@ -1,0 +1,187 @@
+/**
+ * Minimal runtime regression tests for front.js.
+ *
+ * Scope intentionally stays small and avoids deep map/chart rendering.
+ * We validate high-risk behavior that is observable before startPlayer() runs.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+const FRONT_SRC = fs.readFileSync(
+  path.resolve(__dirname, '../../assets/js/front.js'),
+  'utf8'
+);
+
+function loadFront() {
+  // eslint-disable-next-line no-eval
+  eval(FRONT_SRC);
+}
+
+function flushAsync() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function baseFGPX(overrides = {}) {
+  return Object.assign(
+    {
+      deferViewport: true,
+      debugLogging: false,
+      restUrl: 'https://example.test/wp-json/fgpx/v1',
+      nonce: 'nonce-123',
+      ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
+      instances: {},
+      defaultSpeed: 25,
+      weatherEnabled: false,
+      daynightMapEnabled: false,
+    },
+    overrides
+  );
+}
+
+describe('front.js runtime minimal regressions', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    delete window.FGPX;
+    delete window.maplibregl;
+    delete window.Chart;
+    if (window.showNoDataMessage) delete window.showNoDataMessage;
+    if (window.switchChartTab) delete window.switchChartTab;
+    jest.restoreAllMocks();
+  });
+
+  test('boot is idempotent (_bootDone prevents duplicate init work)', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="42"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new Error('network down'));
+
+    window.FGPX = baseFGPX();
+    loadFront();
+
+    expect(typeof window.FGPX.boot).toBe('function');
+
+    window.FGPX.boot();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    // Only one init run should happen, therefore one REST attempt.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(window.FGPX._bootDone).toBe(true);
+  });
+
+  test('per-instance defaultSpeed is applied per container UI', async () => {
+    document.body.innerHTML =
+      '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>' +
+      '<div id="fgpx-app-2" class="fgpx" data-track-id="2"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
+
+    window.FGPX = baseFGPX({
+      instances: {
+        'fgpx-app': { defaultSpeed: 10 },
+        'fgpx-app-2': { defaultSpeed: 100 },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const firstSel = document.querySelector('#fgpx-app .fgpx-select');
+    const secondSel = document.querySelector('#fgpx-app-2 .fgpx-select');
+
+    expect(firstSel).not.toBeNull();
+    expect(secondSel).not.toBeNull();
+    expect(firstSel.value).toBe('10');
+    expect(secondSel.value).toBe('100');
+  });
+
+  test('REST URL uses instance hostPostId override when present', async () => {
+    document.body.innerHTML =
+      '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>' +
+      '<div id="fgpx-app-2" class="fgpx" data-track-id="8"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new Error('network down'));
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      instances: {
+        'fgpx-app': { hostPostId: 111 },
+        'fgpx-app-2': { hostPostId: 222 },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const calledUrls = fetchMock.mock.calls.map((args) => String(args[0]));
+    expect(calledUrls.length).toBe(2);
+    expect(calledUrls[0]).toContain('/track/7?host_post=111');
+    expect(calledUrls[1]).toContain('/track/8?host_post=222');
+  });
+
+  test('failed REST request attempts AJAX fallback', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="9"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new Error('network down'));
+
+    window.FGPX = baseFGPX();
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const calledUrls = fetchMock.mock.calls.map((args) => String(args[0]));
+    expect(calledUrls.length).toBe(2);
+    expect(calledUrls[0]).toContain('/wp-json/fgpx/v1/track/9');
+    expect(calledUrls[1]).toContain('admin-ajax.php');
+    expect(calledUrls[1]).toContain('action=fgpx_track');
+    expect(calledUrls[1]).toContain('id=9');
+  });
+
+  test('shows user-facing error after REST and AJAX both fail', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="12"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
+
+    window.FGPX = baseFGPX({
+      i18n: { failedLoad: 'Failed to load track:' },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const err = document.querySelector('#fgpx-app .fgpx-error');
+    expect(err).not.toBeNull();
+    expect(err.style.display).toBe('block');
+    expect(err.textContent).toContain('Failed to load track:');
+    expect(err.textContent).toContain('network down');
+  });
+});
