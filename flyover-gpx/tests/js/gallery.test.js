@@ -50,7 +50,7 @@ function buildPayload(items, page, totalPages) {
 
 function setupGalleryDom(markup) {
   document.body.innerHTML = markup || `
-    <div class="fgpx-gallery">
+    <div class="fgpx-gallery" data-root-id="gallery-default">
       <div class="fgpx-gallery-toolbar">
         <input type="search" class="fgpx-gallery-search" />
         <select class="fgpx-gallery-sort">
@@ -162,7 +162,7 @@ describe('gallery.js', () => {
 
   test('renders preview image when available and falls back to icon on image error', () => {
     const tracks = makeTracks(2);
-    tracks[0].previewImageUrl = 'https://example.test/preview.jpg';
+    tracks[1].previewImageUrl = 'https://example.test/preview.jpg';
     window.FGPXGallery.tracks = tracks;
     window.FGPXGallery.perPage = 2;
 
