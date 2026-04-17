@@ -2916,6 +2916,37 @@
           useCase: 'Quick previews, thumbnails'
         }
       };
+
+      function createSessionIdSuffix(length) {
+        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var targetLength = Math.max(1, length || 9);
+        var result = '';
+        var cryptoObj = null;
+
+        if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+          cryptoObj = globalThis.crypto;
+        } else if (typeof window !== 'undefined') {
+          var windowCrypto = window.crypto || window.msCrypto;
+          if (windowCrypto && typeof windowCrypto.getRandomValues === 'function') {
+            cryptoObj = windowCrypto;
+          }
+        }
+
+        if (cryptoObj) {
+          var bytes = new Uint8Array(targetLength);
+          cryptoObj.getRandomValues(bytes);
+          for (var i = 0; i < targetLength; i++) {
+            result += chars.charAt(bytes[i] % chars.length);
+          }
+          return result;
+        }
+
+        for (var j = 0; j < targetLength; j++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        return result;
+      }
       
       function VideoRecorder(map, options) {
         this.map = map;
@@ -2951,7 +2982,7 @@
         this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024; // 200MB target chunk size
         this.currentChunkSize = 0;
         this.chunkNumber = 0;
-        this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
         this.downloadedChunks = [];
         // Recorder rotation state to ensure each chunk starts with fresh headers
         this.isRotatingChunk = false;

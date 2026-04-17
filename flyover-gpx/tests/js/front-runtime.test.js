@@ -203,4 +203,11 @@ describe('front.js runtime minimal regressions', () => {
   test('dynamic progress segments are inserted before marker layer', () => {
     expect(FRONT_SRC).toContain("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')");
   });
+
+  test('video recorder session ID generation uses crypto-backed helper', () => {
+    expect(FRONT_SRC).toContain('function createSessionIdSuffix(length)');
+    expect(FRONT_SRC).toContain("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);");
+    expect(FRONT_SRC).toContain('cryptoObj.getRandomValues(bytes);');
+    expect(FRONT_SRC).not.toContain("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);");
+  });
 });
