@@ -199,4 +199,8 @@ describe('front.js runtime minimal regressions', () => {
     expect(err.textContent).toContain('Failed to load track:');
     expect(err.textContent).toContain('network down');
   });
+
+  test('dynamic progress segments are inserted before marker layer', () => {
+    expect(FRONT_SRC).toContain("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')");
+  });
 });

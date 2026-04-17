@@ -7486,13 +7486,18 @@
                   existingSource.setData(segmentData);
                 } else {
                   map.addSource(segmentSourceId, { type: 'geojson', data: segmentData });
-                  map.addLayer({
+                  var segmentLayerConfig = {
                     id: segmentLayerId,
                     type: 'line',
                     source: segmentSourceId,
                     layout: { 'line-join': 'round', 'line-cap': 'round' },
                     paint: { 'line-color': segmentColor, 'line-width': 4, 'line-blur': 0.3 }
-                  });
+                  };
+                  if (map.getLayer('fgpx-point-circle')) {
+                    map.addLayer(segmentLayerConfig, 'fgpx-point-circle');
+                  } else {
+                    map.addLayer(segmentLayerConfig);
+                  }
                 }
               }
               
