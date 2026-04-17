@@ -891,7 +891,7 @@ final class Admin
 		}
 
 		// Parse GPX and compute stats
-		$parse = $this->parse_gpx_and_stats($filePath);
+		$parse = self::parse_gpx_and_stats($filePath);
 		if (\is_wp_error($parse)) {
 			if (\is_readable($filePath)) {
 				@\unlink($filePath);
@@ -2395,7 +2395,7 @@ final class Admin
 	 *
 	 * @return array{stats: array<string,mixed>, geojson: string, bounds: array<int,float>, points_count: int}|\WP_Error
 	 */
-	private function parse_gpx_and_stats(string $filePath)
+	public static function parse_gpx_and_stats(string $filePath)
 	{
 		if (!\is_readable($filePath)) {
 			return new \WP_Error('fgpx_unreadable', \esc_html__('Uploaded file is not readable.', 'flyover-gpx'));
@@ -2472,13 +2472,6 @@ final class Admin
 							}
 						}
 
-						$gainThreshold = 0.5; // meters
-						if ($eleNullable !== null && $prev['ele'] !== null) {
-							$deltaElev = $eleNullable - (float) $prev['ele'];
-							if ($deltaElev > $gainThreshold) {
-								$totalElevationGain += $deltaElev;
-							}
-						}
 					}
 
 					$totalDistance = (float) $totalDistance;
@@ -2943,13 +2936,13 @@ final class Admin
 		$post = \get_post((int) $objectId);
 		if (!$post || $post->post_type !== 'fgpx_track') { return; }
 		
-		$this->clear_all_track_caches((int) $objectId);
+		self::clear_all_track_caches((int) $objectId);
 	}
 
 	/**
 	 * Clear all possible cache variants for a track.
 	 */
-	public function clear_all_track_caches(int $trackId): void
+	public static function clear_all_track_caches(int $trackId): void
 	{
 		$post = \get_post($trackId);
 		if (!$post || $post->post_type !== 'fgpx_track') { return; }
@@ -3054,7 +3047,7 @@ final class Admin
 					// Store final geojson with wind data
 					\update_post_meta((int) $post_id, 'fgpx_geojson', \wp_json_encode($geojsonArray));
 					// Invalidate response cache variants for this post.
-					$this->clear_all_track_caches((int) $post_id);
+					self::clear_all_track_caches((int) $post_id);
 				}
 				$processed++;
 			} else {
@@ -3114,7 +3107,7 @@ final class Admin
 				// Store final geojson with wind data
 				\update_post_meta($post_id, 'fgpx_geojson', \wp_json_encode($geojsonArray));
 				// Invalidate response cache variants for this post.
-				$this->clear_all_track_caches($post_id);
+				self::clear_all_track_caches($post_id);
 			}
 			\wp_send_json_success(['message' => 'Weather data enriched successfully']);
 		} else {

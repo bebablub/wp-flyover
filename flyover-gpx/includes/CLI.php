@@ -179,6 +179,7 @@ final class CLI
 			\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
 		}
 
+		\FGpx\Admin::clear_all_track_caches($postId);
 		\WP_CLI::success('Track imported. ID: ' . (int) $postId);
 
 		$host = (int) (\WP_CLI\Utils\get_flag_value($assoc_args, 'post', 0) ?? 0);
@@ -281,153 +282,16 @@ final class CLI
 		return @copy($absPath, $dest) ? $dest : '';
 	}
 
-	/** Parse GPX and compute stats/geojson/bounds (mirrors Admin::parse_gpx_and_stats) */
-	private static function parseGpxAndStats(string $filePath)
+	/** Parse GPX and compute stats/geojson/bounds — delegates to Admin::parse_gpx_and_stats */
+	private static function parseGpxAndStats(string $filePath): ?array
 	{
-		try {
-			$gpx = new \phpGPX\phpGPX();
-			$file = $gpx->load($filePath);
-		} catch (\Throwable $e) { return null; }
-
-		$coordinates = [];
-		$timestamps = [];
-		$cumulative = [];
-		$heartRates = [];
-		$cadences = [];
-		$temperatures = [];
-		$powers = [];
-		$pointsCount = 0;
-		$totalDistance = 0.0; // meters
-		$totalElevationGain = 0.0;
-		$minElev = null; $maxElev = null;
-		$movingTime = 0.0; // seconds
-		$prev = null; $rawElevations = [];
-		$minLat = 90.0; $minLon = 180.0; $maxLat = -90.0; $maxLon = -180.0;
-
-		foreach ($file->tracks as $track) {
-			foreach ($track->segments as $segment) {
-				foreach ($segment->points as $point) {
-					$lat = (float) $point->latitude; $lon = (float) $point->longitude;
-					$eleNullable = $point->elevation !== null ? (float) $point->elevation : null;
-					$time = $point->time ? (int) $point->time->getTimestamp() : null;
-					$heartRate = null;
-					$cadence = null;
-					$temperature = null;
-					$power = null;
-					if ($point->extensions && $point->extensions->trackPointExtension) {
-						$ext = $point->extensions->trackPointExtension;
-						$heartRate = $ext->hr ?? $ext->heartRate ?? null;
-						$cadence = $ext->cad ?? $ext->cadence ?? null;
-						$temperature = $ext->aTemp ?? $ext->avgTemperature ?? null;
-						$power = $ext->power ?? $ext->watts ?? null;
-					}
-					if ($lat < $minLat) { $minLat = $lat; } if ($lat > $maxLat) { $maxLat = $lat; }
-					if ($lon < $minLon) { $minLon = $lon; } if ($lon > $maxLon) { $maxLon = $lon; }
-					if ($eleNullable !== null) { if ($minElev === null || $eleNullable < $minElev) { $minElev = $eleNullable; } if ($maxElev === null || $eleNullable > $maxElev) { $maxElev = $eleNullable; } }
-					if ($prev !== null) {
-						$d = self::haversine($prev['lon'], $prev['lat'], $lon, $lat);
-						$totalDistance += $d;
-						$dt = ($time !== null && $prev['time'] !== null) ? max(0, $time - $prev['time']) : 0;
-						if ($dt > 0) { $speed = $d / $dt; if ($speed > 0.5) { $movingTime += $dt; } }
-					}
-					$coordinates[] = [$lon, $lat, $eleNullable !== null ? $eleNullable : 0.0];
-					$timestamps[] = $time !== null ? gmdate('c', $time) : null;
-					$cumulative[] = (float) $totalDistance;
-					$heartRates[] = $heartRate;
-					$cadences[] = $cadence;
-					$temperatures[] = $temperature;
-					$powers[] = $power;
-					$pointsCount++;
-					$prev = ['lat' => $lat, 'lon' => $lon, 'ele' => $eleNullable, 'time' => $time];
-					$rawElevations[] = $eleNullable;
-				}
-			}
-		}
-
-		if ($pointsCount === 0) {
+		$parse = \FGpx\Admin::parse_gpx_and_stats($filePath);
+		if (\is_wp_error($parse)) {
 			return null;
 		}
-
-		// Compute total elevation gain with smoothing over raw elevations.
-		if (!empty($rawElevations)) {
-			$filled = [];
-			$last = null;
-			foreach ($rawElevations as $e) {
-				if ($e === null) {
-					$filled[] = $last !== null ? $last : 0.0;
-				} else {
-					$filled[] = $e;
-					$last = $e;
-				}
-			}
-
-			$win = 7;
-			$half = intdiv($win, 2);
-			$smoothed = [];
-			$N = count($filled);
-			for ($i = 0; $i < $N; $i++) {
-				$start = max(0, $i - $half);
-				$end = min($N - 1, $i + $half);
-				$seg = array_slice($filled, $start, $end - $start + 1);
-				sort($seg);
-				$mid = intdiv(count($seg), 2);
-				$smoothed[$i] = $seg[$mid];
-			}
-
-			$totalElevationGain = 0.0;
-			$segmentGain = 0.0;
-			$climbThreshold = 3.0;
-			for ($i = 1; $i < $N; $i++) {
-				$delta = $smoothed[$i] - $smoothed[$i - 1];
-				if ($delta > 0) {
-					$segmentGain += $delta;
-				} else if ($delta < 0) {
-					if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
-					$segmentGain = 0.0;
-				}
-			}
-			if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
-		}
-
-		$avgSpeed = $movingTime > 0 ? $totalDistance / $movingTime : 0.0;
-		$bounds = [$minLon, $minLat, $maxLon, $maxLat];
-		$geojson = [
-			'type' => 'LineString',
-			'coordinates' => $coordinates,
-			'properties' => [
-				'timestamps' => $timestamps,
-				'cumulativeDistance' => $cumulative,
-				'heartRates' => $heartRates,
-				'cadences' => $cadences,
-				'temperatures' => $temperatures,
-				'powers' => $powers,
-			],
-		];
-		$stats = [
-			'total_distance_m' => $totalDistance,
-			'moving_time_s' => $movingTime,
-			'average_speed_m_s' => $avgSpeed,
-			'elevation_gain_m' => $totalElevationGain,
-			'min_elevation_m' => $minElev,
-			'max_elevation_m' => $maxElev,
-		];
-
-		return [
-			'stats' => $stats,
-			'geojson' => wp_json_encode($geojson),
-			'bounds' => $bounds,
-			'points_count' => $pointsCount,
-		];
-	}
-
-	private static function haversine(float $lon1, float $lat1, float $lon2, float $lat2): float
-	{
-		$earth = 6371000.0;
-		$dLat = deg2rad($lat2 - $lat1);
-		$dLon = deg2rad($lon2 - $lon1);
-		$a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) ** 2;
-		$c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-		return $earth * $c;
+		// Encode geojson to JSON string to match existing import() contract
+		$parse['geojson'] = \wp_json_encode($parse['geojson']);
+		return $parse;
 	}
 }
 
