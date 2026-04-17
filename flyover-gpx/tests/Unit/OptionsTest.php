@@ -81,6 +81,10 @@ final class OptionsTest extends TestCase
             'weather_enabled'          => ['fgpx_weather_enabled'],
             'daynight_enabled'         => ['fgpx_daynight_enabled'],
             'elevation_coloring'       => ['fgpx_elevation_coloring'],
+            // Theme / dark mode
+            'theme_mode'               => ['fgpx_theme_mode'],
+            'theme_auto_dark_start'    => ['fgpx_theme_auto_dark_start'],
+            'theme_auto_dark_end'      => ['fgpx_theme_auto_dark_end'],
             // Performance
             'backend_simplify_enabled' => ['fgpx_backend_simplify_enabled'],
             'backend_simplify_target'  => ['fgpx_backend_simplify_target'],
@@ -104,6 +108,10 @@ final class OptionsTest extends TestCase
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
+        // Theme defaults
+        $this->assertSame('system', Options::get('fgpx_theme_mode'));
+        $this->assertSame('22:00',  Options::get('fgpx_theme_auto_dark_start'));
+        $this->assertSame('06:00',  Options::get('fgpx_theme_auto_dark_end'));
     }
 
     public function test_is_defined_returns_false_for_unknown_key(): void
@@ -179,6 +187,7 @@ final class OptionsTest extends TestCase
             'defaultZoom', 'defaultPitch', 'styleJson',
             'backendSimplify', 'backendSimplifyTarget',
             'debugWeatherData',
+            'themeMode', 'themeAutoDarkStart', 'themeAutoDarkEnd',
         ];
 
         foreach ($required as $key) {
@@ -211,5 +220,9 @@ final class OptionsTest extends TestCase
         $this->assertIsString($f['chartColor'],    'chartColor must be string');
         $this->assertIsString($f['chartColor2'],   'chartColor2 must be string');
         $this->assertIsString($f['styleJson'],     'styleJson must be string');
+        $this->assertIsString($f['themeMode'],          'themeMode must be string');
+        $this->assertIsString($f['themeAutoDarkStart'], 'themeAutoDarkStart must be string');
+        $this->assertIsString($f['themeAutoDarkEnd'],   'themeAutoDarkEnd must be string');
+        $this->assertContains($f['themeMode'], ['system', 'dark', 'bright', 'auto'], 'themeMode must be a valid value');
     }
 }

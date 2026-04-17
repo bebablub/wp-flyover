@@ -2,11 +2,11 @@
 /**
  * Flyover GPX - WordPress Plugin
  * 
- * A comprehensive WordPress plugin for uploading, processing, and displaying GPX tracks
- * with interactive maps, elevation charts, weather data, and photo integration.
+ * A comprehensive WordPress plugin for uploading, processing, and displaying GPX tracks with
+ * 3d flyover, interactive maps, statistic charts, weather data, and photo integration.
  * 
  * Plugin Name: Flyover GPX
- * Description: Upload GPX files and render animated flyover maps with MapLibre and an elevation chart.
+ * Description: Upload GPX files and render animated flyover maps with statistic charts.
  * Version: 1.0.5
  * Author: Benjamin Barinka
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@
  * @package FlyoverGPX
  * @version 1.0.5
  * @author Benjamin Barinka
- * @license GPL-2.0+
+ * @license MIT
  * @since 1.0.5
  */
 

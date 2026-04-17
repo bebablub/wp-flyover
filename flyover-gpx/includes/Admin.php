@@ -665,6 +665,31 @@ final class Admin
 		echo '</td></tr>';
 		echo '</table>';
 
+		// Theme / Dark Mode Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌗 Theme / Dark Mode', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		$themeMode = $options['fgpx_theme_mode'];
+		echo '<tr><th scope="row"><label for="fgpx_theme_mode">' . \esc_html__('Theme mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_theme_mode" name="fgpx_theme_mode" onchange="(function(v){var r=document.getElementById(\'fgpx-theme-auto-rows\');r.style.display=v===\'auto\'?\'contents\':\'none\';})(this.value)">';
+		echo '<option value="system"' . selected($themeMode, 'system', false) . '>' . \esc_html__('System defined (follow OS/browser preference)', 'flyover-gpx') . '</option>';
+		echo '<option value="dark"' . selected($themeMode, 'dark', false) . '>' . \esc_html__('Always dark', 'flyover-gpx') . '</option>';
+		echo '<option value="bright"' . selected($themeMode, 'bright', false) . '>' . \esc_html__('Always bright (light)', 'flyover-gpx') . '</option>';
+		echo '<option value="auto"' . selected($themeMode, 'auto', false) . '>' . \esc_html__('Auto (time-based: configure start/end of dark mode)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Controls the player appearance. "System defined" uses your OS/browser dark mode preference. "Auto" switches to dark mode between the configured hours.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tbody id="fgpx-theme-auto-rows" style="display:' . ($themeMode === 'auto' ? 'contents' : 'none') . '">';
+		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_start">' . \esc_html__('Dark mode starts at', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="time" id="fgpx_theme_auto_dark_start" name="fgpx_theme_auto_dark_start" value="' . \esc_attr($options['fgpx_theme_auto_dark_start']) . '" />';
+		echo '<p class="description">' . \esc_html__('Local time when dark mode activates (e.g. 22:00).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_end">' . \esc_html__('Dark mode ends at', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="time" id="fgpx_theme_auto_dark_end" name="fgpx_theme_auto_dark_end" value="' . \esc_attr($options['fgpx_theme_auto_dark_end']) . '" />';
+		echo '<p class="description">' . \esc_html__('Local time when dark mode deactivates (e.g. 06:00). Overnight spans (e.g. 22:00–06:00) are supported.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</tbody>';
+		echo '</table>';
+
 		// Performance & Optimization Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('⚡ Performance & Optimization', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
@@ -1617,6 +1642,22 @@ final class Admin
 		\update_option('fgpx_asset_fallbacks_enabled', isset($_POST['fgpx_asset_fallbacks_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_debug_logging', isset($_POST['fgpx_debug_logging']) ? '1' : '0', true);
 		\update_option('fgpx_debug_weather_data', isset($_POST['fgpx_debug_weather_data']) ? '1' : '0', true);
+
+		// Theme / Dark Mode settings
+		$allowedModes = ['system', 'dark', 'bright', 'auto'];
+		$themeMode = isset($_POST['fgpx_theme_mode']) ? \sanitize_text_field((string) $_POST['fgpx_theme_mode']) : 'system';
+		if (!\in_array($themeMode, $allowedModes, true)) {
+			$themeMode = 'system';
+		}
+		\update_option('fgpx_theme_mode', $themeMode, true);
+		if (isset($_POST['fgpx_theme_auto_dark_start'])) {
+			$start = \sanitize_text_field((string) $_POST['fgpx_theme_auto_dark_start']);
+			\update_option('fgpx_theme_auto_dark_start', \preg_match('/^\d{2}:\d{2}$/', $start) ? $start : '22:00', true);
+		}
+		if (isset($_POST['fgpx_theme_auto_dark_end'])) {
+			$end = \sanitize_text_field((string) $_POST['fgpx_theme_auto_dark_end']);
+			\update_option('fgpx_theme_auto_dark_end', \preg_match('/^\d{2}:\d{2}$/', $end) ? $end : '06:00', true);
+		}
 		\wp_safe_redirect(\add_query_arg(['page' => 'flyover-gpx', 'updated' => 1], \admin_url('options-general.php')));
 		exit;
 	}

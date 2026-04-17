@@ -123,6 +123,11 @@ final class Options
 		'fgpx_elevation_threshold_min' => '3',
 		'fgpx_elevation_threshold_max' => '8',
 
+		// Theme / Dark Mode
+		'fgpx_theme_mode' => 'system',          // system | dark | bright | auto
+		'fgpx_theme_auto_dark_start' => '22:00', // HH:MM – when dark mode begins (auto mode)
+		'fgpx_theme_auto_dark_end' => '06:00',   // HH:MM – when dark mode ends   (auto mode)
+
 		// Debug & Development
 		'fgpx_debug_logging' => '0',
 		'fgpx_debug_weather_data' => '0',
@@ -264,6 +269,11 @@ final class Options
 			// Performance
 			'backendSimplify' => $options['fgpx_backend_simplify_enabled'] === '1',
 			'backendSimplifyTarget' => (int) $options['fgpx_backend_simplify_target'],
+
+			// Theme / Dark Mode
+			'themeMode' => $options['fgpx_theme_mode'],
+			'themeAutoDarkStart' => $options['fgpx_theme_auto_dark_start'],
+			'themeAutoDarkEnd' => $options['fgpx_theme_auto_dark_end'],
 		];
 	}
 }

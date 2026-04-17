@@ -190,7 +190,8 @@
 
 @media (prefers-color-scheme: dark) {
   .fgpx:not([data-fgpx-ready="1"]) {
-    background: #1c1c1c linear-gradient(90deg,#1c1c1c 0%,#222 50%,#1c1c1c 100%);
+    background: #252525 linear-gradient(90deg,#252525 0%,#2d2d2d 50%,#252525 100%);
+    background-size: 800px 100%;
   }
 }
 
@@ -221,6 +222,78 @@
     /*background: #0b0b0b;*/
     border-color: #333;
   }
+}
+
+/* Explicit dark theme (forced via data-fgpx-theme="dark") */
+.fgpx[data-fgpx-theme="dark"] .fgpx-spinner {
+  background: rgba(0, 0, 0, 0.35);
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-error {
+  background: #3a0d0d;
+  color: #ffdddd;
+  border-color: #5a1d1d;
+}
+.fgpx[data-fgpx-theme="dark"]:not([data-fgpx-ready="1"]) {
+  background: #252525 linear-gradient(90deg,#252525 0%,#2d2d2d 50%,#252525 100%);
+  background-size: 800px 100%;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-btn {
+  background: #333;
+  border-color: #333;
+  color: #eee;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-btn-primary {
+  background: #25ceff;
+  border-color: #25ceff;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-select {
+  border-color: #333;
+  color: #333;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-progress {
+  background: #333;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-stat {
+  border-color: #333;
+}
+.fgpx[data-fgpx-theme="dark"] .fgpx-chart-wrap {
+  border-color: #333;
+}
+
+/* Explicit light theme (forced via data-fgpx-theme="light") — overrides OS dark mode */
+.fgpx[data-fgpx-theme="light"] .fgpx-spinner {
+  background: rgba(255, 255, 255, 0.9);
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-error {
+  background: #fde8e8;
+  color: #7a0000;
+  border-color: #f5bcbc;
+}
+.fgpx[data-fgpx-theme="light"]:not([data-fgpx-ready="1"]) {
+  background: #ffffff linear-gradient(90deg,#ffffff 0%,#f2f2f4 50%,#ffffff 100%);
+  background-size: 800px 100%;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-btn {
+  background: #f7f7f7;
+  border-color: #ccc;
+  color: #23282d;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-btn-primary {
+  background: #25ceff;
+  border-color: #25ceff;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-select {
+  border-color: #ccc;
+  color: #23282d;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-progress {
+  background: #e0e0e0;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-stat {
+  border-color: #ddd;
+}
+.fgpx[data-fgpx-theme="light"] .fgpx-chart-wrap {
+  border-color: #ddd;
 }
 
 /* Responsive */

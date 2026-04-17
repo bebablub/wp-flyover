@@ -522,12 +522,70 @@
     };
   }
 
+  /**
+   * Returns true if the given container element is currently in dark mode,
+   * considering a forced data-fgpx-theme attribute first, then OS preference.
+   */
+  function isDarkMode(containerEl) {
+    var attr = containerEl && containerEl.getAttribute('data-fgpx-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  /**
+   * Apply the configured theme mode to the container element.
+   * Sets data-fgpx-theme="dark"|"light" or removes it (system mode).
+   * For "auto" mode, also schedules a re-evaluation at the next boundary.
+   */
+  function applyTheme(el, cfg) {
+    var mode = cfg.themeMode || 'system';
+    if (mode === 'dark') {
+      el.setAttribute('data-fgpx-theme', 'dark');
+    } else if (mode === 'bright') {
+      el.setAttribute('data-fgpx-theme', 'light');
+    } else if (mode === 'auto') {
+      var parseTime = function(hhmm) {
+        var parts = (hhmm || '').split(':');
+        return { h: parseInt(parts[0], 10) || 0, m: parseInt(parts[1], 10) || 0 };
+      };
+      var nowD = new Date();
+      var nowMins = nowD.getHours() * 60 + nowD.getMinutes();
+      var start = parseTime(cfg.themeAutoDarkStart || '22:00');
+      var end   = parseTime(cfg.themeAutoDarkEnd   || '06:00');
+      var startMins = start.h * 60 + start.m;
+      var endMins   = end.h   * 60 + end.m;
+      var inDark;
+      if (startMins < endMins) {
+        // Same-day span (e.g. 08:00–20:00)
+        inDark = nowMins >= startMins && nowMins < endMins;
+      } else {
+        // Overnight span (e.g. 22:00–06:00)
+        inDark = nowMins >= startMins || nowMins < endMins;
+      }
+      el.setAttribute('data-fgpx-theme', inDark ? 'dark' : 'light');
+      // Schedule re-evaluation at the next boundary
+      var nextBoundaryMins;
+      if (inDark) {
+        nextBoundaryMins = (endMins - nowMins + 1440) % 1440;
+      } else {
+        nextBoundaryMins = (startMins - nowMins + 1440) % 1440;
+      }
+      var msUntilNext = nextBoundaryMins * 60 * 1000 - nowD.getSeconds() * 1000;
+      setTimeout(function() { applyTheme(el, cfg); }, msUntilNext + 1000);
+    } else {
+      // system: remove attribute, let CSS @media handle it
+      el.removeAttribute('data-fgpx-theme');
+    }
+  }
+
   function initContainer(el) {
     if (!el || typeof window.maplibregl === 'undefined' || typeof window.Chart === 'undefined' || typeof window.FGPX === 'undefined') {
       return;
     }
     var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
     var FGPX = Object.assign({}, window.FGPX, instCfg);
+    applyTheme(el, FGPX);
 
     var trackId = el.getAttribute('data-track-id');
     var style = el.getAttribute('data-style') || 'raster';
@@ -4934,10 +4992,8 @@
           var xVal = Math.min(Math.max(cursorX, xScale.min), xScale.max);
           var x = xScale.getPixelForValue(xVal);
           ctx.save();
-          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-          }
+          var _chartContainer = ctx.canvas && ctx.canvas.closest ? ctx.canvas.closest('.fgpx') : null;
+          ctx.strokeStyle = isDarkMode(_chartContainer) ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
           ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(x, chart.chartArea.top); ctx.lineTo(x, chart.chartArea.bottom); ctx.stroke();
           ctx.restore();
