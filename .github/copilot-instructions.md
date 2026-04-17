@@ -3,23 +3,6 @@
 ## Scope
 These instructions apply to the whole repository. The WordPress plugin code lives in `flyover-gpx/`.
 
-## Build and Test
-Run all development commands from `flyover-gpx/`.
-
-```bash
-composer update --no-interaction --prefer-dist
-composer lint
-composer test
-npm install
-npm test
-```
-
-Release packaging uses production dependencies:
-
-```bash
-composer install --no-dev --optimize-autoloader
-```
-
 ## Architecture
 - Entry point: `flyover-gpx/flyover-gpx.php`.
 - PHP classes are in `flyover-gpx/includes/` under namespace `FGpx`.
