@@ -93,6 +93,7 @@ require_once FGPX_DIR_PATH . 'includes/ErrorHandler.php';    // Error logging sy
 require_once FGPX_DIR_PATH . 'includes/AssetManager.php';    // Asset loading and CDN fallbacks
 require_once FGPX_DIR_PATH . 'includes/DatabaseOptimizer.php'; // Database performance optimizations
 require_once FGPX_DIR_PATH . 'includes/Plugin.php';          // Core plugin functionality
+require_once FGPX_DIR_PATH . 'includes/GalleryShortcode.php'; // Track gallery shortcode
 require_once FGPX_DIR_PATH . 'includes/Rest.php';            // REST API endpoints
 require_once FGPX_DIR_PATH . 'includes/Admin.php';           // Admin interface and upload handling
 require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line interface
@@ -109,6 +110,9 @@ require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line int
 
     $plugin = new Plugin();
     $plugin->register();
+
+    $gallery = new GalleryShortcode();
+    $gallery->register();
 
     $rest = new Rest();
     $rest->register();

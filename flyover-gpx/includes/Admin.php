@@ -44,6 +44,7 @@ final class Admin
 		\add_filter('handle_bulk_actions-edit-fgpx_track', [$this, 'handle_bulk_actions'], 10, 3);
 		// AJAX handler for individual weather enrichment
 		\add_action('wp_ajax_fgpx_enrich_weather', [$this, 'ajax_enrich_weather']);
+		\add_action('wp_ajax_fgpx_generate_preview', [$this, 'ajax_generate_preview']);
 		// Metaboxes and file replacement
 		\add_action('add_meta_boxes', [$this, 'add_metaboxes']);
 		// Replace GPX functionality removed - use "Add New Track" instead
@@ -1244,6 +1245,12 @@ final class Admin
 		// Add weather enrichment action
 		$nonce = \wp_create_nonce('fgpx_enrich_weather');
 		$actions['fgpx_enrich_weather'] = '<a href="#" class="fgpx-enrich-weather" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($nonce) . '">' . \esc_html__('Enrich Weather', 'flyover-gpx') . '</a>';
+
+		$previewNonce = \wp_create_nonce('fgpx_generate_preview');
+		$hasPreview = $this->get_track_preview_attachment_id((int) $post->ID) > 0;
+		$actions['fgpx_generate_preview'] = '<a href="#" class="fgpx-generate-preview" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewNonce) . '" data-has-preview="' . ($hasPreview ? '1' : '0') . '" data-track-title="' . \esc_attr((string) $post->post_title) . '">'
+			. ($hasPreview ? \esc_html__('Regenerate Preview', 'flyover-gpx') : \esc_html__('Generate Preview', 'flyover-gpx'))
+			. '</a>';
 		
 		return $actions;
 	}
@@ -1344,7 +1351,180 @@ final class Admin
 	}
 	// Show shortcode string for copy reference
 	echo '<p style="margin-top:6px"><code>' . \esc_html($short) . '</code></p>';
+
+	$previewNonce = \wp_create_nonce('fgpx_generate_preview');
+	$previewAttachmentId = $this->get_track_preview_attachment_id((int) $post->ID);
+	$previewUrl = $previewAttachmentId > 0 ? (string) \wp_get_attachment_image_url($previewAttachmentId, 'medium_large') : '';
+	echo '<hr/>';
+	echo '<p><button type="button" class="button button-secondary fgpx-generate-preview" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewNonce) . '" data-track-title="' . \esc_attr((string) $post->post_title) . '">'
+		. ($previewAttachmentId > 0 ? \esc_html__('Regenerate Preview Image', 'flyover-gpx') : \esc_html__('Generate Preview Image', 'flyover-gpx'))
+		. '</button></p>';
+	if ($previewUrl !== '') {
+		echo '<p style="margin:8px 0 0">' . \esc_html__('Current gallery preview image:', 'flyover-gpx') . '</p>';
+		echo '<img data-fgpx-track-preview="1" src="' . \esc_url($previewUrl) . '" alt="' . \esc_attr__('Track preview image', 'flyover-gpx') . '" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />';
+	}
 }
+
+	private function get_track_preview_attachment_id(int $postId): int
+	{
+		if ($postId <= 0) {
+			return 0;
+		}
+
+		return (int) \get_post_meta($postId, 'fgpx_preview_attachment_id', true);
+	}
+
+	/**
+	 * Persist generated preview image and update preview meta fields.
+	 */
+	private function persist_track_preview_image(int $postId, string $base64Image, string $source): array
+	{
+		if ($postId <= 0) {
+			return ['ok' => false, 'error' => 'Invalid post ID'];
+		}
+
+		if (!preg_match('#^data:image/(png|jpeg|jpg);base64,#i', $base64Image, $matches)) {
+			return ['ok' => false, 'error' => 'Unsupported image format'];
+		}
+
+		$binary = \base64_decode((string) preg_replace('#^data:image/[^;]+;base64,#', '', $base64Image), true);
+		if (!is_string($binary) || $binary === '') {
+			return ['ok' => false, 'error' => 'Invalid image data'];
+		}
+
+		// Cap payload size to keep uploads bounded for admin-triggered generation.
+		if (strlen($binary) > 8 * 1024 * 1024) {
+			return ['ok' => false, 'error' => 'Image payload is too large'];
+		}
+
+		$previousAttachmentId = $this->get_track_preview_attachment_id($postId);
+
+		$extension = strtolower((string) $matches[1]);
+		if ($extension === 'jpg') {
+			$extension = 'jpeg';
+		}
+
+		$fileName = sprintf('fgpx-preview-%d-%d.%s', $postId, time(), $extension === 'jpeg' ? 'jpg' : 'png');
+		$upload = \wp_upload_bits($fileName, null, $binary);
+		if (!empty($upload['error'])) {
+			return ['ok' => false, 'error' => (string) $upload['error']];
+		}
+
+		$filePath = isset($upload['file']) ? (string) $upload['file'] : '';
+		$fileType = \wp_check_filetype($fileName, null);
+		if ($filePath === '' || !\file_exists($filePath)) {
+			return ['ok' => false, 'error' => 'Failed to store preview image'];
+		}
+
+		$attachment = [
+			'post_mime_type' => (string) ($fileType['type'] ?? 'image/png'),
+			'post_title' => sprintf('Track %d Preview', $postId),
+			'post_content' => '',
+			'post_status' => 'inherit',
+		];
+
+		$attachmentId = \wp_insert_attachment($attachment, $filePath, $postId);
+		if (!is_int($attachmentId) || $attachmentId <= 0) {
+			return ['ok' => false, 'error' => 'Failed to create preview attachment'];
+		}
+
+		if (!function_exists('wp_generate_attachment_metadata')) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		$metadata = \wp_generate_attachment_metadata($attachmentId, $filePath);
+		if (is_array($metadata)) {
+			\wp_update_attachment_metadata($attachmentId, $metadata);
+		}
+
+		\update_post_meta($postId, 'fgpx_preview_attachment_id', $attachmentId);
+		\update_post_meta($postId, 'fgpx_preview_source', \sanitize_key($source));
+		\update_post_meta($postId, 'fgpx_preview_generated_at', gmdate('c'));
+		\delete_post_meta($postId, 'fgpx_preview_error');
+		self::clear_all_track_caches($postId);
+
+		if ($previousAttachmentId > 0 && $previousAttachmentId !== $attachmentId) {
+			$this->maybe_delete_preview_attachment($previousAttachmentId, $postId);
+		}
+
+		$previewUrl = (string) \esc_url_raw((string) \wp_get_attachment_image_url($attachmentId, 'medium_large'));
+
+		return ['ok' => true, 'attachmentId' => $attachmentId, 'previewUrl' => $previewUrl];
+	}
+
+	/**
+	 * Delete an old preview attachment when it is replaced.
+	 */
+	private function maybe_delete_preview_attachment(int $attachmentId, int $trackId): void
+	{
+		if ($attachmentId <= 0 || $trackId <= 0) {
+			return;
+		}
+
+		$attachment = \get_post($attachmentId);
+		if (!$attachment || $attachment->post_type !== 'attachment') {
+			return;
+		}
+
+		$parent = (int) ($attachment->post_parent ?? 0);
+		if ($parent !== 0 && $parent !== $trackId) {
+			return;
+		}
+
+		\wp_delete_attachment($attachmentId, true);
+	}
+
+	/**
+	 * Generate a simple fallback preview card image (option 4) when snapshot is unavailable.
+	 */
+	private function generate_fallback_preview_data_url(int $postId): string
+	{
+		if (!function_exists('imagecreatetruecolor')) {
+			return '';
+		}
+
+		$title = (string) \get_the_title($postId);
+		$distance = (string) \get_post_meta($postId, 'fgpx_total_distance_m', true);
+		$duration = (string) \get_post_meta($postId, 'fgpx_moving_time_s', true);
+		$gain = (string) \get_post_meta($postId, 'fgpx_elevation_gain_m', true);
+
+		$distanceKm = $distance !== '' ? number_format(((float) $distance) / 1000, 2) . ' km' : '-';
+		$durationText = $duration !== '' ? $this->format_hms((int) round((float) $duration)) : '-';
+		$gainText = $gain !== '' ? number_format((float) $gain, 0) . ' m' : '-';
+
+		$img = \imagecreatetruecolor(1200, 630);
+		if (!$img) {
+			return '';
+		}
+
+		$bg = \imagecolorallocate($img, 15, 76, 129);
+		$bg2 = \imagecolorallocate($img, 45, 131, 199);
+		$text = \imagecolorallocate($img, 255, 255, 255);
+		$sub = \imagecolorallocate($img, 225, 239, 250);
+
+		\imagefilledrectangle($img, 0, 0, 1200, 630, $bg);
+		\imagefilledellipse($img, 1020, 110, 520, 520, $bg2);
+		\imagefilledellipse($img, 1180, 640, 420, 420, $bg2);
+
+		$title = substr($title !== '' ? $title : ('Track #' . $postId), 0, 56);
+		\imagestring($img, 5, 54, 74, 'Flyover GPX Preview', $sub);
+		\imagestring($img, 5, 54, 134, $title, $text);
+		\imagestring($img, 5, 54, 250, 'Distance: ' . $distanceKm, $text);
+		\imagestring($img, 5, 54, 290, 'Duration: ' . $durationText, $text);
+		\imagestring($img, 5, 54, 330, 'Elevation Gain: ' . $gainText, $text);
+		\imagestring($img, 4, 54, 520, 'Generated fallback preview', $sub);
+
+		ob_start();
+		\imagepng($img);
+		$binary = ob_get_clean();
+		\imagedestroy($img);
+
+		if (!is_string($binary) || $binary === '') {
+			return '';
+		}
+
+		return 'data:image/png;base64,' . base64_encode($binary);
+	}
 
 	// Replace GPX metabox removed - use "Add New Track" instead
 
@@ -2401,21 +2581,28 @@ final class Admin
 	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track'];
 	if (in_array($screen->id, $relevant_pages, true)) {
 		\wp_enqueue_script('jquery');
-		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.2', true);
+		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.3', true);
 		\wp_enqueue_style('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/css/admin.css', [], '1.0.2');
+		$options = Options::getAll();
+		\wp_localize_script('fgpx-admin', 'FGPXAdminPreview', [
+			'restBase' => \esc_url_raw(\site_url('/wp-json/fgpx/v1')),
+			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
+			'defaultStyle' => (string) ($options['fgpx_default_style'] ?? 'raster'),
+			'defaultStyleUrl' => (string) ($options['fgpx_default_style_url'] ?? ''),
+			'snapshotWidth' => 1200,
+			'snapshotHeight' => 630,
+			'bulkMaxTracks' => 25,
+			'bulkPauseMs' => 200,
+		]);
 	}
 	
-	// Only enqueue assets globally on the list screen to avoid interfering with the editor save flow
+	// Keep list-screen payload light: only MapLibre JS is needed for offscreen snapshot previews.
 	if ($screen->id === 'edit-fgpx_track') {
 		try {
 			$plugin = new Plugin();
 			$plugin->register_assets();
 		} catch (\Throwable $e) { /* no-op */ }
-		\wp_enqueue_style('maplibre-gl-css');
-		\wp_enqueue_style('fgpx-front');
 		\wp_enqueue_script('maplibre-gl-js');
-		\wp_enqueue_script('chartjs');
-		\wp_enqueue_script('fgpx-front');
 	}
 }
 
@@ -2879,6 +3066,34 @@ final class Admin
 	public function maybe_show_admin_notice(): void
 	{
 		if (!isset($_GET['fgpx_msg'])) {
+			if (isset($_GET['fgpx_preview_generated']) || isset($_GET['fgpx_preview_errors']) || isset($_GET['fgpx_preview_skipped'])) {
+				$generated = isset($_GET['fgpx_preview_generated']) ? (int) $_GET['fgpx_preview_generated'] : 0;
+				$errors = isset($_GET['fgpx_preview_errors']) ? (int) $_GET['fgpx_preview_errors'] : 0;
+				$skipped = isset($_GET['fgpx_preview_skipped']) ? (int) $_GET['fgpx_preview_skipped'] : 0;
+				$deferred = isset($_GET['fgpx_preview_deferred']) ? (int) $_GET['fgpx_preview_deferred'] : 0;
+				$unsupported = isset($_GET['fgpx_preview_unsupported']) ? (int) $_GET['fgpx_preview_unsupported'] : 0;
+
+				if ($unsupported === 1) {
+					echo '<div class="notice notice-error is-dismissible"><p>'
+						. \esc_html__('Preview fallback generation requires PHP GD/image functions. Install or enable GD, or use JavaScript-enabled generation.', 'flyover-gpx')
+						. '</p></div>';
+				} elseif ($generated > 0 && $errors === 0) {
+					echo '<div class="notice notice-success is-dismissible"><p>'
+						. sprintf(
+							_n('%d preview image generated.', '%d preview images generated.', $generated, 'flyover-gpx'),
+							$generated
+						)
+						. ($skipped > 0 ? ' ' . sprintf(__('Skipped %d tracks with existing preview.', 'flyover-gpx'), $skipped) : '')
+						. ($deferred > 0 ? ' ' . sprintf(__('Deferred %d tracks because of bulk safety limits.', 'flyover-gpx'), $deferred) : '')
+						. '</p></div>';
+				} elseif ($generated > 0 || $errors > 0) {
+					echo '<div class="notice notice-warning is-dismissible"><p>'
+						. sprintf(__('Preview generation finished: %1$d generated, %2$d skipped, %3$d failed.', 'flyover-gpx'), $generated, $skipped, $errors)
+						. ($deferred > 0 ? ' ' . sprintf(__('Deferred %d tracks because of bulk safety limits.', 'flyover-gpx'), $deferred) : '')
+						. '</p></div>';
+				}
+			}
+
 			// Check for bulk weather enrichment results
 			if (isset($_GET['fgpx_weather_enriched']) || isset($_GET['fgpx_weather_errors'])) {
 				$enriched = isset($_GET['fgpx_weather_enriched']) ? (int) $_GET['fgpx_weather_enriched'] : 0;
@@ -2949,9 +3164,7 @@ final class Admin
 				@\unlink($file);
 			}
 		}
-		// Invalidate any cached JSON variants for this post (best-effort)
-		$modified = (string) \get_post_field('post_modified_gmt', $postId);
-		\delete_transient('fgpx_json_' . (int) $postId . '_' . $modified);
+		self::clear_all_track_caches($postId);
 	}
 
 	/**
@@ -2963,6 +3176,8 @@ final class Admin
 		$modified = (string) $post->post_modified_gmt;
 		// Delete common v2 cache variants for this post
 		\delete_transient('fgpx_json_v2_' . (int) $postId . '_' . $modified . '_hp_0_simp_0');
+		// Invalidate gallery track list so the new/updated track appears immediately.
+		\FGpx\GalleryShortcode::invalidate_tracks_cache();
 	}
 
 	/**
@@ -2970,9 +3185,16 @@ final class Admin
 	 */
 	public function invalidate_cache_on_meta(int $metaId, int $objectId, string $metaKey, $metaValue): void
 	{
-		// Invalidate cache for file path changes and weather data changes
-		$weatherKeys = ['fgpx_file_path', 'fgpx_weather_points', 'fgpx_weather_summary'];
-		if ((int) $objectId <= 0 || !\in_array($metaKey, $weatherKeys, true)) { return; }
+		// Invalidate cache for file path, weather, and preview metadata changes.
+		$trackedKeys = [
+			'fgpx_file_path',
+			'fgpx_weather_points',
+			'fgpx_weather_summary',
+			'fgpx_preview_attachment_id',
+			'fgpx_preview_source',
+			'fgpx_preview_generated_at',
+		];
+		if ((int) $objectId <= 0 || !\in_array($metaKey, $trackedKeys, true)) { return; }
 		
 		$post = \get_post((int) $objectId);
 		if (!$post || $post->post_type !== 'fgpx_track') { return; }
@@ -3037,6 +3259,8 @@ final class Admin
 		// Clear old cache formats too
 		\delete_transient('fgpx_track_' . $trackId);
 		\delete_transient('fgpx_json_' . $trackId . '_' . $modified);
+		// Invalidate gallery track list.
+		\FGpx\GalleryShortcode::invalidate_tracks_cache();
 	}
 
 	/**
@@ -3045,6 +3269,8 @@ final class Admin
 	public function add_bulk_actions(array $actions): array
 	{
 		$actions['fgpx_enrich_weather'] = \esc_html__('Enrich with Weather Data', 'flyover-gpx');
+		$actions['fgpx_generate_previews'] = \esc_html__('Generate Preview Images', 'flyover-gpx');
+		$actions['fgpx_regenerate_previews'] = \esc_html__('Regenerate Preview Images', 'flyover-gpx');
 		return $actions;
 	}
 
@@ -3053,11 +3279,78 @@ final class Admin
 	 */
 	public function handle_bulk_actions(string $redirect_to, string $doaction, array $post_ids): string
 	{
-		if ($doaction !== 'fgpx_enrich_weather') {
+		if (empty($post_ids)) {
 			return $redirect_to;
 		}
 
-		if (empty($post_ids)) {
+		if ($doaction === 'fgpx_generate_previews' || $doaction === 'fgpx_regenerate_previews') {
+			$maxTracksPerRequest = 25;
+			$post_ids = array_values(array_map('intval', $post_ids));
+			$post_ids = array_filter($post_ids, static function (int $id): bool {
+				return $id > 0;
+			});
+
+			if (empty($post_ids)) {
+				return $redirect_to;
+			}
+
+			$deferred = 0;
+			if (count($post_ids) > $maxTracksPerRequest) {
+				$deferred = count($post_ids) - $maxTracksPerRequest;
+				$post_ids = array_slice($post_ids, 0, $maxTracksPerRequest);
+			}
+
+			if (!function_exists('imagecreatetruecolor')) {
+				return \add_query_arg([
+					'fgpx_preview_generated' => 0,
+					'fgpx_preview_errors' => count($post_ids),
+					'fgpx_preview_skipped' => 0,
+					'fgpx_preview_deferred' => $deferred,
+					'fgpx_preview_unsupported' => 1,
+				], $redirect_to);
+			}
+
+			$generated = 0;
+			$errors = 0;
+			$skipped = 0;
+			$force = $doaction === 'fgpx_regenerate_previews';
+
+			foreach ($post_ids as $post_id) {
+				$trackId = (int) $post_id;
+				$post = \get_post($trackId);
+				if (!$post || $post->post_type !== 'fgpx_track') {
+					continue;
+				}
+
+				if (!$force && $this->get_track_preview_attachment_id($trackId) > 0) {
+					$skipped++;
+					continue;
+				}
+
+				$imageData = $this->generate_fallback_preview_data_url($trackId);
+				if ($imageData === '') {
+					$errors++;
+					continue;
+				}
+
+				$result = $this->persist_track_preview_image($trackId, $imageData, 'fallback_card');
+				if (!($result['ok'] ?? false)) {
+					$errors++;
+					continue;
+				}
+
+				$generated++;
+			}
+
+			return \add_query_arg([
+				'fgpx_preview_generated' => $generated,
+				'fgpx_preview_errors' => $errors,
+				'fgpx_preview_skipped' => $skipped,
+				'fgpx_preview_deferred' => $deferred,
+			], $redirect_to);
+		}
+
+		if ($doaction !== 'fgpx_enrich_weather') {
 			return $redirect_to;
 		}
 
@@ -3162,5 +3455,66 @@ final class Admin
 				\wp_send_json_error(['message' => 'Failed to enrich with weather data (unknown error)'], 500);
 			}
 		}
+	}
+
+	/**
+	 * AJAX handler for generating/regenerating gallery preview images.
+	 */
+	public function ajax_generate_preview(): void
+	{
+		if (!$this->validateNonce('fgpx_generate_preview', 'nonce', false)) {
+			\wp_send_json_error(['message' => 'Security check failed'], 403);
+		}
+
+		$postId = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+		if ($postId <= 0) {
+			\wp_send_json_error(['message' => 'Invalid post ID'], 400);
+		}
+
+		$post = \get_post($postId);
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			\wp_send_json_error(['message' => 'Invalid track'], 404);
+		}
+
+		if (!\current_user_can('edit_post', $postId)) {
+			\wp_send_json_error(['message' => 'Insufficient permissions to edit this track'], 403);
+		}
+
+		$source = isset($_POST['source']) ? \sanitize_key((string) $_POST['source']) : 'fallback_card';
+		if (!\in_array($source, ['map_snapshot', 'fallback_card'], true)) {
+			$source = 'fallback_card';
+		}
+
+		$imageData = isset($_POST['image_data']) ? (string) $_POST['image_data'] : '';
+		if ($imageData !== '' && strlen($imageData) > 12 * 1024 * 1024) {
+			\wp_send_json_error(['message' => 'Image payload is too large'], 413);
+		}
+
+		if ($imageData === '') {
+			$imageData = $this->generate_fallback_preview_data_url($postId);
+			$source = 'fallback_card';
+		}
+
+		if ($imageData === '') {
+			\wp_send_json_error([
+				'message' => 'Preview generation unavailable: no map snapshot provided and PHP GD fallback is not available.',
+			], 500);
+		}
+
+		$result = $this->persist_track_preview_image($postId, $imageData, $source);
+		if (!($result['ok'] ?? false)) {
+			$error = (string) ($result['error'] ?? 'Preview generation failed');
+			\update_post_meta($postId, 'fgpx_preview_error', $error);
+			\wp_send_json_error(['message' => $error], 500);
+		}
+
+		\wp_send_json_success([
+			'message' => $source === 'map_snapshot'
+				? 'Map snapshot preview generated successfully.'
+				: 'Fallback preview generated successfully.',
+			'previewUrl' => (string) \esc_url_raw((string) ($result['previewUrl'] ?? '')),
+			'source' => $source,
+			'attachmentId' => (int) ($result['attachmentId'] ?? 0),
+		]);
 	}
 }

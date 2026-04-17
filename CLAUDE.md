@@ -135,9 +135,12 @@ CDN assets (MapLibre, Chart.js) use a fallback chain: primary CDN → fallback C
 
 The `[flyover_gpx]` shortcode accepts 30+ attributes for per-embed overrides (id, style, height, zoom, speed, privacy, hud, elevation_coloring, chart colors, feature toggles, gpx_download). All optional attributes fall back to admin settings in `Options`.
 
-## Features (v1.0.3)
+The `[flyover_gpx_gallery]` shortcode renders a browsable track gallery with inline player. Attributes: `per_page` (4–48, default 12), `height` (player height), `style` (raster|vector), `style_url`, `show_view_toggle` (1|0). Per-instance config is stored in `window.FGPXGalleryInstances[rootId]` so multiple galleries on the same page are isolated. Track list is cached as a 5-min transient (`fgpx_gallery_tracks_v1`), invalidated automatically on track save/delete via `GalleryShortcode::invalidate_tracks_cache()`.
+
+## Features (v1.0.5)
 
 - **Fullscreen button** — MapLibre `FullscreenControl` added to map
 - **Click-on-chart-to-seek** — clicking the elevation/speed chart seeks playback to that position
 - **GPX download button** — optional `⬇` button; enabled via `fgpx_gpx_download_enabled` setting or `gpx_download="1"` shortcode attribute; served via AJAX with nonce authentication
 - **Multiple shortcodes per page** — `Plugin::$instanceCounter` issues unique IDs; `initContainer(el)` merges per-instance overrides; `fgpx-lazy.js` observes all `.fgpx` containers
+- **Gallery shortcode** — `[flyover_gpx_gallery]` with grid/list cards, search, sort, load more, inline player, social share links, hash-based deep-link auto-open

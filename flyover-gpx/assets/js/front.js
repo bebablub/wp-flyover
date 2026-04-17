@@ -583,6 +583,10 @@
     if (!el || typeof window.maplibregl === 'undefined' || typeof window.Chart === 'undefined' || typeof window.FGPX === 'undefined') {
       return;
     }
+    if (el.getAttribute('data-fgpx-initialized') === '1') {
+      return;
+    }
+    el.setAttribute('data-fgpx-initialized', '1');
     var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
     var FGPX = Object.assign({}, window.FGPX, instCfg);
     applyTheme(el, FGPX);
@@ -591,7 +595,15 @@
     var style = el.getAttribute('data-style') || 'raster';
     var styleUrl = el.getAttribute('data-style-url');
 
-    var ui = buildLayout(el, FGPX);
+    var ui;
+    try {
+      ui = buildLayout(el, FGPX);
+    } catch (e) {
+      // Release guard so the container can be retried after a transient failure.
+      el.removeAttribute('data-fgpx-initialized');
+      DBG.warn('initContainer: buildLayout failed, guard released', e);
+      return;
+    }
     ui.spinner.style.display = 'flex';
     ui.error.style.display = 'none';
 
@@ -8824,6 +8836,9 @@
       DBG.warn('Initialization error:', e);
     }
   }
+
+  window.FGPX = window.FGPX || {};
+  window.FGPX.initContainer = initContainer;
 
   if (window.FGPX && window.FGPX.deferViewport) {
     // Lazy: expose boot for loader

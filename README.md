@@ -163,7 +163,39 @@ Notes:
 - If a vector `style_url` fails to load, the player falls back to OSM raster tiles.
 - Multiple instances per page are supported. The first container uses `fgpx-app`, additional embeds use `fgpx-app-N`.
 - Disabling tile prefetching sets MapLibre’s `prefetchZoomDelta` to 0 and skips prewarm to minimize extra requests.
+## Gallery Shortcode
 
+Embed a browsable track gallery with inline player and social sharing:
+
+```text
+[flyover_gpx_gallery]
+```
+
+Parameters (all optional):
+
+- `per_page` (optional): Number of tracks shown before "Load more". Range 4–48. Default `12`.
+- `height` (optional): Player height when a track is opened. Default `620px`.
+- `style` (optional): Map style for the player — `raster` (default) or `vector`.
+- `style_url` (optional): MapLibre style URL when `style="vector"`.
+- `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
+
+Features:
+
+- Grid and list card view with distance, duration, elevation gain, and upload date
+- Full-text search across title and metadata
+- Sort by newest, distance, duration, elevation gain, or title
+- Inline player panel — opens below the list when a track is selected
+- Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-shortcode button
+- Shared URLs include a `#track-{id}` hash that auto-opens the correct track on page load
+- Multiple `[flyover_gpx_gallery]` shortcodes on the same page are fully isolated
+
+Examples:
+
+```text
+[flyover_gpx_gallery]
+[flyover_gpx_gallery per_page="6" height="500px"]
+[flyover_gpx_gallery show_view_toggle="0"]
+```
 ### Inline Style JSON (Admin)
 
 You can paste a complete MapLibre `style.json` into Settings → Flyover GPX → Shortcode Defaults → “Inline style JSON (optional)”.
