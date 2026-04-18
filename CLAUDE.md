@@ -40,15 +40,21 @@ flyover-gpx/
   tests/
     bootstrap.php            defines ABSPATH + get_option() stub
     Unit/
+      AdminWeatherWindTest.php      weather and wind enrichment behavior
+      GalleryShortcodeIntegrationTest.php  gallery data shape and integration behavior
+      GalleryShortcodeTest.php      gallery shortcode unit coverage
       OptionsTest.php        Options class: defaults, keys, types, cache, getForFrontend() contract
+      RestCoreBehaviorTest.php      REST endpoint core behavior checks
       VersionConsistencyTest.php  version strings consistent + semver format
     js/
+      gallery.test.js        gallery UI behavior (search/sort/load more/hash/preview)
       setup.js               global IntersectionObserver mock
       fgpx-lazy.test.js      8 tests: bootstrap modes, IO setup, deferred triggering
       front-boot.test.js     8 tests: boot registration, _bootDone guard, eager no-crash
+      front-runtime.test.js  runtime front-end behavior coverage
 ```
 
-**PHP tests**: `tests/bootstrap.php` stubs only `get_option()` — enough to test `Options` without WordPress. Add further stubs there when testing additional classes.
+**PHP tests**: `tests/bootstrap.php` provides a broader WordPress-like stub layer used by unit tests across `Options`, `Rest`, `Admin`, and gallery-related classes.
 
 **JS tests**: IIFE scripts are loaded via `fs.readFileSync` + `eval()` into the jsdom global context. `lazyStyles: []` / `lazyScripts: []` make the async Promise chain resolve in two microtask ticks (`await Promise.resolve()` twice). The `IntersectionObserver` mock in `setup.js` exposes `_callback` so tests can simulate viewport intersection events.
 
@@ -58,7 +64,7 @@ flyover-gpx/
 
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
-| `ci.yml` | push / PR → `main` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) → `js-tests` (Jest, Node 20) |
+| `ci.yml` | push / PR → `main`, `feat/**` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) → `js-tests` (Jest, Node 20) |
 | `release.yml` | push tag `v*.*.*` | tests → prod composer install → ZIP → GitHub Release |
 
 ### Releasing a version
