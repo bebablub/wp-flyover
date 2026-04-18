@@ -103,6 +103,14 @@ final class GalleryShortcode
         }
 
         $showViewToggle = \in_array(\strtolower((string) $atts['show_view_toggle']), ['1', 'true', 'yes', 'on'], true);
+        $themeMode = \sanitize_key((string) ($options['fgpx_theme_mode'] ?? 'system'));
+        if ($themeMode === 'dark') {
+            $themeAttr = ' data-fgpx-theme="dark"';
+        } elseif ($themeMode === 'bright') {
+            $themeAttr = ' data-fgpx-theme="light"';
+        } else {
+            $themeAttr = '';
+        }
 
         $rootId = 'fgpx-gallery-' . \wp_generate_uuid4();
 
@@ -113,7 +121,7 @@ final class GalleryShortcode
             'styleUrl' => $styleUrl,
         ], $rootId);
 
-        return '<div id="' . \esc_attr($rootId) . '" class="fgpx-gallery" data-root-id="' . \esc_attr($rootId) . '">'
+        return '<div id="' . \esc_attr($rootId) . '" class="fgpx-gallery" data-root-id="' . \esc_attr($rootId) . '"' . $themeAttr . '>'
             . '<div class="fgpx-gallery-toolbar">'
             . '<div class="fgpx-gallery-search-wrap">'
             . '<input type="search" class="fgpx-gallery-search" placeholder="' . \esc_attr__('Search tracks (title, distance, duration, elevation, keywords)...', 'flyover-gpx') . '" aria-label="' . \esc_attr__('Search tracks', 'flyover-gpx') . '" />'

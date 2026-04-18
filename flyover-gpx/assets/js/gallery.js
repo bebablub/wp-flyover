@@ -145,6 +145,87 @@
     }
   }
 
+  function applyGalleryTheme(root, cfg) {
+    if (!root) {
+      return;
+    }
+
+    var playerConfig = (cfg && cfg.playerConfig) ? cfg.playerConfig : {};
+    var mode = String(playerConfig.themeMode || 'system');
+
+    if (root.__fgpxGalleryThemeTimer) {
+      clearTimeout(root.__fgpxGalleryThemeTimer);
+      root.__fgpxGalleryThemeTimer = null;
+    }
+
+    if (mode === 'dark') {
+      root.setAttribute('data-fgpx-theme', 'dark');
+      return;
+    }
+
+    if (mode === 'bright') {
+      root.setAttribute('data-fgpx-theme', 'light');
+      return;
+    }
+
+    if (mode === 'auto') {
+      var parseMinutes = function (hhmm, fallback) {
+        var value = String(hhmm || '');
+        var parts = value.split(':');
+        if (parts.length !== 2) {
+          return fallback;
+        }
+        var h = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10);
+        if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+          return fallback;
+        }
+        return h * 60 + m;
+      };
+
+      var now = new Date();
+      var nowMins = now.getHours() * 60 + now.getMinutes();
+      var startMins = parseMinutes(playerConfig.themeAutoDarkStart, 22 * 60);
+      var endMins = parseMinutes(playerConfig.themeAutoDarkEnd, 6 * 60);
+
+      // Degenerate range means no defined dark window; fall back to system.
+      if (startMins === endMins) {
+        root.removeAttribute('data-fgpx-theme');
+        return;
+      }
+
+      var inDark;
+
+      if (startMins < endMins) {
+        inDark = nowMins >= startMins && nowMins < endMins;
+      } else {
+        inDark = nowMins >= startMins || nowMins < endMins;
+      }
+
+      root.setAttribute('data-fgpx-theme', inDark ? 'dark' : 'light');
+
+      var nextBoundaryMins = inDark
+        ? ((endMins - nowMins + 1440) % 1440)
+        : ((startMins - nowMins + 1440) % 1440);
+      var msUntilNext = (nextBoundaryMins * 60 * 1000)
+        - (now.getSeconds() * 1000)
+        - now.getMilliseconds();
+      if (msUntilNext <= 0) {
+        msUntilNext += 24 * 60 * 60 * 1000;
+      }
+      root.__fgpxGalleryThemeTimer = setTimeout(function () {
+        if (!document.documentElement.contains(root)) {
+          root.__fgpxGalleryThemeTimer = null;
+          return;
+        }
+        applyGalleryTheme(root, cfg);
+      }, msUntilNext + 200);
+      return;
+    }
+
+    root.removeAttribute('data-fgpx-theme');
+  }
+
   function qs(selector, root) {
     return (root || document).querySelector(selector);
   }
@@ -433,6 +514,8 @@
   }
 
   function initGallery(root, cfg) {
+    applyGalleryTheme(root, cfg);
+
     var tracks = Array.isArray(cfg.tracks) ? cfg.tracks.slice() : [];
     var galleryRootId = String(root && root.getAttribute('data-root-id') || '');
     var strings = cfg.strings || {};

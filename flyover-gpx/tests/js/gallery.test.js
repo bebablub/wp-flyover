@@ -104,6 +104,8 @@ function baseStrings() {
 }
 
 describe('gallery.js', () => {
+  const RealDate = Date;
+
   beforeEach(() => {
     jest.useRealTimers();
     setupGalleryDom();
@@ -132,6 +134,119 @@ describe('gallery.js', () => {
     delete window.__FGPXGalleryPlayerAssetsPromise;
     delete window.__FGPXGalleryConsumedHash;
     window.location.hash = '';
+    global.Date = RealDate;
+  });
+
+  test('applies forced bright mode to gallery shell as light', () => {
+    window.FGPXGallery.playerConfig = { themeMode: 'bright' };
+
+    loadGallery();
+
+    expect(document.querySelector('.fgpx-gallery').getAttribute('data-fgpx-theme')).toBe('light');
+  });
+
+  test('system mode removes forced theme attribute from gallery shell', () => {
+    setupGalleryDom(`
+      <div class="fgpx-gallery" data-root-id="gallery-default" data-fgpx-theme="dark">
+        <div class="fgpx-gallery-toolbar">
+          <input type="search" class="fgpx-gallery-search" />
+          <select class="fgpx-gallery-sort"><option value="newest">Newest</option></select>
+        </div>
+        <div class="fgpx-gallery-results fgpx-gallery-results-grid" aria-live="polite"></div>
+        <div class="fgpx-gallery-footer"><button type="button" class="fgpx-gallery-load-more">Load more</button></div>
+        <section class="fgpx-gallery-player-panel" hidden>
+          <header class="fgpx-gallery-player-header"><div class="fgpx-gallery-player-title" tabindex="-1"></div><div class="fgpx-gallery-player-actions"></div></header>
+          <div class="fgpx-gallery-player-mount"></div>
+        </section>
+      </div>
+    `);
+
+    window.FGPXGallery.playerConfig = { themeMode: 'system' };
+
+    loadGallery();
+
+    expect(document.querySelector('.fgpx-gallery').hasAttribute('data-fgpx-theme')).toBe(false);
+  });
+
+  test('auto mode applies dark at configured time window', () => {
+    global.Date = class extends RealDate {
+      constructor(...args) {
+        if (args.length) {
+          return new RealDate(...args);
+        }
+        return new RealDate('2026-01-01T23:15:30');
+      }
+
+      static now() {
+        return new RealDate('2026-01-01T23:15:30').getTime();
+      }
+    };
+
+    jest.spyOn(global, 'setTimeout').mockImplementation(() => 1);
+    window.FGPXGallery.playerConfig = {
+      themeMode: 'auto',
+      themeAutoDarkStart: '22:00',
+      themeAutoDarkEnd: '06:00',
+    };
+
+    loadGallery();
+
+    expect(document.querySelector('.fgpx-gallery').getAttribute('data-fgpx-theme')).toBe('dark');
+    expect(setTimeout).toHaveBeenCalled();
+  });
+
+  test('auto mode with equal start and end falls back to system theme', () => {
+    setupGalleryDom(`
+      <div class="fgpx-gallery" data-root-id="gallery-default" data-fgpx-theme="dark">
+        <div class="fgpx-gallery-toolbar">
+          <input type="search" class="fgpx-gallery-search" />
+          <select class="fgpx-gallery-sort"><option value="newest">Newest</option></select>
+        </div>
+        <div class="fgpx-gallery-results fgpx-gallery-results-grid" aria-live="polite"></div>
+        <div class="fgpx-gallery-footer"><button type="button" class="fgpx-gallery-load-more">Load more</button></div>
+        <section class="fgpx-gallery-player-panel" hidden>
+          <header class="fgpx-gallery-player-header"><div class="fgpx-gallery-player-title" tabindex="-1"></div><div class="fgpx-gallery-player-actions"></div></header>
+          <div class="fgpx-gallery-player-mount"></div>
+        </section>
+      </div>
+    `);
+
+    const timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation(() => 1);
+    window.FGPXGallery.playerConfig = {
+      themeMode: 'auto',
+      themeAutoDarkStart: '22:00',
+      themeAutoDarkEnd: '22:00',
+    };
+
+    loadGallery();
+
+    expect(document.querySelector('.fgpx-gallery').hasAttribute('data-fgpx-theme')).toBe(false);
+    expect(timeoutSpy).not.toHaveBeenCalled();
+  });
+
+  test('auto mode with invalid times falls back to default dark window', () => {
+    global.Date = class extends RealDate {
+      constructor(...args) {
+        if (args.length) {
+          return new RealDate(...args);
+        }
+        return new RealDate('2026-01-01T23:15:30');
+      }
+
+      static now() {
+        return new RealDate('2026-01-01T23:15:30').getTime();
+      }
+    };
+
+    window.FGPXGallery.playerConfig = {
+      themeMode: 'auto',
+      themeAutoDarkStart: '99:99',
+      themeAutoDarkEnd: 'bad',
+    };
+
+    loadGallery();
+
+    expect(document.querySelector('.fgpx-gallery').getAttribute('data-fgpx-theme')).toBe('dark');
   });
 
   test('renders initial page and load-more appends additional items in inline mode', () => {
