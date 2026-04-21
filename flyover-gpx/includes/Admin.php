@@ -354,6 +354,10 @@ final class Admin
 		$defZoom = $options['fgpx_default_zoom'];
 		$defSpeed = $options['fgpx_default_speed'];
 		$defPitch = $options['fgpx_default_pitch'];
+		$galleryPerPage = $options['fgpx_gallery_per_page'];
+		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
+		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
+		$galleryShowSearch = $options['fgpx_gallery_show_search'];
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
 		$gpxDownloadEnabled = $options['fgpx_gpx_download_enabled'];
@@ -436,6 +440,31 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_default_pitch">' . \esc_html__('Default pitch', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_default_pitch" name="fgpx_default_pitch" class="small-text" min="0" max="60" step="1" value="' . \esc_attr($defPitch) . '" />';
 		echo '<p class="description">' . \esc_html__('Map viewing angle tilt in degrees. Lower = flatter (top-down).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</table>';
+
+		// Gallery Defaults Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🖼️ Gallery Defaults', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_per_page">' . \esc_html__('Gallery items per page (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_gallery_per_page" name="fgpx_gallery_per_page" class="small-text" min="4" max="48" step="1" value="' . \esc_attr($galleryPerPage) . '" />';
+		echo '<p class="description">' . \esc_html__('Used by [flyover_gpx_gallery] when per_page is not set in shortcode.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_default_sort">' . \esc_html__('Gallery default sort', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_gallery_default_sort" name="fgpx_gallery_default_sort">';
+		echo '<option value="newest"' . selected($galleryDefaultSort, 'newest', false) . '>' . \esc_html__('Newest', 'flyover-gpx') . '</option>';
+		echo '<option value="distance"' . selected($galleryDefaultSort, 'distance', false) . '>' . \esc_html__('Distance', 'flyover-gpx') . '</option>';
+		echo '<option value="duration"' . selected($galleryDefaultSort, 'duration', false) . '>' . \esc_html__('Duration', 'flyover-gpx') . '</option>';
+		echo '<option value="gain"' . selected($galleryDefaultSort, 'gain', false) . '>' . \esc_html__('Elevation gain', 'flyover-gpx') . '</option>';
+		echo '<option value="title"' . selected($galleryDefaultSort, 'title', false) . '>' . \esc_html__('Title', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Initial sort used by gallery shortcode when not specified per embed.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_show_view_toggle">' . \esc_html__('Show gallery view toggle by default', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gallery_show_view_toggle" name="fgpx_gallery_show_view_toggle" value="1"' . ($galleryShowViewToggle === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show Grid/List switcher when shortcode does not define show_view_toggle.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_show_search">' . \esc_html__('Show gallery search by default', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gallery_show_search" name="fgpx_gallery_show_search" value="1"' . ($galleryShowSearch === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show search input when shortcode does not define show_search.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
 
@@ -2003,6 +2032,17 @@ final class Admin
 		\update_option('fgpx_default_zoom', (string) $zoom, true);
 		\update_option('fgpx_default_speed', (string) $speed, true);
 		\update_option('fgpx_default_pitch', (string) $pitch, true);
+		$galleryPerPage = $this->getValidInt('fgpx_gallery_per_page', 12, 4, 48);
+		$allowedGallerySorts = ['newest', 'distance', 'duration', 'gain', 'title'];
+		$galleryDefaultSort = isset($_POST['fgpx_gallery_default_sort']) ? \sanitize_text_field((string) $_POST['fgpx_gallery_default_sort']) : 'newest';
+		if (!\in_array($galleryDefaultSort, $allowedGallerySorts, true)) {
+			$galleryDefaultSort = 'newest';
+		}
+
+		\update_option('fgpx_gallery_per_page', (string) $galleryPerPage, true);
+		\update_option('fgpx_gallery_default_sort', $galleryDefaultSort, true);
+		\update_option('fgpx_gallery_show_view_toggle', $this->getValidBool('fgpx_gallery_show_view_toggle') ? '1' : '0', true);
+		\update_option('fgpx_gallery_show_search', $this->getValidBool('fgpx_gallery_show_search') ? '1' : '0', true);
 		// Use type-safe validation helpers for boolean values
 		\update_option('fgpx_show_labels', $this->getValidBool('fgpx_show_labels') ? '1' : '0', true);
 		\update_option('fgpx_photos_enabled', $this->getValidBool('fgpx_photos_enabled') ? '1' : '0', true);
@@ -3535,6 +3575,10 @@ final class Admin
 		foreach ($patterns as $pattern) {
 			\delete_transient($pattern);
 		}
+
+		// Clear dynamically generated variants (for example _rh_/_sm_ cache key segments).
+		self::delete_track_transients_by_prefix('fgpx_json_v2_' . $trackId . '_' . $modified . '_');
+		self::delete_track_transients_by_prefix('fgpx_json_v3_' . $trackId . '_' . $modified . '_');
 		
 		// Also clear any cached key stored in post meta
 		\delete_post_meta($trackId, 'fgpx_cached_key');
@@ -3584,6 +3628,70 @@ final class Admin
 						\delete_transient('fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $hostPostId . '_simp_' . $simp . '_w_' . $weather . '_wind_' . $wind . $strategySuffix);
 					}
 				}
+			}
+		}
+
+		// Also remove host-specific dynamic variants with additional tokens.
+		self::delete_track_transients_by_prefix('fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $hostPostId . '_');
+	}
+
+	/**
+	 * Delete transient keys by cache prefix.
+	 *
+	 * Needed for dynamic cache key extensions that cannot be safely enumerated.
+	 */
+	private static function delete_track_transients_by_prefix(string $prefix): void
+	{
+		if ($prefix === '') {
+			return;
+		}
+
+		// Test environment: transients are stored in-memory in a global array.
+		if (isset($GLOBALS['fgpx_test_transients']) && \is_array($GLOBALS['fgpx_test_transients'])) {
+			foreach (array_keys($GLOBALS['fgpx_test_transients']) as $key) {
+				if (strpos((string) $key, $prefix) === 0) {
+					unset($GLOBALS['fgpx_test_transients'][$key]);
+				}
+			}
+		}
+
+		global $wpdb;
+		if (!isset($wpdb->options) || !\is_string($wpdb->options) || $wpdb->options === '') {
+			return;
+		}
+
+		if (method_exists($wpdb, 'esc_like') && method_exists($wpdb, 'prepare') && method_exists($wpdb, 'get_col')) {
+			$likeTransientNames = '_transient_' . $wpdb->esc_like($prefix) . '%';
+			$select = $wpdb->prepare(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$likeTransientNames
+			);
+			if (\is_string($select) && $select !== '') {
+				$rows = (array) $wpdb->get_col($select);
+				foreach ($rows as $optionName) {
+					$optionName = (string) $optionName;
+					if (strpos($optionName, '_transient_') !== 0) {
+						continue;
+					}
+					$transientKey = substr($optionName, strlen('_transient_'));
+					if ($transientKey !== '') {
+						\delete_transient($transientKey);
+					}
+				}
+			}
+		}
+
+		if (method_exists($wpdb, 'esc_like') && method_exists($wpdb, 'prepare') && method_exists($wpdb, 'query')) {
+			$likeTransient = '_transient_' . $wpdb->esc_like($prefix) . '%';
+			$likeTimeout = '_transient_timeout_' . $wpdb->esc_like($prefix) . '%';
+			$query = $wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+				$likeTransient,
+				$likeTimeout
+			);
+
+			if (\is_string($query) && $query !== '') {
+				$wpdb->query($query);
 			}
 		}
 	}

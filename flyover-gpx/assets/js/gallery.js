@@ -456,17 +456,14 @@
       var playerId = 'fgpx-gallery-player-' + String(track.id) + '-' + String(Date.now());
       mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '625px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
 
-      if (window.FGPX) {
-        window.FGPX.gpxDownloadUrl = track.gpxDownloadUrl || '';
-      }
-
       // Set per-player instance override for gallery photo enrichment strategy
       if (!window.FGPX.instances) {
         window.FGPX.instances = {};
       }
-      window.FGPX.instances[playerId] = {
-        galleryPhotoStrategy: 'latest_embed'
-      };
+      window.FGPX.instances[playerId] = Object.assign({}, cfg.playerConfig || {}, {
+        galleryPhotoStrategy: 'latest_embed',
+        gpxDownloadUrl: track.gpxDownloadUrl || ''
+      });
 
       var playerEl = qs('#' + playerId, root);
       if (playerEl && window.FGPX && typeof window.FGPX.initContainer === 'function') {

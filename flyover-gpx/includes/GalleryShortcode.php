@@ -64,12 +64,30 @@ final class GalleryShortcode
     public function render_shortcode(array $atts = []): string
     {
         $options = Options::getAll();
+        $galleryDefaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 12);
+        if ($galleryDefaultPerPage < 4) {
+            $galleryDefaultPerPage = 4;
+        }
+        if ($galleryDefaultPerPage > 48) {
+            $galleryDefaultPerPage = 48;
+        }
+
+        $galleryDefaultSort = \sanitize_key((string) ($options['fgpx_gallery_default_sort'] ?? 'newest'));
+        if (!\in_array($galleryDefaultSort, ['newest', 'distance', 'duration', 'gain', 'title'], true)) {
+            $galleryDefaultSort = 'newest';
+        }
+
+        $galleryShowViewToggleDefault = (($options['fgpx_gallery_show_view_toggle'] ?? '1') === '1') ? '1' : '0';
+        $galleryShowSearchDefault = (($options['fgpx_gallery_show_search'] ?? '1') === '1') ? '1' : '0';
+
         $defaults = [
-            'per_page' => '12',
+            'per_page' => (string) $galleryDefaultPerPage,
             'height' => $options['fgpx_default_height'],
             'style' => $options['fgpx_default_style'],
             'style_url' => $options['fgpx_default_style_url'],
-            'show_view_toggle' => '1',
+            'show_view_toggle' => $galleryShowViewToggleDefault,
+            'show_search' => $galleryShowSearchDefault,
+            'default_sort' => $galleryDefaultSort,
         ];
 
         $atts = \shortcode_atts($defaults, $atts, 'flyover_gpx_gallery');
@@ -103,6 +121,11 @@ final class GalleryShortcode
         }
 
         $showViewToggle = \in_array(\strtolower((string) $atts['show_view_toggle']), ['1', 'true', 'yes', 'on'], true);
+        $showSearch = \in_array(\strtolower((string) $atts['show_search']), ['1', 'true', 'yes', 'on'], true);
+        $defaultSort = \sanitize_key((string) ($atts['default_sort'] ?? 'newest'));
+        if (!\in_array($defaultSort, ['newest', 'distance', 'duration', 'gain', 'title'], true)) {
+            $defaultSort = 'newest';
+        }
         $themeMode = \sanitize_key((string) ($options['fgpx_theme_mode'] ?? 'system'));
         if ($themeMode === 'dark') {
             $themeAttr = ' data-fgpx-theme="dark"';
@@ -119,13 +142,17 @@ final class GalleryShortcode
             'height' => $height,
             'style' => $style,
             'styleUrl' => $styleUrl,
+            'defaultSort' => $defaultSort,
+            'showSearch' => $showSearch,
         ], $rootId);
 
         return '<div id="' . \esc_attr($rootId) . '" class="fgpx-gallery" data-root-id="' . \esc_attr($rootId) . '"' . $themeAttr . '>'
             . '<div class="fgpx-gallery-toolbar">'
-            . '<div class="fgpx-gallery-search-wrap">'
-            . '<input type="search" class="fgpx-gallery-search" placeholder="' . \esc_attr__('Search tracks (title, distance, duration, elevation, keywords)...', 'flyover-gpx') . '" aria-label="' . \esc_attr__('Search tracks', 'flyover-gpx') . '" />'
-            . '</div>'
+                        . ($showSearch
+                                ? '<div class="fgpx-gallery-search-wrap">'
+                                        . '<input type="search" class="fgpx-gallery-search" placeholder="' . \esc_attr__('Search tracks (title, distance, duration, elevation, keywords)...', 'flyover-gpx') . '" aria-label="' . \esc_attr__('Search tracks', 'flyover-gpx') . '" />'
+                                    . '</div>'
+                                : '')
             . '<div class="fgpx-gallery-controls">'
             . '<label class="fgpx-gallery-sort-label">'
             . '<span>' . \esc_html__('Sort', 'flyover-gpx') . '</span>'
@@ -186,7 +213,15 @@ final class GalleryShortcode
             return ['item' => null];
         }
 
-        $perPage = isset($params['per_page']) ? (int) $params['per_page'] : 12;
+        $defaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 12);
+        if ($defaultPerPage < 4) {
+            $defaultPerPage = 4;
+        }
+        if ($defaultPerPage > 48) {
+            $defaultPerPage = 48;
+        }
+
+        $perPage = isset($params['per_page']) ? (int) $params['per_page'] : $defaultPerPage;
         $perPage = max(4, min(48, $perPage));
 
         $page = isset($params['page']) ? (int) $params['page'] : 1;
@@ -625,7 +660,8 @@ final class GalleryShortcode
             'playerHeight' => (string) $galleryCfg['height'],
             'playerStyle' => (string) $galleryCfg['style'],
             'playerStyleUrl' => (string) $galleryCfg['styleUrl'],
-            'defaultSort' => 'newest',
+            'defaultSort' => (string) $galleryCfg['defaultSort'],
+            'showSearch' => !empty($galleryCfg['showSearch']),
             'playerConfig' => $playerCfg,
             'playerStyles' => array_values(array_filter([
                 AssetManager::getAssetUrl('maplibre-gl-css', 'style'),

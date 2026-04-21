@@ -178,6 +178,14 @@ Parameters (all optional):
 - `style` (optional): Map style for the player — `raster` (default) or `vector`.
 - `style_url` (optional): MapLibre style URL when `style="vector"`.
 - `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
+- `show_search` (optional): Show search input. Accepts `1|0|true|false`. Default `1`.
+- `default_sort` (optional): Initial sort key. One of `newest|distance|duration|gain|title`. Default `newest`.
+
+Default resolution order:
+
+- Shortcode attribute value (if provided)
+- Admin Gallery defaults (Settings → Flyover GPX)
+- Built-in fallback
 
 Features:
 
@@ -224,6 +232,7 @@ Examples:
 [flyover_gpx_gallery]
 [flyover_gpx_gallery per_page="6" height="500px"]
 [flyover_gpx_gallery show_view_toggle="0"]
+[flyover_gpx_gallery show_search="0" default_sort="distance"]
 ```
 ### Inline Style JSON (Admin)
 

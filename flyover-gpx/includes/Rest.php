@@ -400,9 +400,23 @@ final class Rest
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
         $hostPostForCache = (int) $request->get_param('host_post');
         $strategy = \sanitize_key((string) $request->get_param('strategy'));
+        $resolvedHostPostForCache = $hostPostForCache;
+        if ($resolvedHostPostForCache === 0 && $strategy === 'latest_embed') {
+            $resolvedHostPostForCache = $this->find_latest_embedding_post_id($id);
+        }
+        $sourcePostModifiedToken = 'na';
+        if ($resolvedHostPostForCache > 0) {
+            $sourcePostForCache = \get_post($resolvedHostPostForCache);
+            if ($sourcePostForCache && isset($sourcePostForCache->post_modified_gmt)) {
+                $modifiedGmt = (string) $sourcePostForCache->post_modified_gmt;
+                if ($modifiedGmt !== '') {
+                    $sourcePostModifiedToken = preg_replace('/[^0-9]/', '', $modifiedGmt) ?: 'na';
+                }
+            }
+        }
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_rh_' . $resolvedHostPostForCache . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
 
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -513,15 +527,11 @@ final class Rest
         // Attempt to collect attached photos (images) with EXIF GPS/time
         $photos = [];
         // Optional: fetch attachments from the host post that contains the shortcode
-        $hostPost = (int) $request->get_param('host_post');
-        // Strategy already read above for cache key construction.
-        $collectFromPost = $hostPost > 0 ? $hostPost : 0;
+        $collectFromPost = $resolvedHostPostForCache > 0 ? $resolvedHostPostForCache : 0;
         $sourcePostId = 0;
         $sourcePostTitle = '';
 
-        // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
-        if ($collectFromPost === 0 && $strategy === 'latest_embed') {
-            $collectFromPost = $this->find_latest_embedding_post_id($id);
+        if ($hostPostForCache === 0 && $strategy === 'latest_embed') {
             ErrorHandler::debug('Gallery photo strategy resolved', [
                 'track_id' => $id,
                 'strategy' => $strategy,
@@ -536,7 +546,9 @@ final class Rest
         }
 
         $attachmentIds = [];
+        $fallbackAttachmentIds = [];
         $imageUrls = [];
+        $hasHostSourcedPhotos = false;
         if ($collectFromPost > 0) {
             // 1) Attached media to the host post
             $attached = \get_attached_media('image', $collectFromPost);
@@ -588,7 +600,11 @@ final class Rest
                 'post_mime_type' => 'image'
             ]);
             if (\is_array($fallback)) {
-                foreach ($fallback as $att) { $attachmentIds[(int) $att->ID] = true; }
+                foreach ($fallback as $att) {
+                    $attId = (int) $att->ID;
+                    $attachmentIds[$attId] = true;
+                    $fallbackAttachmentIds[$attId] = true;
+                }
             }
         }
 
@@ -617,6 +633,11 @@ final class Rest
             $cap = function_exists('wp_get_attachment_caption') ? (\wp_get_attachment_caption($att_id) ?: '') : '';
             if ($cap === '') { $cap = (string) get_post_field('post_excerpt', $att_id) ?: ''; }
             $desc = (string) get_post_field('post_content', $att_id);
+            $photoSourcePostId = isset($fallbackAttachmentIds[$att_id]) ? 0 : $sourcePostId;
+            $photoSourcePostTitle = isset($fallbackAttachmentIds[$att_id]) ? '' : $sourcePostTitle;
+            if ($photoSourcePostId > 0) {
+                $hasHostSourcedPhotos = true;
+            }
             $photos[] = [
                 'id' => (int) $att_id,
                 'title' => (string) \get_the_title($att_id),
@@ -627,8 +648,8 @@ final class Rest
                 'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                 'thumbUrl' => \is_array($thumb) ? (string) $thumb[0] : (string) \wp_get_attachment_url($att_id),
                 'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id),
-                'source_post_id' => $sourcePostId,
-                'source_post_title' => $sourcePostTitle,
+                'source_post_id' => $photoSourcePostId,
+                'source_post_title' => $photoSourcePostTitle,
             ];
         }
 
@@ -675,6 +696,9 @@ final class Rest
                         $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
                     }
                 }
+                if ($sourcePostId > 0) {
+                    $hasHostSourcedPhotos = true;
+                }
                 $photos[] = [
                     'id' => 0,
                     'title' => '',
@@ -690,6 +714,9 @@ final class Rest
                 ];
             }
         }
+
+        $responseSourcePostId = ($sourcePostId > 0 && $hasHostSourcedPhotos) ? $sourcePostId : 0;
+        $responseSourcePostTitle = ($sourcePostId > 0 && $hasHostSourcedPhotos) ? $sourcePostTitle : '';
 
         // Get weather data
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
@@ -732,8 +759,8 @@ final class Rest
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
-            'source_post_id' => $sourcePostId,
-            'source_post_title' => $sourcePostTitle,
+            'source_post_id' => $responseSourcePostId,
+            'source_post_title' => $responseSourcePostTitle,
             'weather' => \is_array($decodedWeather) ? $decodedWeather : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummaryRest) ? $decodedWeatherSummaryRest : null,
         ];
@@ -742,7 +769,7 @@ final class Rest
         ErrorHandler::debug('Gallery photo collection completed', [
             'track_id' => $id,
             'photos_found' => count($photos),
-            'source_post_id' => $sourcePostId,
+            'source_post_id' => $responseSourcePostId,
             'strategy' => $strategy,
         ]);
 
@@ -773,13 +800,23 @@ final class Rest
         }
 
         $hostPostForCache = isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0;
-        $hostPost = $hostPostForCache;
         $strategy = \sanitize_key((string) ($_GET['strategy'] ?? ''));
-        $sourcePostId = 0;
+        $hostPost = $hostPostForCache;
         
         // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
         if ($hostPost === 0 && $strategy === 'latest_embed') {
             $hostPost = $this->find_latest_embedding_post_id($id);
+        }
+
+        $sourcePostModifiedToken = 'na';
+        if ($hostPost > 0) {
+            $sourcePostForCache = \get_post($hostPost);
+            if ($sourcePostForCache && isset($sourcePostForCache->post_modified_gmt)) {
+                $modifiedGmt = (string) $sourcePostForCache->post_modified_gmt;
+                if ($modifiedGmt !== '') {
+                    $sourcePostModifiedToken = preg_replace('/[^0-9]/', '', $modifiedGmt) ?: 'na';
+                }
+            }
         }
         
         $modified = (string) $post->post_modified_gmt;
@@ -791,7 +828,7 @@ final class Rest
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
         
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_rh_' . $hostPost . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
             header('Cache-Control: public, max-age=300');
@@ -877,13 +914,16 @@ final class Rest
         // Photos from host post (if provided), with fallbacks
         $photos = [];
         $collectFromPost = $hostPost > 0 ? $hostPost : 0;
+        $sourcePostId = 0;
         $sourcePostTitle = '';
         if ($collectFromPost > 0) {
             $sourcePostId = $collectFromPost;
             $sourcePostTitle = (string) \get_the_title($collectFromPost) ?: '';
         }
         $attachmentIds = [];
+        $fallbackAttachmentIds = [];
         $imageUrls = [];
+        $hasHostSourcedPhotos = false;
         if ($collectFromPost > 0) {
             $attached = \get_attached_media('image', $collectFromPost);
             if (\is_array($attached)) {
@@ -903,7 +943,7 @@ final class Rest
                 if (preg_match_all('/wp-image-(\d+)/', $content, $m)) {
                     foreach ($m[1] as $mid) { $attachmentIds[(int) $mid] = true; }
                 }
-                if (preg_match_all('/<img[^>]+src="([^\"]+)"/i', $content, $m2)) {
+                if (preg_match_all('/<img[^>]+src="([^\"]+\.(?:jpe?g|png|webp))(?:\?[^\"]*)?"/i', $content, $m2)) {
                     foreach ($m2[1] as $url) {
                         $imageUrls[] = (string) $url;
                         $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($url) : 0;
@@ -924,7 +964,11 @@ final class Rest
                 'post_mime_type' => 'image'
             ]);
             if (\is_array($fallback)) {
-                foreach ($fallback as $att) { $attachmentIds[(int) $att->ID] = true; }
+                foreach ($fallback as $att) {
+                    $attId = (int) $att->ID;
+                    $attachmentIds[$attId] = true;
+                    $fallbackAttachmentIds[$attId] = true;
+                }
             }
         }
         foreach (array_keys($attachmentIds) as $att_id) {
@@ -951,6 +995,11 @@ final class Rest
             $cap = function_exists('wp_get_attachment_caption') ? (\wp_get_attachment_caption($att_id) ?: '') : '';
             if ($cap === '') { $cap = (string) get_post_field('post_excerpt', $att_id) ?: ''; }
             $desc = (string) get_post_field('post_content', $att_id);
+            $photoSourcePostId = isset($fallbackAttachmentIds[$att_id]) ? 0 : $sourcePostId;
+            $photoSourcePostTitle = isset($fallbackAttachmentIds[$att_id]) ? '' : $sourcePostTitle;
+            if ($photoSourcePostId > 0) {
+                $hasHostSourcedPhotos = true;
+            }
             $photos[] = [
                 'id' => (int) $att_id,
                 'title' => (string) \get_the_title($att_id),
@@ -961,8 +1010,8 @@ final class Rest
                 'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                 'thumbUrl' => \is_array($thumb) ? (string) $thumb[0] : (string) \wp_get_attachment_url($att_id),
                 'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id),
-                'source_post_id' => $sourcePostId,
-                'source_post_title' => $sourcePostTitle,
+                'source_post_id' => $photoSourcePostId,
+                'source_post_title' => $photoSourcePostTitle,
             ];
         }
         if (!empty($imageUrls)) {
@@ -1007,6 +1056,9 @@ final class Rest
                         $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
                     }
                 }
+                if ($sourcePostId > 0) {
+                    $hasHostSourcedPhotos = true;
+                }
                 $photos[] = [
                     'id' => 0,
                     'title' => '',
@@ -1022,6 +1074,9 @@ final class Rest
                 ];
             }
         }
+
+        $responseSourcePostId = ($sourcePostId > 0 && $hasHostSourcedPhotos) ? $sourcePostId : 0;
+        $responseSourcePostTitle = ($sourcePostId > 0 && $hasHostSourcedPhotos) ? $sourcePostTitle : '';
 
         // Get weather data (already retrieved for cache key)
         $weatherSummary = \get_post_meta($id, 'fgpx_weather_summary', true);
@@ -1063,8 +1118,8 @@ final class Rest
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
-            'source_post_id' => $sourcePostId,
-            'source_post_title' => $sourcePostTitle,
+            'source_post_id' => $responseSourcePostId,
+            'source_post_title' => $responseSourcePostTitle,
             'weather' => \is_array($decodedWeatherAjax) ? $decodedWeatherAjax : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummary) ? $decodedWeatherSummary : null,
         ];
@@ -1073,7 +1128,7 @@ final class Rest
         ErrorHandler::debug('Gallery photo collection completed (AJAX)', [
             'track_id' => $id,
             'photos_found' => count($photos),
-            'source_post_id' => $sourcePostId,
+            'source_post_id' => $responseSourcePostId,
             'strategy' => $strategy,
         ]);
 

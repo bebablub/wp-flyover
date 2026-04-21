@@ -629,6 +629,8 @@
 
     function getCachedData() {
       try {
+        // latest_embed can change when embedding context changes; avoid stale local payloads.
+        if (hasGalleryStrategy) return null;
         if (!window.localStorage) return null;
         var cacheKey = getCacheKey();
         var cached = localStorage.getItem(cacheKey);
@@ -652,6 +654,7 @@
 
     function setCachedData(payload) {
       try {
+        if (hasGalleryStrategy) return;
         if (!window.localStorage) return;
         var cacheKey = getCacheKey();
         

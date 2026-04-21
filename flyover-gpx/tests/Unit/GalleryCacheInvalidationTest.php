@@ -34,11 +34,13 @@ final class GalleryCacheInvalidationTest extends TestCase
 
         $defaultKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_default';
         $embedKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_latest_embed';
+        $resolvedHostKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_rh_777_sm_20260421103045_simp_0_w_0_wind_0_st_latest_embed';
         $legacyKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1';
         $unrelatedKey = 'fgpx_json_v3_999_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_default';
 
         $GLOBALS['fgpx_test_transients'][$defaultKey] = ['ok' => true];
         $GLOBALS['fgpx_test_transients'][$embedKey] = ['ok' => true];
+        $GLOBALS['fgpx_test_transients'][$resolvedHostKey] = ['ok' => true];
         $GLOBALS['fgpx_test_transients'][$legacyKey] = ['ok' => true];
         $GLOBALS['fgpx_test_transients'][$unrelatedKey] = ['ok' => true];
         $GLOBALS['fgpx_test_post_meta'][$trackId]['fgpx_cached_key'] = $defaultKey;
@@ -47,6 +49,7 @@ final class GalleryCacheInvalidationTest extends TestCase
 
         $this->assertArrayNotHasKey($defaultKey, $GLOBALS['fgpx_test_transients']);
         $this->assertArrayNotHasKey($embedKey, $GLOBALS['fgpx_test_transients']);
+        $this->assertArrayNotHasKey($resolvedHostKey, $GLOBALS['fgpx_test_transients']);
         $this->assertArrayNotHasKey($legacyKey, $GLOBALS['fgpx_test_transients']);
         $this->assertArrayHasKey($unrelatedKey, $GLOBALS['fgpx_test_transients']);
         $this->assertArrayNotHasKey('fgpx_cached_key', $GLOBALS['fgpx_test_post_meta'][$trackId]);
@@ -102,11 +105,14 @@ final class GalleryCacheInvalidationTest extends TestCase
         ]);
 
         $cacheKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $embeddingPostId . '_simp_1500_w_1_wind_1_st_latest_embed';
+        $dynamicCacheKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $embeddingPostId . '_rh_' . $embeddingPostId . '_sm_20260421120000_simp_1500_w_1_wind_1_st_latest_embed';
         $GLOBALS['fgpx_test_transients'][$cacheKey] = ['ok' => true];
+        $GLOBALS['fgpx_test_transients'][$dynamicCacheKey] = ['ok' => true];
 
         $admin = new Admin();
         $admin->invalidate_track_caches_for_embedding_post_deletion($embeddingPostId);
 
         $this->assertArrayNotHasKey($cacheKey, $GLOBALS['fgpx_test_transients']);
+        $this->assertArrayNotHasKey($dynamicCacheKey, $GLOBALS['fgpx_test_transients']);
     }
 }

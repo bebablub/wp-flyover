@@ -277,6 +277,53 @@ describe('front.js runtime minimal regressions', () => {
     expect(cacheKeys.some((k) => k.includes('_st_latest_embed'))).toBe(true);
   });
 
+  test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    // Seed a would-be valid cache entry; latest_embed should ignore it.
+    localStorage.setItem(
+      'fgpx_cache_v3_7_hp_0_s_0_t_1200_st_latest_embed',
+      JSON.stringify({
+        timestamp: Date.now(),
+        payload: {
+          geojson: { coordinates: [], properties: {} },
+          bounds: [],
+          stats: {},
+          photos: [],
+        },
+      })
+    );
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: { coordinates: [], properties: {} },
+        bounds: [],
+        stats: {},
+        photos: [],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+    await flushAsync();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('strategy=latest_embed');
+  });
+
   test('video recorder session ID generation uses crypto-backed helper', () => {
     expect(FRONT_SRC).toContain('function createSessionIdSuffix(length)');
     expect(FRONT_SRC).toContain("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);");

@@ -310,6 +310,46 @@ describe('gallery.js', () => {
     expect(firstTitle).toContain('Track 1');
   });
 
+  test('applies configured defaultSort on first render', () => {
+    window.FGPXGallery.tracks = [
+      { id: 10, title: 'Zulu', distanceKm: 3, durationS: 100, durationLabel: '01:40', elevationGainM: 30, elevationGainLabel: '30', dateTs: 300, dateLabel: '2026-01-03', gpxDownloadUrl: '', keywords: '' },
+      { id: 20, title: 'Alpha', distanceKm: 2, durationS: 90, durationLabel: '01:30', elevationGainM: 20, elevationGainLabel: '20', dateTs: 200, dateLabel: '2026-01-02', gpxDownloadUrl: '', keywords: '' },
+      { id: 30, title: 'Mike', distanceKm: 1, durationS: 80, durationLabel: '01:20', elevationGainM: 10, elevationGainLabel: '10', dateTs: 100, dateLabel: '2026-01-01', gpxDownloadUrl: '', keywords: '' },
+    ];
+    window.FGPXGallery.defaultSort = 'title';
+    window.FGPXGallery.perPage = 3;
+
+    loadGallery();
+
+    const firstTitle = document.querySelector('.fgpx-gallery-card-title').textContent;
+    expect(firstTitle).toContain('Alpha');
+  });
+
+  test('initializes without search input when markup omits it', () => {
+    setupGalleryDom(`
+      <div class="fgpx-gallery" data-root-id="gallery-default">
+        <div class="fgpx-gallery-toolbar">
+          <select class="fgpx-gallery-sort"><option value="newest">Newest</option></select>
+          <div class="fgpx-gallery-view-toggle">
+            <button type="button" class="fgpx-gallery-view-btn is-active" data-view="grid" aria-pressed="true">Grid</button>
+            <button type="button" class="fgpx-gallery-view-btn" data-view="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+        <div class="fgpx-gallery-results fgpx-gallery-results-grid" aria-live="polite"></div>
+        <div class="fgpx-gallery-footer"><button type="button" class="fgpx-gallery-load-more">Load more</button></div>
+        <section class="fgpx-gallery-player-panel" hidden>
+          <header class="fgpx-gallery-player-header"><div class="fgpx-gallery-player-title" tabindex="-1"></div><div class="fgpx-gallery-player-actions"></div></header>
+          <div class="fgpx-gallery-player-mount"></div>
+        </section>
+      </div>
+    `);
+
+    loadGallery();
+
+    const cards = document.querySelectorAll('.fgpx-gallery-card');
+    expect(cards.length).toBe(12);
+  });
+
   test('clicking a card mounts player and creates share urls', () => {
     loadGallery();
 
@@ -333,6 +373,7 @@ describe('gallery.js', () => {
   });
 
   test('gallery player mount sets per-instance strategy override without mutating global config', () => {
+    window.FGPXGallery.tracks[14].gpxDownloadUrl = 'https://example.test/dl.gpx';
     loadGallery();
 
     const cards = document.querySelectorAll('.fgpx-gallery-card');
@@ -345,9 +386,11 @@ describe('gallery.js', () => {
     expect(window.FGPX.instances).not.toBeNull();
     expect(window.FGPX.instances[playerId]).not.toBeUndefined();
     expect(window.FGPX.instances[playerId].galleryPhotoStrategy).toBe('latest_embed');
+    expect(window.FGPX.instances[playerId].gpxDownloadUrl).toBe('https://example.test/dl.gpx');
     
     // Verify global strategy key was not promoted to top-level config
     expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
+    expect(window.FGPX.gpxDownloadUrl).toBeUndefined();
   });
 
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
