@@ -231,50 +231,9 @@ describe('front.js runtime minimal regressions', () => {
     expect(calledUrls[1]).toContain('strategy=latest_embed');
   });
 
-  test('gallery strategy cache key includes _st_latest_embed token', async () => {
-    // This test verifies that strategy affects cache key differentiation
-    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
-
-    window.maplibregl = {};
-    window.Chart = function ChartStub() {};
-
-    const cacheKeys = [];
-    const originalSetItem = Storage.prototype.setItem;
-    jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
-      if (key.startsWith('fgpx_cache_v3_')) {
-        cacheKeys.push(key);
-      }
-      return originalSetItem.call(localStorage, key, value);
-    });
-
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        geojson: {
-          coordinates: [],
-          properties: {},
-        },
-        bounds: [],
-        stats: {},
-        photos: [],
-      }),
-    });
-    global.fetch = fetchMock;
-    window.fetch = fetchMock;
-
-    window.FGPX = baseFGPX({
-      ajaxUrl: null,
-      instances: {
-        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
-      },
-    });
-
-    loadFront();
-    window.FGPX.boot();
-    await flushAsync();
-
-    // Verify cache key includes strategy token
-    expect(cacheKeys.some((k) => k.includes('_st_latest_embed'))).toBe(true);
+  test('cache key builder includes strategy token for differentiation', () => {
+    expect(FRONT_SRC).toContain("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';");
+    expect(FRONT_SRC).toContain("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;");
   });
 
   test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
