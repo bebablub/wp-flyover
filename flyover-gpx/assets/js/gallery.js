@@ -457,16 +457,26 @@
         window.FGPX.gpxDownloadUrl = track.gpxDownloadUrl || '';
       }
 
+      // Set per-player instance override for gallery photo enrichment strategy
+      if (!window.FGPX.instances) {
+        window.FGPX.instances = {};
+      }
+      window.FGPX.instances[playerId] = {
+        galleryPhotoStrategy: 'latest_embed'
+      };
+
       var playerEl = qs('#' + playerId, root);
       if (playerEl && window.FGPX && typeof window.FGPX.initContainer === 'function') {
         try {
           window.FGPX.initContainer(playerEl);
         } catch (_) {
           renderPlayerError(panel, mount, title, strings);
+          delete window.FGPX.instances[playerId];
           return;
         }
       } else {
         renderPlayerError(panel, mount, title, strings);
+        delete window.FGPX.instances[playerId];
         return;
       }
 

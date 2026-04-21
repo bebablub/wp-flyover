@@ -607,7 +607,15 @@
     ui.spinner.style.display = 'flex';
     ui.error.style.display = 'none';
 
-    var restUrl = String(window.FGPX.restUrl).replace(/\/$/, '') + '/track/' + encodeURIComponent(trackId) + (window.FGPX && FGPX.hostPostId ? ('?host_post=' + encodeURIComponent(String(FGPX.hostPostId))) : '');
+    // Determine photo enrichment strategy and build REST URL accordingly
+    var hasGalleryStrategy = FGPX && FGPX.galleryPhotoStrategy === 'latest_embed';
+    var restUrlParams = [];
+    if (hasGalleryStrategy) {
+      restUrlParams.push('strategy=latest_embed');
+    } else if (window.FGPX && FGPX.hostPostId) {
+      restUrlParams.push('host_post=' + encodeURIComponent(String(FGPX.hostPostId)));
+    }
+    var restUrl = String(window.FGPX.restUrl).replace(/\/$/, '') + '/track/' + encodeURIComponent(trackId) + (restUrlParams.length > 0 ? ('?' + restUrlParams.join('&')) : '');
     var ajaxUrl = (window.FGPX && FGPX.ajaxUrl) ? String(window.FGPX.ajaxUrl) : null;
 
     // Frontend caching for better performance on large tracks
@@ -615,7 +623,8 @@
       var hostPost = (window.FGPX && FGPX.hostPostId) ? String(FGPX.hostPostId) : '0';
       var simplify = (window.FGPX && FGPX.backendSimplify) ? '1' : '0';
       var target = (window.FGPX && FGPX.backendSimplifyTarget) ? String(FGPX.backendSimplifyTarget) : '1200';
-      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target;
+      var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';
+      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;
     }
 
     function getCachedData() {
@@ -762,7 +771,7 @@
     function fetchAjax() {
       if (!ajaxUrl) return Promise.reject(new Error('No AJAX URL'));
       var u = ajaxUrl + (ajaxUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fgpx_track&id=' + encodeURIComponent(trackId);
-      if (window.FGPX && FGPX.hostPostId) { u += '&host_post=' + encodeURIComponent(String(FGPX.hostPostId)); }
+      if (hasGalleryStrategy) { u += '&strategy=latest_embed'; } else if (window.FGPX && FGPX.hostPostId) { u += '&host_post=' + encodeURIComponent(String(FGPX.hostPostId)); }
       return fetch(u, { credentials: 'same-origin' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
     }
@@ -2625,7 +2634,7 @@
             el.appendChild(inner);
             el.addEventListener('mouseenter', function(){ inner.style.transform = 'scale(1.8)'; });
             el.addEventListener('mouseleave', function(){ inner.style.transform = 'scale(1)'; });
-            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || ''); });
+            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || '', ph.source_post_id, ph.source_post_title || '', ph.timestamp || ''); });
             var marker = new window.maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
             photoMarkers.push({ marker: marker, photo: ph, lngLat: lngLat, pDist: pDistApprox });
             if (pDistApprox != null) { tmpByDist.push({ p: ph, pDist: pDistApprox, lngLat: lngLat }); }
@@ -4602,9 +4611,15 @@
       var overlayCaption = document.createElement('div');
       overlayCaption.style.cssText = 'position:absolute;right:12px;bottom:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 12px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
       overlay.appendChild(overlayCaption);
+      var overlaySource = document.createElement('div');
+      overlaySource.style.cssText = 'position:absolute;right:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
+      overlay.appendChild(overlaySource);
+      var overlayTime = document.createElement('div');
+      overlayTime.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
+      overlay.appendChild(overlayTime);
       ui.mapEl.appendChild(overlay);
-      function showOverlay(url, caption) { 
-        DBG.log('overlay show', { url:url, caption: !!caption });
+      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp) { 
+        DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
         // Clear any existing map layer first to prevent distorted frames
         if (videoRecorder && videoRecorder.isRecording) {
@@ -4613,7 +4628,37 @@
         
         overlayImg.src = url; 
         overlayCaption.textContent = caption || ''; 
-        overlayCaption.style.display = caption ? 'block' : 'none'; 
+        overlayCaption.style.display = caption ? 'block' : 'none';
+        
+        // Show photo source for both embed and track photos
+        if (sourcePostId && sourcePostId > 0 && sourcePostTitle) {
+          overlaySource.textContent = '📷 ' + sourcePostTitle;
+          overlaySource.style.display = 'block';
+        } else if (sourcePostId && sourcePostId > 0) {
+          overlaySource.textContent = '📷 Photo from linked post';
+          overlaySource.style.display = 'block';
+        } else if (sourcePostId === 0 || (sourcePostId && sourcePostId < 1)) {
+          overlaySource.textContent = '📷 Photo from track';
+          overlaySource.style.display = 'block';
+        } else {
+          overlaySource.textContent = '';
+          overlaySource.style.display = 'none';
+        }
+
+        if (photoTimestamp) {
+          var dt = new Date(photoTimestamp);
+          if (!isNaN(dt.getTime())) {
+            overlayTime.textContent = '🕒 ' + dt.toLocaleString();
+            overlayTime.style.display = 'block';
+          } else {
+            overlayTime.textContent = '';
+            overlayTime.style.display = 'none';
+          }
+        } else {
+          overlayTime.textContent = '';
+          overlayTime.style.display = 'none';
+        }
+        
         overlay.style.display = 'flex'; 
         
         // During recording, use dark grey background to match map layer
@@ -4647,6 +4692,8 @@
               overlayImg.src = ''; 
               overlayCaption.textContent = ''; 
               overlayCaption.style.display = 'none';
+              overlaySource.textContent = '';
+              overlaySource.style.display = 'none';
               // Reset background to default
               overlay.style.background = 'rgba(0,0,0,0.6)';
               overlay.removeEventListener('transitionend', done); 
@@ -4673,6 +4720,8 @@
             overlayImg.src = ''; 
             overlayCaption.textContent = ''; 
             overlayCaption.style.display = 'none';
+            overlaySource.textContent = '';
+            overlaySource.style.display = 'none';
             // Reset background to default
             overlay.style.background = 'rgba(0,0,0,0.6)';
             // Clear overlay from map canvas if recording
@@ -4882,7 +4931,7 @@
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
-        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '');
+        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '', next.source_post_id, next.source_post_title || '', next.timestamp || '');
         
         // If recording, also draw the photo overlay on the canvas
         if (videoRecorder && videoRecorder.isRecording) {

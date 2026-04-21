@@ -46,8 +46,12 @@ final class Admin
 		\add_action('wp_ajax_fgpx_enrich_weather', [$this, 'ajax_enrich_weather']);
 		\add_action('wp_ajax_fgpx_generate_preview', [$this, 'ajax_generate_preview']);
 		\add_action('wp_ajax_fgpx_save_preview_mode', [$this, 'ajax_save_preview_mode']);
+		\add_action('wp_ajax_fgpx_clear_cache', [$this, 'ajax_clear_track_cache']);
 		\add_action('save_post', [$this, 'sync_track_preview_references_on_post_save'], 20, 3);
 		\add_action('post_updated', [$this, 'sync_track_preview_references_on_post_updated'], 20, 3);
+		// Invalidate track caches when embedding posts change status or are deleted
+		\add_action('transition_post_status', [$this, 'invalidate_track_caches_for_embedding_post_status_transition'], 20, 3);
+		\add_action('before_delete_post', [$this, 'invalidate_track_caches_for_embedding_post_deletion'], 10);
 		\add_action('transition_post_status', [$this, 'sync_track_preview_references_on_status_transition'], 20, 3);
 		\add_action('updated_postmeta', [$this, 'sync_track_preview_references_on_thumbnail_meta_change'], 20, 4);
 		\add_action('added_post_meta', [$this, 'sync_track_preview_references_on_thumbnail_meta_change'], 20, 4);
@@ -1258,6 +1262,10 @@ final class Admin
 		$actions['fgpx_generate_preview'] = '<a href="#" class="fgpx-generate-preview" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewNonce) . '" data-has-preview="' . ($hasPreview ? '1' : '0') . '" data-track-title="' . \esc_attr((string) $post->post_title) . '">'
 			. ($hasPreview ? \esc_html__('Regenerate Preview', 'flyover-gpx') : \esc_html__('Generate Preview', 'flyover-gpx'))
 			. '</a>';
+
+		// Add clear cache action
+		$clearCacheNonce = \wp_create_nonce('fgpx_clear_cache');
+		$actions['fgpx_clear_cache'] = '<a href="#" class="fgpx-clear-cache" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($clearCacheNonce) . '">' . \esc_html__('Clear Cache', 'flyover-gpx') . '</a>';
 		
 		return $actions;
 	}
@@ -2830,7 +2838,7 @@ final class Admin
 	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track'];
 	if (in_array($screen->id, $relevant_pages, true)) {
 		\wp_enqueue_script('jquery');
-		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.3', true);
+		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.4', true);
 		\wp_enqueue_style('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/css/admin.css', [], '1.0.2');
 		if ($screen->id === 'fgpx_track') {
 			\wp_enqueue_media();
@@ -3502,6 +3510,26 @@ final class Admin
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_1',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1',
+
+			// With weather + wind + strategy (gallery latest_embed)
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_1_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_0_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_1_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_0_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_1_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0_st_latest_embed',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1_st_latest_embed',
+
+			// With weather + wind + strategy (explicit default strategy token)
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_1_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_0_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1_wind_1_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_0_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0_wind_1_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0_st_default',
+			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1_st_default',
 		];
 		
 		foreach ($patterns as $pattern) {
@@ -3516,6 +3544,48 @@ final class Admin
 		\delete_transient('fgpx_json_' . $trackId . '_' . $modified);
 		// Invalidate gallery track list.
 		\FGpx\GalleryShortcode::invalidate_tracks_cache();
+	}
+
+	/**
+	 * Clear host-post specific cache variants for a track.
+	 *
+	 * This is used when an embedding post changes status or is deleted,
+	 * so responses cached with hp_{postId} are invalidated too.
+	 */
+	private static function clear_host_post_track_caches(int $trackId, int $hostPostId): void
+	{
+		if ($trackId <= 0 || $hostPostId <= 0) {
+			return;
+		}
+
+		$post = \get_post($trackId);
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			return;
+		}
+
+		$modified = (string) $post->post_modified_gmt;
+		$simplifyTargets = [0, 1500];
+		$weatherFlags = [0, 1];
+		$windFlags = [0, 1];
+		$strategies = ['', '_st_default', '_st_latest_embed'];
+
+		foreach ($simplifyTargets as $simp) {
+			foreach ($weatherFlags as $weather) {
+				foreach ($windFlags as $wind) {
+					// Legacy/current cache keys without explicit strategy token.
+					\delete_transient('fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_' . $hostPostId . '_simp_' . $simp . '_w_' . $weather . '_wind_' . $wind);
+					\delete_transient('fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $hostPostId . '_simp_' . $simp . '_w_' . $weather . '_wind_' . $wind);
+
+					// Explicit strategy variants.
+					foreach ($strategies as $strategySuffix) {
+						if ($strategySuffix === '') {
+							continue;
+						}
+						\delete_transient('fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $hostPostId . '_simp_' . $simp . '_w_' . $weather . '_wind_' . $wind . $strategySuffix);
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -3797,6 +3867,76 @@ final class Admin
 		}
 	}
 
+	/**
+	 * Invalidate track REST caches when embedding post status changes to/from publish.
+	 * This ensures photos from embedding posts don't appear stale after unpublishing.
+	 */
+	public function invalidate_track_caches_for_embedding_post_status_transition(string $newStatus, string $oldStatus, \WP_Post $post): void
+	{
+		if ($newStatus === $oldStatus) {
+			return;
+		}
+
+		// Only care about publishing or unpublishing
+		if ($newStatus !== 'publish' && $oldStatus !== 'publish') {
+			return;
+		}
+
+		// Don't process track posts themselves; only embedding posts
+		if ($post->post_type === 'fgpx_track') {
+			return;
+		}
+
+		$trackIds = $this->extract_track_ids_from_content((string) ($post->post_content ?? ''));
+		if (empty($trackIds)) {
+			return;
+		}
+
+		// Invalidate REST caches for all tracks referenced in this post
+		foreach ($trackIds as $trackId) {
+			self::clear_all_track_caches((int) $trackId);
+			self::clear_host_post_track_caches((int) $trackId, (int) $post->ID);
+			ErrorHandler::debug('Track REST cache cleared due to embedding post status change', [
+				'track_id' => $trackId,
+				'embedding_post_id' => $post->ID,
+				'new_status' => $newStatus,
+				'old_status' => $oldStatus,
+			]);
+		}
+	}
+
+	/**
+	 * Invalidate track REST caches when embedding post is deleted.
+	 * This prevents stale cached photos from appearing after the embedding post is permanently deleted.
+	 */
+	public function invalidate_track_caches_for_embedding_post_deletion(int $postId): void
+	{
+		$post = \get_post($postId);
+		if (!$post) {
+			return;
+		}
+
+		// Don't process track posts themselves; only embedding posts
+		if ($post->post_type === 'fgpx_track') {
+			return;
+		}
+
+		$trackIds = $this->extract_track_ids_from_content((string) ($post->post_content ?? ''));
+		if (empty($trackIds)) {
+			return;
+		}
+
+		// Invalidate REST caches for all tracks referenced in this post
+		foreach ($trackIds as $trackId) {
+			self::clear_all_track_caches((int) $trackId);
+			self::clear_host_post_track_caches((int) $trackId, (int) $post->ID);
+			ErrorHandler::debug('Track REST cache cleared due to embedding post deletion', [
+				'track_id' => $trackId,
+				'embedding_post_id' => $post->ID,
+			]);
+		}
+	}
+
 	public function ajax_save_preview_mode(): void
 	{
 		if (!$this->validateNonce('fgpx_save_preview_mode', 'nonce', false)) {
@@ -3856,6 +3996,35 @@ final class Admin
 			'mode' => $mode,
 			'source' => \sanitize_key((string) \get_post_meta($postId, 'fgpx_preview_source', true)),
 		]);
+	}
+
+	/**
+	 * AJAX handler to clear track cache.
+	 */
+	public function ajax_clear_track_cache(): void
+	{
+		$nonce = \sanitize_key((string) ($_POST['nonce'] ?? ''));
+		$postId = (int) ($_POST['post_id'] ?? 0);
+
+		if (!$nonce || !$postId) {
+			\wp_send_json_error(['message' => 'Invalid request'], 400);
+		}
+
+		if (!\wp_verify_nonce($nonce, 'fgpx_clear_cache')) {
+			\wp_send_json_error(['message' => 'Nonce verification failed'], 403);
+		}
+
+		if (!\current_user_can('manage_options')) {
+			\wp_send_json_error(['message' => 'Permission denied'], 403);
+		}
+
+		$post = \get_post($postId);
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			\wp_send_json_error(['message' => 'Track not found'], 404);
+		}
+
+		self::clear_all_track_caches($postId);
+		\wp_send_json_success(['message' => 'Cache cleared successfully']);
 	}
 
 	/**

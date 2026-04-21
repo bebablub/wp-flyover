@@ -240,6 +240,86 @@
             }
         });
 
+        // Handle clear cache action
+        $('.fgpx-clear-cache').on('click', function(e) {
+            e.preventDefault();
+
+            const $link = $(this);
+            const postId = $link.data('post-id');
+            const nonce = $link.data('nonce');
+
+            if (!postId || !nonce) {
+                alert('Invalid data for cache clearing.');
+                return;
+            }
+
+            if (!confirm('Clear cache for this track? The player will regenerate track data on next page load.')) {
+                return;
+            }
+
+            // Disable the link and show loading state
+            $link.css('pointer-events', 'none').attr('aria-disabled', 'true');
+            const originalText = $link.text();
+            $link.text('Clearing...');
+
+            // Make AJAX request
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_clear_cache',
+                    post_id: postId,
+                    nonce: nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $link.text('✓ Cleared');
+                        $link.css('color', '#46b450');
+                        showAdminNotice('Cache cleared successfully! The page will reload.', 'success');
+                        
+                        // Reload the page after 1.5 seconds
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        $link.text('✗ Failed');
+                        $link.css('color', '#dc3232');
+                        const errorMsg = response.data && response.data.message 
+                            ? response.data.message 
+                            : 'Failed to clear cache.';
+                        showAdminNotice(errorMsg, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $link.text('✗ Error');
+                    $link.css('color', '#dc3232');
+                    console.error('[FGPX] Clear cache AJAX error:', {
+                        status: status,
+                        error: error,
+                        statusCode: xhr.status
+                    });
+                    
+                    let errorMsg = 'Network error during cache clearing.';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response && response.data && response.data.message) {
+                            errorMsg = response.data.message;
+                        }
+                    } catch (_) { }
+                    
+                    showAdminNotice(errorMsg, 'error');
+                },
+                complete: function() {
+                    setTimeout(function() {
+                        $link.css('pointer-events', '').removeAttr('aria-disabled');
+                        if ($link.text() === 'Clearing...') {
+                            $link.text(originalText);
+                        }
+                    }, 2000);
+                }
+            });
+        });
+
         $('#doaction, #doaction2').on('click', async function(e) {
             const triggerId = this.id;
             const select = triggerId === 'doaction2' ? $('#bulk-action-selector-bottom') : $('#bulk-action-selector-top');

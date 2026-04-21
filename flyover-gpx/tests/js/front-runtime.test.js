@@ -204,6 +204,65 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')");
   });
 
+  test('gallery player strategy param is passed to REST and AJAX URLs', async () => {
+    document.body.innerHTML =
+      '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = mockRejectedFetch('network down');
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: 'http://example.com/wp-admin/admin-ajax.php',
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const calledUrls = fetchMock.mock.calls.map((args) => String(args[0]));
+    expect(calledUrls.length).toBe(2);
+    expect(calledUrls[0]).toContain('strategy=latest_embed');
+    expect(calledUrls[1]).toContain('strategy=latest_embed');
+  });
+
+  test('gallery strategy cache key includes _st_latest_embed token', () => {
+    // This test verifies that strategy affects cache key differentiation
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const cacheKeys = [];
+    const originalSetItem = Storage.prototype.setItem;
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
+      if (key.startsWith('fgpx_cache_v3_')) {
+        cacheKeys.push(key);
+      }
+      return originalSetItem.call(localStorage, key, value);
+    });
+
+    mockRejectedFetch('network down');
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    // Verify cache key includes strategy token
+    expect(cacheKeys.some((k) => k.includes('_st_latest_embed'))).toBe(true);
+  });
+
   test('video recorder session ID generation uses crypto-backed helper', () => {
     expect(FRONT_SRC).toContain('function createSessionIdSuffix(length)');
     expect(FRONT_SRC).toContain("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);");

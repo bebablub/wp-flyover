@@ -188,6 +188,35 @@ Features:
 - Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-link button (copies share URL with `#track-{id}` hash)
 - Shared URLs include a `#track-{id}` hash that auto-opens the correct track on page load
 - Multiple `[flyover_gpx_gallery]` shortcodes on the same page are fully isolated
+- **Photo enrichment from embedding posts** – When opening a track from the gallery, the player automatically loads photos from the latest post that embeds the track, providing richer visual context
+
+#### Photo Enrichment from Embedding Posts
+
+When you open a track in the gallery player, the plugin automatically searches for the most recent published post that contains the same track shortcode and loads photos from that post instead of (or in addition to) the track's own attachments. This feature enriches tracks with contextual photos from blog posts, reviews, or articles that reference them.
+
+**How it works:**
+
+1. Gallery player detects the **latest embedding post** — the most recent published post that contains `[flyover_gpx id="123"]` (the track shortcode)
+2. Photos are collected from that post in this order:
+   - Direct media attachments to the post
+   - Images in gallery blocks
+   - Inline images in post content
+   - Fallback: track's own attached images if the embedding post has no photos
+3. Each photo includes its **source post reference** — the player UI indicates "📷 Photo from linked post" when viewing photos enriched from an embedding post
+4. **Cache strategy**: Photos are cached for 6 hours. If you delete or unpublish the embedding post, the cache is automatically invalidated
+
+**Example:**
+
+- Track: "Downtown Bike Trail" has 5 attached photos
+- Blog post: "My Saturday Ride" embeds this track with 12 photos
+- Gallery result: Player shows the 12 photos from the blog post when opening the track from the gallery
+
+**Tips:**
+
+- Create posts with `[flyover_gpx id="123"]` to embed tracks alongside journey photos, observations, or race reports
+- The plugin automatically picks the **latest post** by publish date; if multiple posts embed the same track, the newest one is used
+- For consistent photo experience: upload photos to the post that embeds the track using the WordPress gallery block or inline images
+- Photos are deduplicated by approximate location (~10m precision) to avoid duplicate markers on the map
 
 Examples:
 

@@ -399,9 +399,10 @@ final class Rest
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
         $hostPostForCache = (int) $request->get_param('host_post');
+        $strategy = \sanitize_key((string) $request->get_param('strategy'));
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
 
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -513,7 +514,27 @@ final class Rest
         $photos = [];
         // Optional: fetch attachments from the host post that contains the shortcode
         $hostPost = (int) $request->get_param('host_post');
+        // Strategy already read above for cache key construction.
         $collectFromPost = $hostPost > 0 ? $hostPost : 0;
+        $sourcePostId = 0;
+        $sourcePostTitle = '';
+
+        // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
+        if ($collectFromPost === 0 && $strategy === 'latest_embed') {
+            $collectFromPost = $this->find_latest_embedding_post_id($id);
+            ErrorHandler::debug('Gallery photo strategy resolved', [
+                'track_id' => $id,
+                'strategy' => $strategy,
+                'resolved_post_id' => $collectFromPost,
+            ]);
+        }
+
+        // Track the source post for photo metadata
+        if ($collectFromPost > 0) {
+            $sourcePostId = $collectFromPost;
+            $sourcePostTitle = (string) \get_the_title($collectFromPost) ?: '';
+        }
+
         $attachmentIds = [];
         $imageUrls = [];
         if ($collectFromPost > 0) {
@@ -547,6 +568,16 @@ final class Rest
                 }
             }
         }
+        
+        // Log fallback to track attachments if strategy found no embedding post
+        if ($collectFromPost === 0 && $strategy === 'latest_embed') {
+            ErrorHandler::debug('Gallery photo strategy fell back to track attachments', [
+                'track_id' => $id,
+                'strategy' => $strategy,
+                'reason' => 'No embedding post found, using track photos',
+            ]);
+        }
+
         // Fallback to track's attachments if none found
         if (empty($attachmentIds)) {
             $fallback = \get_children([
@@ -595,7 +626,9 @@ final class Rest
                 'lon' => $lon,
                 'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                 'thumbUrl' => \is_array($thumb) ? (string) $thumb[0] : (string) \wp_get_attachment_url($att_id),
-                'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id)
+                'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id),
+                'source_post_id' => $sourcePostId,
+                'source_post_title' => $sourcePostTitle,
             ];
         }
 
@@ -652,6 +685,8 @@ final class Rest
                     'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                     'thumbUrl' => (string) $u,
                     'fullUrl' => (string) $u,
+                    'source_post_id' => $sourcePostId,
+                    'source_post_title' => $sourcePostTitle,
                 ];
             }
         }
@@ -697,9 +732,19 @@ final class Rest
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
+            'source_post_id' => $sourcePostId,
+            'source_post_title' => $sourcePostTitle,
             'weather' => \is_array($decodedWeather) ? $decodedWeather : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummaryRest) ? $decodedWeatherSummaryRest : null,
         ];
+
+        // Log completion of photo collection for observability
+        ErrorHandler::debug('Gallery photo collection completed', [
+            'track_id' => $id,
+            'photos_found' => count($photos),
+            'source_post_id' => $sourcePostId,
+            'strategy' => $strategy,
+        ]);
 
         \set_transient($cache_key, $data, 6 * HOUR_IN_SECONDS);
         \update_post_meta($id, 'fgpx_cached_key', $cache_key);
@@ -727,7 +772,16 @@ final class Rest
             \wp_send_json(['message' => 'Forbidden'], 403);
         }
 
-        $hostPost = isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0;
+        $hostPostForCache = isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0;
+        $hostPost = $hostPostForCache;
+        $strategy = \sanitize_key((string) ($_GET['strategy'] ?? ''));
+        $sourcePostId = 0;
+        
+        // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
+        if ($hostPost === 0 && $strategy === 'latest_embed') {
+            $hostPost = $this->find_latest_embedding_post_id($id);
+        }
+        
         $modified = (string) $post->post_modified_gmt;
         $simplifyEnabled = (string) \get_option('fgpx_backend_simplify_enabled', '0') === '1';
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
@@ -737,7 +791,7 @@ final class Rest
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
         
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPost . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled;
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
             header('Cache-Control: public, max-age=300');
@@ -823,6 +877,11 @@ final class Rest
         // Photos from host post (if provided), with fallbacks
         $photos = [];
         $collectFromPost = $hostPost > 0 ? $hostPost : 0;
+        $sourcePostTitle = '';
+        if ($collectFromPost > 0) {
+            $sourcePostId = $collectFromPost;
+            $sourcePostTitle = (string) \get_the_title($collectFromPost) ?: '';
+        }
         $attachmentIds = [];
         $imageUrls = [];
         if ($collectFromPost > 0) {
@@ -901,7 +960,9 @@ final class Rest
                 'lon' => $lon,
                 'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                 'thumbUrl' => \is_array($thumb) ? (string) $thumb[0] : (string) \wp_get_attachment_url($att_id),
-                'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id)
+                'fullUrl' => \is_array($full) ? (string) $full[0] : (string) \wp_get_attachment_url($att_id),
+                'source_post_id' => $sourcePostId,
+                'source_post_title' => $sourcePostTitle,
             ];
         }
         if (!empty($imageUrls)) {
@@ -956,6 +1017,8 @@ final class Rest
                     'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
                     'thumbUrl' => (string) $u,
                     'fullUrl' => (string) $u,
+                    'source_post_id' => $sourcePostId,
+                    'source_post_title' => $sourcePostTitle,
                 ];
             }
         }
@@ -1000,9 +1063,19 @@ final class Rest
             'photos' => self::dedupe_photos_by_location($photos),
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
+            'source_post_id' => $sourcePostId,
+            'source_post_title' => $sourcePostTitle,
             'weather' => \is_array($decodedWeatherAjax) ? $decodedWeatherAjax : ['type' => 'FeatureCollection', 'features' => []],
             'weatherSummary' => \is_array($decodedWeatherSummary) ? $decodedWeatherSummary : null,
         ];
+
+        // Log completion of photo collection for observability (AJAX endpoint)
+        ErrorHandler::debug('Gallery photo collection completed (AJAX)', [
+            'track_id' => $id,
+            'photos_found' => count($photos),
+            'source_post_id' => $sourcePostId,
+            'strategy' => $strategy,
+        ]);
 
         \set_transient($cache_key, $data, 6 * HOUR_IN_SECONDS);
         \update_post_meta($id, 'fgpx_cached_key', $cache_key);
@@ -1059,6 +1132,112 @@ final class Rest
         \header('Cache-Control: no-store');
         \readfile($realPath);
         exit;
+    }
+
+    /**
+     * Extract track IDs from shortcode content.
+     * Mirrors Admin class method for consistent behavior.
+     *
+     * @param string $content Post content to search
+     * @return array<int>
+     */
+    private function extract_track_ids_from_content(string $content): array
+    {
+        if ($content === '' || stripos($content, '[flyover_gpx') === false) {
+            return [];
+        }
+
+        $ids = [];
+        if (preg_match_all('/\[flyover_gpx\b[^\]]*\bid\s*=\s*(["\']?)(\d+)\1[^\]]*\]/i', $content, $matches) !== false) {
+            foreach (($matches[2] ?? []) as $rawId) {
+                $trackId = (int) $rawId;
+                if ($trackId > 0) {
+                    $ids[$trackId] = $trackId;
+                }
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    /**
+     * Get allowed post types for finding embedding posts.
+     * Mirrors Admin class method for consistent behavior.
+     *
+     * @return array<string>
+     */
+    private function get_preview_reference_post_types(): array
+    {
+        $postTypes = ['post', 'page'];
+        if (function_exists('get_post_types')) {
+            $detected = \get_post_types(['public' => true], 'names');
+            if (\is_array($detected) && !empty($detected)) {
+                $postTypes = array_map('strval', $detected);
+            }
+        }
+
+        $excluded = ['fgpx_track', 'attachment'];
+        $postTypes = array_values(array_filter(array_unique($postTypes), static function (string $postType) use ($excluded): bool {
+            return $postType !== '' && !\in_array($postType, $excluded, true);
+        }));
+
+        return !empty($postTypes) ? $postTypes : ['post', 'page'];
+    }
+
+    /**
+     * Find the latest published post that embeds a specific track.
+     * Mirrors Admin class method for consistent behavior in gallery photo enrichment.
+     *
+     * Tiebreaker: When multiple posts have the same post_date_gmt, the post with the highest ID is selected.
+     * This ensures deterministic behavior when posts are published at exactly the same second.
+     * Ordering: ORDER BY post_date_gmt DESC, ID DESC
+     *
+     * @param int $trackId Track post ID to find embeddings for
+     * @return int Latest embedding post ID, or 0 if not found
+     */
+    private function find_latest_embedding_post_id(int $trackId): int
+    {
+        if ($trackId <= 0) {
+            return 0;
+        }
+
+        global $wpdb;
+        if (!isset($wpdb->posts)) {
+            return 0;
+        }
+
+        $allowedPostTypes = $this->get_preview_reference_post_types();
+        $typePlaceholders = implode(', ', array_fill(0, count($allowedPostTypes), '%s'));
+        $queryArgs = array_merge(['publish'], $allowedPostTypes, ['%[flyover_gpx%']);
+
+        $query = $wpdb->prepare(
+            "SELECT ID, post_content FROM {$wpdb->posts} WHERE post_status = %s AND post_type IN ({$typePlaceholders}) AND post_content LIKE %s ORDER BY post_date_gmt DESC, ID DESC",
+            ...$queryArgs
+        );
+
+        $rows = $wpdb->get_results($query);
+        if (!\is_array($rows) || empty($rows)) {
+            return 0;
+        }
+
+        foreach ($rows as $row) {
+            $postId = isset($row->ID) ? (int) $row->ID : 0;
+            if ($postId <= 0) {
+                continue;
+            }
+
+            $content = isset($row->post_content) ? (string) $row->post_content : '';
+            if ($content === '') {
+                continue;
+            }
+
+            $ids = $this->extract_track_ids_from_content($content);
+            if (\in_array($trackId, $ids, true)) {
+                return $postId;
+            }
+        }
+
+        return 0;
     }
 }
 

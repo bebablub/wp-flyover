@@ -332,6 +332,27 @@ describe('gallery.js', () => {
     expect(wa).toContain('wa.me');
   });
 
+  test('gallery player mount sets per-instance strategy override without mutating global config', () => {
+    const originalGlobal = JSON.stringify(window.FGPX);
+    
+    loadGallery();
+
+    const cards = document.querySelectorAll('.fgpx-gallery-card');
+    cards[0].click();
+
+    const mount = document.querySelector('.fgpx-gallery-player-mount .fgpx');
+    const playerId = mount.getAttribute('id');
+    
+    // Verify per-instance override is set
+    expect(window.FGPX.instances).not.toBeNull();
+    expect(window.FGPX.instances[playerId]).not.toBeUndefined();
+    expect(window.FGPX.instances[playerId].galleryPhotoStrategy).toBe('latest_embed');
+    
+    // Verify global FGPX config was not mutated
+    expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
+    expect(JSON.stringify(window.FGPX)).toEqual(originalGlobal);
+  });
+
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
     delete navigator.clipboard;
     document.execCommand = jest.fn(() => true);
