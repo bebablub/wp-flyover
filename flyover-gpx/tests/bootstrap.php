@@ -501,8 +501,9 @@ if (!isset($GLOBALS['wpdb'])) {
                 return (array) $GLOBALS['fgpx_test_wpdb_get_results']($query);
             }
 
-            // Detect post-content shortcode lookup used by find_latest_embedding_post_id.
-            if (strpos($query, 'post_content') !== false && strpos($query, 'flyover_gpx') !== false) {
+            // Detect post-content lookup query used by find_latest_embedding_post_id.
+            // In tests, prepare() keeps placeholders, so query text may not contain the shortcode literal.
+            if (stripos($query, 'SELECT ID, post_content') !== false && stripos($query, 'post_content LIKE') !== false) {
                 $rows = [];
                 foreach ($GLOBALS['fgpx_test_posts'] ?? [] as $id => $data) {
                     $postStatus = is_array($data) ? (string) ($data['post_status'] ?? '') : (string) ($data->post_status ?? '');
