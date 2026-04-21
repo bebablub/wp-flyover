@@ -177,6 +177,14 @@ if (!function_exists('set_transient')) {
     }
 }
 
+if (!function_exists('delete_transient')) {
+    function delete_transient(string $key): bool
+    {
+        unset($GLOBALS['fgpx_test_transients'][$key]);
+        return true;
+    }
+}
+
 if (!function_exists('wp_remote_get')) {
     function wp_remote_get(string $url, array $args = [])
     {
@@ -491,6 +499,20 @@ if (!isset($GLOBALS['wpdb'])) {
         {
             if (isset($GLOBALS['fgpx_test_wpdb_get_results']) && is_callable($GLOBALS['fgpx_test_wpdb_get_results'])) {
                 return (array) $GLOBALS['fgpx_test_wpdb_get_results']($query);
+            }
+
+            // Detect post-content shortcode lookup used by find_latest_embedding_post_id.
+            if (strpos($query, 'post_content') !== false && strpos($query, 'flyover_gpx') !== false) {
+                $rows = [];
+                foreach ($GLOBALS['fgpx_test_posts'] ?? [] as $id => $data) {
+                    $postStatus = is_array($data) ? (string) ($data['post_status'] ?? '') : (string) ($data->post_status ?? '');
+                    $postType   = is_array($data) ? (string) ($data['post_type']   ?? '') : (string) ($data->post_type   ?? '');
+                    $content    = is_array($data) ? (string) ($data['post_content'] ?? '') : (string) ($data->post_content ?? '');
+                    if ($postStatus === 'publish' && $postType !== 'fgpx_track' && $postType !== 'attachment' && strpos($content, '[flyover_gpx') !== false) {
+                        $rows[] = (object) ['ID' => (int) $id, 'post_content' => $content];
+                    }
+                }
+                return $rows;
             }
 
             $metaKey = '';
