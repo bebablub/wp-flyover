@@ -18,7 +18,7 @@
   --fgpx-g-icon-grad-start: #555;
   --fgpx-g-icon-grad-end: #888;
   --fgpx-g-icon-color: #fff;
-  --fgpx-g-title-text: #23282d;
+  --fgpx-g-title-text: #f5f7fa;
   --fgpx-g-meta-text: #555;
   --fgpx-g-empty-border: #ddd;
   --fgpx-g-empty-text: #555;
@@ -142,6 +142,22 @@
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
+@keyframes fgpx-gallery-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fgpx-gallery-card.fgpx-gallery-card-reveal {
+  animation: fgpx-gallery-card-reveal 240ms ease-out both;
+  animation-delay: var(--fgpx-gallery-reveal-delay, 0ms);
+}
+
 @media (hover: hover) {
   .fgpx-gallery-card:hover {
     border-color: var(--fgpx-g-card-active-border);
@@ -218,7 +234,7 @@
   margin: 2px 0 8px;
   font-size: 15px;
   line-height: 1.3;
-  color: #fff;
+  color: var(--fgpx-g-title-text);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   word-break: break-word;
 }
@@ -364,6 +380,14 @@
 
 .fgpx-gallery-player-mount {
   padding: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fgpx-gallery-card,
+  .fgpx-gallery-card.fgpx-gallery-card-reveal {
+    animation: none;
+    transition: none;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

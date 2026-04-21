@@ -48,6 +48,22 @@ function buildPayload(items, page, totalPages) {
   };
 }
 
+function mockReducedMotion(matches) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: jest.fn().mockImplementation(() => ({
+      matches,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
+
 function setupGalleryDom(markup) {
   document.body.innerHTML = markup || `
     <div class="fgpx-gallery" data-root-id="gallery-default">
@@ -109,6 +125,7 @@ describe('gallery.js', () => {
   beforeEach(() => {
     jest.useRealTimers();
     setupGalleryDom();
+    mockReducedMotion(false);
     window.location.hash = '';
     window.FGPX = {
       initContainer: jest.fn(),
@@ -133,6 +150,7 @@ describe('gallery.js', () => {
     delete window.fetch;
     delete window.__FGPXGalleryPlayerAssetsPromise;
     delete window.__FGPXGalleryConsumedHash;
+    delete window.matchMedia;
     window.location.hash = '';
     global.Date = RealDate;
   });
@@ -261,6 +279,34 @@ describe('gallery.js', () => {
     cards = document.querySelectorAll('.fgpx-gallery-card');
     expect(cards.length).toBe(15);
     expect(loadMore.hidden).toBe(true);
+  });
+
+  test('reveals cards on first render and only animates newly added cards on load more', () => {
+    loadGallery();
+
+    let cards = Array.from(document.querySelectorAll('.fgpx-gallery-card'));
+    expect(cards).toHaveLength(12);
+    expect(cards.every((card) => card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
+    expect(cards[0].style.getPropertyValue('--fgpx-gallery-reveal-delay')).toBe('0ms');
+    expect(cards[1].style.getPropertyValue('--fgpx-gallery-reveal-delay')).toBe('45ms');
+
+    document.querySelector('.fgpx-gallery-load-more').click();
+
+    cards = Array.from(document.querySelectorAll('.fgpx-gallery-card'));
+    expect(cards).toHaveLength(15);
+    expect(cards.slice(0, 12).every((card) => !card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
+    expect(cards.slice(12).every((card) => card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
+    expect(cards[12].style.getPropertyValue('--fgpx-gallery-reveal-delay')).toBe('0ms');
+  });
+
+  test('skips reveal animation when reduced motion is preferred', () => {
+    mockReducedMotion(true);
+
+    loadGallery();
+
+    const cards = Array.from(document.querySelectorAll('.fgpx-gallery-card'));
+    expect(cards).toHaveLength(12);
+    expect(cards.every((card) => !card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
   });
 
   test('inline search matches metadata and keyword text', () => {

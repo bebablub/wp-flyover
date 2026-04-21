@@ -415,6 +415,37 @@
     });
   }
 
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function applyRevealAnimation(results, fromIndex) {
+    if (!results || fromIndex < 0 || prefersReducedMotion()) {
+      return;
+    }
+
+    var cards = qsa('.fgpx-gallery-card', results);
+    if (!cards.length || fromIndex >= cards.length) {
+      return;
+    }
+
+    cards.forEach(function (card, index) {
+      if (index < fromIndex) {
+        card.classList.remove('fgpx-gallery-card-reveal');
+        card.style.removeProperty('--fgpx-gallery-reveal-delay');
+        return;
+      }
+
+      var staggerIndex = index - fromIndex;
+      card.style.setProperty('--fgpx-gallery-reveal-delay', String(Math.min(staggerIndex, 7) * 45) + 'ms');
+      card.classList.add('fgpx-gallery-card-reveal');
+    });
+  }
+
   function setLoadingState(results, loadMoreBtn, isLoading, strings, resetResults) {
     if (results) {
       results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
@@ -541,6 +572,8 @@
     var searchDebounceId = null;
     var requestToken = 0;
     var activeTrackId = null;
+    var revealedModes = { grid: false, list: false };
+    var pendingRevealFromIndex = -1;
 
     function getFiltered() {
       var filtered = tracks;
@@ -578,6 +611,16 @@
         results.classList.add('fgpx-gallery-results-grid');
         results.classList.remove('fgpx-gallery-results-list');
       }
+
+      if (!loadError && visible.length > 0) {
+        var revealFromIndex = pendingRevealFromIndex;
+        if (revealFromIndex < 0 && !revealedModes[viewMode]) {
+          revealFromIndex = 0;
+        }
+        applyRevealAnimation(results, revealFromIndex);
+        revealedModes[viewMode] = true;
+      }
+      pendingRevealFromIndex = -1;
 
       if (loadMoreBtn) {
         if (isLoading) {
@@ -624,6 +667,7 @@
 
         var items = Array.isArray(payload && payload.items) ? payload.items : [];
         tracks = reset ? items : tracks.concat(items);
+  pendingRevealFromIndex = reset ? -1 : Math.max(0, tracks.length - items.length);
         currentPage = nextPage;
         hasMore = !!(payload && payload.pagination && payload.pagination.hasMore);
         loadError = '';
@@ -728,6 +772,7 @@
           }
           return;
         }
+        pendingRevealFromIndex = visibleCount;
         visibleCount += Number(cfg.perPage) || 12;
         render();
       });
