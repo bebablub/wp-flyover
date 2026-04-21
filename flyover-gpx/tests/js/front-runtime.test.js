@@ -231,7 +231,7 @@ describe('front.js runtime minimal regressions', () => {
     expect(calledUrls[1]).toContain('strategy=latest_embed');
   });
 
-  test('gallery strategy cache key includes _st_latest_embed token', () => {
+  test('gallery strategy cache key includes _st_latest_embed token', async () => {
     // This test verifies that strategy affects cache key differentiation
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
@@ -247,7 +247,20 @@ describe('front.js runtime minimal regressions', () => {
       return originalSetItem.call(localStorage, key, value);
     });
 
-    mockRejectedFetch('network down');
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [],
+          properties: {},
+        },
+        bounds: [],
+        stats: {},
+        photos: [],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
 
     window.FGPX = baseFGPX({
       ajaxUrl: null,
@@ -258,6 +271,7 @@ describe('front.js runtime minimal regressions', () => {
 
     loadFront();
     window.FGPX.boot();
+    await flushAsync();
 
     // Verify cache key includes strategy token
     expect(cacheKeys.some((k) => k.includes('_st_latest_embed'))).toBe(true);

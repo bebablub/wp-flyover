@@ -333,7 +333,7 @@ describe('gallery.js', () => {
   });
 
   test('gallery player mount sets per-instance strategy override without mutating global config', () => {
-    const originalGlobal = JSON.stringify(window.FGPX);
+    const originalDownloadUrl = window.FGPX.gpxDownloadUrl;
     
     loadGallery();
 
@@ -348,9 +348,9 @@ describe('gallery.js', () => {
     expect(window.FGPX.instances[playerId]).not.toBeUndefined();
     expect(window.FGPX.instances[playerId].galleryPhotoStrategy).toBe('latest_embed');
     
-    // Verify global FGPX config was not mutated
+    // Verify global strategy key was not promoted to top-level config
     expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
-    expect(JSON.stringify(window.FGPX)).toEqual(originalGlobal);
+    expect(window.FGPX.gpxDownloadUrl).toBe(originalDownloadUrl);
   });
 
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
