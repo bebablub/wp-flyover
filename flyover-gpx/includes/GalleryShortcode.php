@@ -83,9 +83,9 @@ final class GalleryShortcode
         }
 
         $height = \sanitize_text_field((string) $atts['height']);
-        // Allow only safe CSS length values (e.g. 620px, 80vh, 100%, 50em, 20rem).
+        // Allow only safe CSS length values (e.g. 625px, 80vh, 100%, 50em, 20rem).
         if ($height === '' || !preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $height)) {
-            $height = '620px';
+            $height = '625px';
         }
 
         $style = \sanitize_key((string) $atts['style']);
@@ -156,7 +156,7 @@ final class GalleryShortcode
             . '<a class="fgpx-share-btn fgpx-share-fb" href="#" target="_blank" rel="noopener noreferrer">' . \esc_html__('Facebook', 'flyover-gpx') . '</a>'
             . '<a class="fgpx-share-btn fgpx-share-x" href="#" target="_blank" rel="noopener noreferrer">' . \esc_html__('Twitter', 'flyover-gpx') . '</a>'
             . '<a class="fgpx-share-btn fgpx-share-wa" href="#" target="_blank" rel="noopener noreferrer">' . \esc_html__('WhatsApp', 'flyover-gpx') . '</a>'
-            . '<button type="button" class="fgpx-share-btn fgpx-share-copy">' . \esc_html__('Copy Shortcode', 'flyover-gpx') . '</button>'
+            . '<button type="button" class="fgpx-share-btn fgpx-share-copy">' . \esc_html__('Copy Link', 'flyover-gpx') . '</button>'
             . '</div>'
             . '</header>'
             . '<div class="fgpx-gallery-player-mount"></div>'
@@ -647,9 +647,9 @@ final class GalleryShortcode
                 'gain' => \esc_html__('Elevation gain', 'flyover-gpx'),
                 'uploaded' => \esc_html__('Uploaded', 'flyover-gpx'),
                 'launch' => \esc_html__('Open Track', 'flyover-gpx'),
-                'copied' => \esc_html__('Shortcode copied', 'flyover-gpx'),
-                'copyFailed' => \esc_html__('Could not copy shortcode', 'flyover-gpx'),
-                'copyShortcode' => \esc_html__('Copy Shortcode', 'flyover-gpx'),
+                'copied' => \esc_html__('Link copied', 'flyover-gpx'),
+                'copyFailed' => \esc_html__('Could not copy link', 'flyover-gpx'),
+                'copyShortcode' => \esc_html__('Copy Link', 'flyover-gpx'),
                 'playerLoadFailed' => \esc_html__('Could not load the track player. Please try again.', 'flyover-gpx'),
             ],
         ];

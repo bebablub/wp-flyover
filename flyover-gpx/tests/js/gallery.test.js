@@ -76,7 +76,7 @@ function setupGalleryDom(markup) {
             <a class="fgpx-share-btn fgpx-share-fb" href="#">Facebook</a>
             <a class="fgpx-share-btn fgpx-share-x" href="#">Twitter</a>
             <a class="fgpx-share-btn fgpx-share-wa" href="#">WhatsApp</a>
-            <button type="button" class="fgpx-share-btn fgpx-share-copy">Copy Shortcode</button>
+            <button type="button" class="fgpx-share-btn fgpx-share-copy">Copy Link</button>
           </div>
         </header>
         <div class="fgpx-gallery-player-mount"></div>
@@ -96,9 +96,9 @@ function baseStrings() {
     gain: 'Elevation gain',
     uploaded: 'Uploaded',
     launch: 'Open Track',
-    copied: 'Shortcode copied',
-    copyFailed: 'Could not copy shortcode',
-    copyShortcode: 'Copy Shortcode',
+    copied: 'Link copied',
+    copyFailed: 'Could not copy link',
+    copyShortcode: 'Copy Link',
     playerLoadFailed: 'Could not load the track player. Please try again.',
   };
 }
@@ -116,7 +116,7 @@ describe('gallery.js', () => {
     window.FGPXGallery = {
       tracks: makeTracks(15),
       perPage: 12,
-      playerHeight: '620px',
+      playerHeight: '625px',
       playerStyle: 'raster',
       playerStyleUrl: '',
       defaultSort: 'newest',
@@ -310,11 +310,11 @@ describe('gallery.js', () => {
     expect(firstTitle).toContain('Track 1');
   });
 
-  test('clicking open track mounts player and creates share urls', () => {
+  test('clicking a card mounts player and creates share urls', () => {
     loadGallery();
 
-    const openButtons = document.querySelectorAll('.fgpx-gallery-open');
-    openButtons[0].click();
+    const cards = document.querySelectorAll('.fgpx-gallery-card');
+    cards[0].click();
 
     const panel = document.querySelector('.fgpx-gallery-player-panel');
     expect(panel.hidden).toBe(false);
@@ -332,17 +332,17 @@ describe('gallery.js', () => {
     expect(wa).toContain('wa.me');
   });
 
-  test('copy shortcode falls back to execCommand when Clipboard API is unavailable', async () => {
+  test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
     delete navigator.clipboard;
     document.execCommand = jest.fn(() => true);
 
     loadGallery();
 
-    document.querySelector('.fgpx-gallery-open').click();
+    document.querySelector('.fgpx-gallery-card').click();
     document.querySelector('.fgpx-share-copy').click();
 
     expect(document.execCommand).toHaveBeenCalledWith('copy');
-    expect(document.querySelector('.fgpx-share-copy').textContent).toBe('Shortcode copied');
+    expect(document.querySelector('.fgpx-share-copy').textContent).toBe('Link copied');
 
     await flushPromises();
   });
@@ -364,7 +364,7 @@ describe('gallery.js', () => {
 
     loadGallery();
 
-    document.querySelector('.fgpx-gallery-open').click();
+    document.querySelector('.fgpx-gallery-card').click();
     await flushPromises();
     await flushPromises();
 

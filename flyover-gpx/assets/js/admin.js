@@ -192,16 +192,22 @@
             try {
                 const response = await generatePreviewForTrack(postId, nonce, trackTitle);
                 if (response && response.success) {
-                    const usedSource = response.data && response.data.source ? response.data.source : 'fallback_card';
+                    const usedSource = response.data && response.data.source ? response.data.source : 'none';
                     const previewUrl = response.data && response.data.previewUrl ? response.data.previewUrl : '';
+                    const message = response.data && response.data.message ? String(response.data.message) : 'Preview generated successfully.';
 
                     $btn.text('✓ Preview Ready').css('color', '#46b450').attr('data-has-preview', '1');
-                    showAdminNotice(usedSource === 'map_snapshot'
-                        ? 'Map snapshot preview generated successfully.'
-                        : 'Fallback preview generated successfully.', 'success');
+                    showAdminNotice(message, 'success');
+
+                    const $sourceLabel = $('.fgpx-preview-current-source code').first();
+                    if ($sourceLabel.length) {
+                        $sourceLabel.text(usedSource || 'none');
+                    }
 
                     if (previewUrl) {
                         upsertPreviewImage(previewUrl);
+                    } else {
+                        removePreviewImage();
                     }
                 } else {
                     const message = response && response.data && response.data.message
@@ -314,6 +320,120 @@
 
             $trigger.prop('disabled', false).val(originalText);
             showAdminNotice('Preview generation finished: ' + generated + ' generated, ' + skipped + ' skipped, ' + failed + ' failed.', failed > 0 ? 'warning' : 'success');
+        });
+
+        $(document).on('change', '.fgpx-preview-mode-select', function() {
+            const $box = $(this).closest('.fgpx-preview-mode-box');
+            const mode = String($(this).val() || 'auto');
+            $box.find('.fgpx-preview-custom-wrap').toggle(mode === 'custom');
+        });
+
+        $(document).on('click', '.fgpx-preview-custom-select', function(e) {
+            e.preventDefault();
+
+            if (!window.wp || !wp.media) {
+                showAdminNotice('WordPress media library is not available on this screen.', 'error');
+                return;
+            }
+
+            const $box = $(this).closest('.fgpx-preview-mode-box');
+            const frame = wp.media({
+                title: 'Select custom track preview image',
+                button: { text: 'Use this image' },
+                multiple: false,
+                library: { type: 'image' }
+            });
+
+            frame.on('select', function() {
+                const selected = frame.state().get('selection').first();
+                if (!selected) {
+                    return;
+                }
+
+                const data = selected.toJSON();
+                const id = Number(data.id) > 0 ? Number(data.id) : 0;
+                const url = data.sizes && data.sizes.medium_large && data.sizes.medium_large.url
+                    ? data.sizes.medium_large.url
+                    : (data.url || '');
+
+                $box.find('.fgpx-preview-custom-id').val(String(id));
+                if (url) {
+                    $box.find('.fgpx-preview-custom-thumb').html(
+                        '<img src="' + String(url).replace(/"/g, '&quot;') + '" alt="Custom preview image" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />'
+                    ).show();
+                }
+            });
+
+            frame.open();
+        });
+
+        $(document).on('click', '.fgpx-preview-custom-clear', function(e) {
+            e.preventDefault();
+            const $box = $(this).closest('.fgpx-preview-mode-box');
+            $box.find('.fgpx-preview-custom-id').val('0');
+            $box.find('.fgpx-preview-custom-thumb').empty().hide();
+        });
+
+        $(document).on('click', '.fgpx-preview-mode-save', function(e) {
+            e.preventDefault();
+
+            const $btn = $(this);
+            const $box = $btn.closest('.fgpx-preview-mode-box');
+            const postId = Number($box.data('post-id')) || 0;
+            const nonce = String($box.data('nonce') || '');
+            const mode = String($box.find('.fgpx-preview-mode-select').val() || 'auto');
+            const customAttachmentId = Number($box.find('.fgpx-preview-custom-id').val() || 0);
+            const $status = $box.find('.fgpx-preview-mode-status');
+
+            if (!postId || !nonce) {
+                showAdminNotice('Cannot save preview mode due to missing track data.', 'error');
+                return;
+            }
+
+            $btn.prop('disabled', true);
+            $status.text('Saving...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_save_preview_mode',
+                    post_id: postId,
+                    nonce: nonce,
+                    mode: mode,
+                    custom_attachment_id: customAttachmentId
+                },
+                success: function(response) {
+                    if (!response || !response.success) {
+                        const message = response && response.data && response.data.message
+                            ? response.data.message
+                            : 'Failed to save preview mode.';
+                        $status.text('Failed').css('color', '#d63638');
+                        showAdminNotice(message, 'error');
+                        return;
+                    }
+
+                    const previewUrl = response.data && response.data.previewUrl ? String(response.data.previewUrl) : '';
+                    if (previewUrl) {
+                        upsertPreviewImage(previewUrl);
+                    } else {
+                        removePreviewImage();
+                    }
+
+                    const source = response.data && response.data.source ? String(response.data.source) : 'none';
+                    $box.find('.fgpx-preview-current-source code').text(source || 'none');
+
+                    $status.text('Saved').css('color', '#2271b1');
+                    showAdminNotice('Preview mode updated.', 'success');
+                },
+                error: function() {
+                    $status.text('Failed').css('color', '#d63638');
+                    showAdminNotice('Network error while saving preview mode.', 'error');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false);
+                }
+            });
         });
     });
 
@@ -613,7 +733,16 @@
             return;
         }
 
-        let image = holder.querySelector('img[data-fgpx-track-preview="1"]');
+        let wrap = holder.querySelector('.fgpx-preview-current-wrap');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.className = 'fgpx-preview-current-wrap';
+            wrap.innerHTML = '<p style="margin:8px 0 0">Current gallery preview image:</p>';
+            holder.appendChild(wrap);
+        }
+        wrap.style.display = '';
+
+        let image = wrap.querySelector('img[data-fgpx-track-preview="1"]');
         if (!image) {
             image = document.createElement('img');
             image.setAttribute('data-fgpx-track-preview', '1');
@@ -623,10 +752,29 @@
             image.style.border = '1px solid #ccd0d4';
             image.style.borderRadius = '6px';
             image.style.marginTop = '8px';
-            holder.appendChild(image);
+            wrap.appendChild(image);
         }
 
         image.src = previewUrl;
+    }
+
+    function removePreviewImage() {
+        const holder = document.querySelector('#fgpx_preview');
+        if (!holder) {
+            return;
+        }
+
+        const wrap = holder.querySelector('.fgpx-preview-current-wrap');
+        if (!wrap) {
+            return;
+        }
+
+        const image = wrap.querySelector('img[data-fgpx-track-preview="1"]');
+        if (image && image.parentNode) {
+            image.parentNode.removeChild(image);
+        }
+
+        wrap.style.display = 'none';
     }
     
     /**

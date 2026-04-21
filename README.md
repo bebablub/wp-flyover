@@ -116,7 +116,7 @@ Parameters:
 
 - `id` (required): The Track post ID.
 - `style` (optional): `raster` (default) or `vector`.
-- `height` (optional): Container height (e.g. `620px`, `60vh`). Default `620px`.
+- `height` (optional): Container height (e.g. `625px`, `60vh`). Default `625px`.
 - `zoom` (optional): Initial zoom level. Default is set in Settings → Flyover GPX.
 - `style_url` (optional): A MapLibre style URL when `style="vector"`. Ignored if an inline style JSON is configured in settings.
 - `privacy` (optional): Override privacy mode for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to the admin setting.
@@ -174,7 +174,7 @@ Embed a browsable track gallery with inline player and social sharing:
 Parameters (all optional):
 
 - `per_page` (optional): Number of tracks shown before "Load more". Range 4–48. Default `12`.
-- `height` (optional): Player height when a track is opened. Default `620px`.
+- `height` (optional): Player height when a track is opened. Default `625px`.
 - `style` (optional): Map style for the player — `raster` (default) or `vector`.
 - `style_url` (optional): MapLibre style URL when `style="vector"`.
 - `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
@@ -185,7 +185,7 @@ Features:
 - Full-text search across title and metadata
 - Sort by newest, distance, duration, elevation gain, or title
 - Inline player panel — opens below the list when a track is selected
-- Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-shortcode button
+- Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-link button (copies share URL with `#track-{id}` hash)
 - Shared URLs include a `#track-{id}` hash that auto-opens the correct track on page load
 - Multiple `[flyover_gpx_gallery]` shortcodes on the same page are fully isolated
 

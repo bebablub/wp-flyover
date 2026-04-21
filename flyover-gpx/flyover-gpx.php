@@ -7,17 +7,17 @@
  * 
  * Plugin Name: Flyover GPX
  * Description: Upload GPX files and render animated flyover maps with statistic charts.
- * Version: 1.0.5
+ * Version: 1.1.0
  * Author: Benjamin Barinka
  * Requires PHP: 7.4
  * Requires at least: 6.0
  * Text Domain: flyover-gpx
  * 
  * @package FlyoverGPX
- * @version 1.0.5
+ * @version 1.1.0
  * @author Benjamin Barinka
  * @license MIT
- * @since 1.0.5
+ * @since 1.1.0
  */
 
 declare(strict_types=1);
@@ -35,7 +35,7 @@ if (!\defined('ABSPATH')) {
  * Define essential plugin constants for version, paths, and URLs.
  * These constants are used throughout the plugin for consistency.
  */
-\define('FGPX_VERSION', '1.0.5');           // Plugin version for cache busting and compatibility
+\define('FGPX_VERSION', '1.1.0');           // Plugin version for cache busting and compatibility
 \define('FGPX_FILE', __FILE__);             // Main plugin file path
 \define('FGPX_DIR_PATH', plugin_dir_path(__FILE__)); // Plugin directory path
 \define('FGPX_DIR_URL', plugin_dir_url(__FILE__));   // Plugin directory URL

@@ -104,7 +104,7 @@
   }
 
   function copyShortcode(copyBtn, shortcode, strings) {
-    var resetLabel = strings.copyShortcode || 'Copy Shortcode';
+    var resetLabel = strings.copyShortcode || 'Copy Link';
     var successLabel = strings.copied || 'Copied';
     var failedLabel = strings.copyFailed || 'Copy failed';
 
@@ -331,17 +331,12 @@
       + '<span><strong>' + escHtml(strings.uploaded) + ':</strong> ' + escHtml(track.dateLabel) + '</span>'
       + '</div>';
 
-    var button = '<button type="button" class="fgpx-gallery-open button button-primary" data-track-id="' + escHtml(track.id) + '">' + escHtml(strings.launch) + '</button>';
-
-    return '<article class="fgpx-gallery-card' + (listMode ? ' fgpx-gallery-card-list' : '') + (isActive ? ' is-active' : '') + '" aria-current="' + (isActive ? 'true' : 'false') + '">'
-      + '<div class="fgpx-gallery-card-top">'
+    return '<article class="fgpx-gallery-card' + (listMode ? ' fgpx-gallery-card-list' : '') + (isActive ? ' is-active' : '') + '" aria-current="' + (isActive ? 'true' : 'false') + '" data-track-id="' + escHtml(track.id) + '" role="button" tabindex="0">'
       + visual
       + '<div class="fgpx-gallery-card-main">'
       + '<h3 class="fgpx-gallery-card-title">' + escHtml(track.title) + '</h3>'
       + meta
       + '</div>'
-      + '</div>'
-      + '<div class="fgpx-gallery-card-actions">' + button + '</div>'
       + '</article>';
   }
 
@@ -421,15 +416,14 @@
     if (results) {
       results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
       if (isLoading && resetResults) {
-        results.innerHTML = '<div class="fgpx-gallery-empty">' + escHtml(strings.loading || 'Loading tracks...') + '</div>';
+        results.innerHTML = '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span><span class="fgpx-gallery-loading-label">' + escHtml(strings.loading || 'Loading tracks...') + '</span></div>';
       }
     }
 
     if (loadMoreBtn) {
       loadMoreBtn.disabled = !!isLoading;
       if (isLoading) {
-        loadMoreBtn.hidden = false;
-        loadMoreBtn.textContent = strings.loading || 'Loading tracks...';
+        loadMoreBtn.hidden = true;
       }
     }
   }
@@ -457,7 +451,7 @@
 
     function renderPlayer() {
       var playerId = 'fgpx-gallery-player-' + String(track.id) + '-' + String(Date.now());
-      mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '620px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
+      mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '625px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
 
       if (window.FGPX) {
         window.FGPX.gpxDownloadUrl = track.gpxDownloadUrl || '';
@@ -489,7 +483,7 @@
     if (window.FGPX && typeof window.FGPX.initContainer === 'function') {
       renderPlayer();
     } else {
-      mount.innerHTML = '<div class="fgpx-gallery-empty">' + escHtml(strings.loading || 'Loading...') + '</div>';
+      mount.innerHTML = '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span></div>';
       ensurePlayerAssets(cfg).then(renderPlayer).catch(function () {
         renderPlayerError(panel, mount, title, strings);
       });
@@ -509,7 +503,7 @@
 
     var copyBtn = qs('.fgpx-share-copy', root);
     if (copyBtn) {
-      copyBtn.setAttribute('data-shortcode', '[flyover_gpx id="' + String(track.id) + '"]');
+      copyBtn.setAttribute('data-share-url', pageUrl);
     }
   }
 
@@ -741,9 +735,9 @@
     }
 
     root.addEventListener('click', function (ev) {
-      var openBtn = closestByClass(ev.target, 'fgpx-gallery-open');
-      if (openBtn) {
-        var id = Number(openBtn.getAttribute('data-track-id'));
+      var card = closestByClass(ev.target, 'fgpx-gallery-card');
+      if (card) {
+        var id = Number(card.getAttribute('data-track-id'));
         var track = findTrackById(tracks, id);
         if (track) {
           activeTrackId = id;
@@ -755,9 +749,9 @@
 
       var copyBtn = closestByClass(ev.target, 'fgpx-share-copy');
       if (copyBtn) {
-        var shortcode = copyBtn.getAttribute('data-shortcode') || '';
-        if (!shortcode) return;
-        copyShortcode(copyBtn, shortcode, strings);
+        var shareUrl = copyBtn.getAttribute('data-share-url') || '';
+        if (!shareUrl) return;
+        copyShortcode(copyBtn, shareUrl, strings);
       }
     });
 
@@ -772,6 +766,19 @@
         target.parentNode.classList.add('is-fallback');
       }
     }, true);
+
+    root.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') {
+        return;
+      }
+      var card = closestByClass(ev.target, 'fgpx-gallery-card');
+      if (!card) {
+        return;
+      }
+
+      ev.preventDefault();
+      card.click();
+    });
 
     if (serverMode) {
       loadTracks(true).then(function () {

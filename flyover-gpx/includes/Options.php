@@ -30,7 +30,7 @@ final class Options
 		'fgpx_default_style' => 'raster',
 		'fgpx_default_style_url' => '',
 		'fgpx_default_style_json' => '',
-		'fgpx_default_height' => '620px',
+		'fgpx_default_height' => '625px',
 		'fgpx_default_zoom' => '11',
 		'fgpx_default_speed' => '25',
 		'fgpx_default_pitch' => '60',

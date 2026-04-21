@@ -102,7 +102,7 @@ final class OptionsTest extends TestCase
     {
         // get_option stub returns $default → Options returns definition defaults
         $this->assertSame('raster', Options::get('fgpx_default_style'));
-        $this->assertSame('620px',  Options::get('fgpx_default_height'));
+        $this->assertSame('625px',  Options::get('fgpx_default_height'));
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
