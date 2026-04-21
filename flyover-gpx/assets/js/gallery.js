@@ -48,6 +48,9 @@
         window.FGPX[key] = playerConfig[key];
       }
     }
+    if (playerConfig.photosEnabled !== undefined) {
+      window.FGPX.photosEnabled = playerConfig.photosEnabled;
+    }
   }
 
   function ensurePlayerAssets(cfg) {

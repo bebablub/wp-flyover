@@ -2569,7 +2569,7 @@
       }
 
       function addPhotoMarkers() {
-        if (!(window.FGPX && FGPX.photosEnabled) || !Array.isArray(photos) || photos.length === 0) { return; }
+        if (!FGPX.photosEnabled || !Array.isArray(photos) || photos.length === 0) { return; }
         var tmpByDist = [];
         photos.forEach(function(ph){
           var lngLat = null;
@@ -7859,7 +7859,7 @@
         updateVisuals(progress);
         // If photos are enabled with timestamps, show overlay when marker reaches the photo time
         try {
-          if (window.FGPX && FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
+          if (FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
             if (overlayActive) { 
               return; 
             }
