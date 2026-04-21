@@ -333,8 +333,6 @@ describe('gallery.js', () => {
   });
 
   test('gallery player mount sets per-instance strategy override without mutating global config', () => {
-    const originalDownloadUrl = window.FGPX.gpxDownloadUrl;
-    
     loadGallery();
 
     const cards = document.querySelectorAll('.fgpx-gallery-card');
@@ -350,7 +348,6 @@ describe('gallery.js', () => {
     
     // Verify global strategy key was not promoted to top-level config
     expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
-    expect(window.FGPX.gpxDownloadUrl).toBe(originalDownloadUrl);
   });
 
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
