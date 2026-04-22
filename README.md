@@ -21,6 +21,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Video recording – record MP4/WebM videos of the flyover animation with customizable settings
 - Privacy mode (hide first/last N km for playback window only)
 - Dark mode‑friendly UI
+- Gallery with tile/list view, Searchable, filterable, orderable
 - Admin tools: Add New Track page, sortable stats, live preview
 - Configurable defaults (height, zoom, pitch, chart colors, elevation coloring)
 - Custom styling: inline style.json or vector style URL; OSM raster fallback
@@ -65,6 +66,10 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
   <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
     <img src="demo/screenshot5.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather overlay</p>
+  </div>
+    <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot8.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Gallery: Grid view</p>
   </div>
   <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
     <img src="demo/screenshot6.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
