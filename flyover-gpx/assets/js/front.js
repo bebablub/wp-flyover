@@ -583,6 +583,10 @@
     if (!el || typeof window.maplibregl === 'undefined' || typeof window.Chart === 'undefined' || typeof window.FGPX === 'undefined') {
       return;
     }
+    if (el.getAttribute('data-fgpx-initialized') === '1') {
+      return;
+    }
+    el.setAttribute('data-fgpx-initialized', '1');
     var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
     var FGPX = Object.assign({}, window.FGPX, instCfg);
     applyTheme(el, FGPX);
@@ -591,11 +595,27 @@
     var style = el.getAttribute('data-style') || 'raster';
     var styleUrl = el.getAttribute('data-style-url');
 
-    var ui = buildLayout(el, FGPX);
+    var ui;
+    try {
+      ui = buildLayout(el, FGPX);
+    } catch (e) {
+      // Release guard so the container can be retried after a transient failure.
+      el.removeAttribute('data-fgpx-initialized');
+      DBG.warn('initContainer: buildLayout failed, guard released', e);
+      return;
+    }
     ui.spinner.style.display = 'flex';
     ui.error.style.display = 'none';
 
-    var restUrl = String(window.FGPX.restUrl).replace(/\/$/, '') + '/track/' + encodeURIComponent(trackId) + (window.FGPX && FGPX.hostPostId ? ('?host_post=' + encodeURIComponent(String(FGPX.hostPostId))) : '');
+    // Determine photo enrichment strategy and build REST URL accordingly
+    var hasGalleryStrategy = FGPX && FGPX.galleryPhotoStrategy === 'latest_embed';
+    var restUrlParams = [];
+    if (hasGalleryStrategy) {
+      restUrlParams.push('strategy=latest_embed');
+    } else if (window.FGPX && FGPX.hostPostId) {
+      restUrlParams.push('host_post=' + encodeURIComponent(String(FGPX.hostPostId)));
+    }
+    var restUrl = String(window.FGPX.restUrl).replace(/\/$/, '') + '/track/' + encodeURIComponent(trackId) + (restUrlParams.length > 0 ? ('?' + restUrlParams.join('&')) : '');
     var ajaxUrl = (window.FGPX && FGPX.ajaxUrl) ? String(window.FGPX.ajaxUrl) : null;
 
     // Frontend caching for better performance on large tracks
@@ -603,11 +623,14 @@
       var hostPost = (window.FGPX && FGPX.hostPostId) ? String(FGPX.hostPostId) : '0';
       var simplify = (window.FGPX && FGPX.backendSimplify) ? '1' : '0';
       var target = (window.FGPX && FGPX.backendSimplifyTarget) ? String(FGPX.backendSimplifyTarget) : '1200';
-      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target;
+      var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';
+      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;
     }
 
     function getCachedData() {
       try {
+        // latest_embed can change when embedding context changes; avoid stale local payloads.
+        if (hasGalleryStrategy) return null;
         if (!window.localStorage) return null;
         var cacheKey = getCacheKey();
         var cached = localStorage.getItem(cacheKey);
@@ -631,6 +654,7 @@
 
     function setCachedData(payload) {
       try {
+        if (hasGalleryStrategy) return;
         if (!window.localStorage) return;
         var cacheKey = getCacheKey();
         
@@ -750,7 +774,7 @@
     function fetchAjax() {
       if (!ajaxUrl) return Promise.reject(new Error('No AJAX URL'));
       var u = ajaxUrl + (ajaxUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fgpx_track&id=' + encodeURIComponent(trackId);
-      if (window.FGPX && FGPX.hostPostId) { u += '&host_post=' + encodeURIComponent(String(FGPX.hostPostId)); }
+      if (hasGalleryStrategy) { u += '&strategy=latest_embed'; } else if (window.FGPX && FGPX.hostPostId) { u += '&host_post=' + encodeURIComponent(String(FGPX.hostPostId)); }
       return fetch(u, { credentials: 'same-origin' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
     }
@@ -2548,7 +2572,7 @@
       }
 
       function addPhotoMarkers() {
-        if (!(window.FGPX && FGPX.photosEnabled) || !Array.isArray(photos) || photos.length === 0) { return; }
+        if (!FGPX.photosEnabled || !Array.isArray(photos) || photos.length === 0) { return; }
         var tmpByDist = [];
         photos.forEach(function(ph){
           var lngLat = null;
@@ -2613,7 +2637,7 @@
             el.appendChild(inner);
             el.addEventListener('mouseenter', function(){ inner.style.transform = 'scale(1.8)'; });
             el.addEventListener('mouseleave', function(){ inner.style.transform = 'scale(1)'; });
-            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || ''); });
+            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || '', ph.source_post_id, ph.source_post_title || '', ph.timestamp || ''); });
             var marker = new window.maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
             photoMarkers.push({ marker: marker, photo: ph, lngLat: lngLat, pDist: pDistApprox });
             if (pDistApprox != null) { tmpByDist.push({ p: ph, pDist: pDistApprox, lngLat: lngLat }); }
@@ -2904,6 +2928,37 @@
           useCase: 'Quick previews, thumbnails'
         }
       };
+
+      function createSessionIdSuffix(length) {
+        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var targetLength = Math.max(1, length || 9);
+        var result = '';
+        var cryptoObj = null;
+
+        if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+          cryptoObj = globalThis.crypto;
+        } else if (typeof window !== 'undefined') {
+          var windowCrypto = window.crypto || window.msCrypto;
+          if (windowCrypto && typeof windowCrypto.getRandomValues === 'function') {
+            cryptoObj = windowCrypto;
+          }
+        }
+
+        if (cryptoObj) {
+          var bytes = new Uint8Array(targetLength);
+          cryptoObj.getRandomValues(bytes);
+          for (var i = 0; i < targetLength; i++) {
+            result += chars.charAt(bytes[i] % chars.length);
+          }
+          return result;
+        }
+
+        for (var j = 0; j < targetLength; j++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        return result;
+      }
       
       function VideoRecorder(map, options) {
         this.map = map;
@@ -2939,7 +2994,7 @@
         this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024; // 200MB target chunk size
         this.currentChunkSize = 0;
         this.chunkNumber = 0;
-        this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
         this.downloadedChunks = [];
         // Recorder rotation state to ensure each chunk starts with fresh headers
         this.isRotatingChunk = false;
@@ -4559,9 +4614,15 @@
       var overlayCaption = document.createElement('div');
       overlayCaption.style.cssText = 'position:absolute;right:12px;bottom:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 12px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
       overlay.appendChild(overlayCaption);
+      var overlaySource = document.createElement('div');
+      overlaySource.style.cssText = 'position:absolute;right:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
+      overlay.appendChild(overlaySource);
+      var overlayTime = document.createElement('div');
+      overlayTime.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
+      overlay.appendChild(overlayTime);
       ui.mapEl.appendChild(overlay);
-      function showOverlay(url, caption) { 
-        DBG.log('overlay show', { url:url, caption: !!caption });
+      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp) { 
+        DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
         // Clear any existing map layer first to prevent distorted frames
         if (videoRecorder && videoRecorder.isRecording) {
@@ -4570,7 +4631,37 @@
         
         overlayImg.src = url; 
         overlayCaption.textContent = caption || ''; 
-        overlayCaption.style.display = caption ? 'block' : 'none'; 
+        overlayCaption.style.display = caption ? 'block' : 'none';
+        
+        // Show photo source for both embed and track photos
+        if (sourcePostId && sourcePostId > 0 && sourcePostTitle) {
+          overlaySource.textContent = '📷 ' + sourcePostTitle;
+          overlaySource.style.display = 'block';
+        } else if (sourcePostId && sourcePostId > 0) {
+          overlaySource.textContent = '📷 Photo from linked post';
+          overlaySource.style.display = 'block';
+        } else if (sourcePostId === 0 || (sourcePostId && sourcePostId < 1)) {
+          overlaySource.textContent = '📷 Photo from track';
+          overlaySource.style.display = 'block';
+        } else {
+          overlaySource.textContent = '';
+          overlaySource.style.display = 'none';
+        }
+
+        if (photoTimestamp) {
+          var dt = new Date(photoTimestamp);
+          if (!isNaN(dt.getTime())) {
+            overlayTime.textContent = '🕒 ' + dt.toLocaleString();
+            overlayTime.style.display = 'block';
+          } else {
+            overlayTime.textContent = '';
+            overlayTime.style.display = 'none';
+          }
+        } else {
+          overlayTime.textContent = '';
+          overlayTime.style.display = 'none';
+        }
+        
         overlay.style.display = 'flex'; 
         
         // During recording, use dark grey background to match map layer
@@ -4604,6 +4695,8 @@
               overlayImg.src = ''; 
               overlayCaption.textContent = ''; 
               overlayCaption.style.display = 'none';
+              overlaySource.textContent = '';
+              overlaySource.style.display = 'none';
               // Reset background to default
               overlay.style.background = 'rgba(0,0,0,0.6)';
               overlay.removeEventListener('transitionend', done); 
@@ -4630,6 +4723,8 @@
             overlayImg.src = ''; 
             overlayCaption.textContent = ''; 
             overlayCaption.style.display = 'none';
+            overlaySource.textContent = '';
+            overlaySource.style.display = 'none';
             // Reset background to default
             overlay.style.background = 'rgba(0,0,0,0.6)';
             // Clear overlay from map canvas if recording
@@ -4839,7 +4934,7 @@
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
-        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '');
+        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '', next.source_post_id, next.source_post_title || '', next.timestamp || '');
         
         // If recording, also draw the photo overlay on the canvas
         if (videoRecorder && videoRecorder.isRecording) {
@@ -7767,7 +7862,7 @@
         updateVisuals(progress);
         // If photos are enabled with timestamps, show overlay when marker reaches the photo time
         try {
-          if (window.FGPX && FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
+          if (FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
             if (overlayActive) { 
               return; 
             }
@@ -8824,6 +8919,9 @@
       DBG.warn('Initialization error:', e);
     }
   }
+
+  window.FGPX = window.FGPX || {};
+  window.FGPX.initContainer = initContainer;
 
   if (window.FGPX && window.FGPX.deferViewport) {
     // Lazy: expose boot for loader

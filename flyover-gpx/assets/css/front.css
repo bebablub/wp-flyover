@@ -76,7 +76,8 @@
   border-radius: 4px;
   border: 1px solid var(--fgpx-border, #ccc);
   background: var(--fgpx-field-bg, #fff);
-  color: inherit;
+  color: #23282d;
+  color-scheme: light;
   min-width: 0;
   max-width: 100%;
   width: auto;
@@ -207,9 +208,16 @@
     border-color: #25ceff;
   }
   .fgpx .fgpx-select {
-    /*background: #111;*/
+    background: #111;
     border-color: #333;
-    color: #333;
+    color: #eee;
+    color-scheme: dark;
+  }
+  .fgpx[data-fgpx-theme="light"] .fgpx-select {
+    background: #fff;
+    border-color: #ccc;
+    color: #23282d;
+    color-scheme: light;
   }
   .fgpx .fgpx-progress {
     background: #333;
@@ -247,8 +255,10 @@
   border-color: #25ceff;
 }
 .fgpx[data-fgpx-theme="dark"] .fgpx-select {
+  background: #111;
   border-color: #333;
-  color: #333;
+  color: #eee;
+  color-scheme: dark;
 }
 .fgpx[data-fgpx-theme="dark"] .fgpx-progress {
   background: #333;
@@ -283,8 +293,10 @@
   border-color: #25ceff;
 }
 .fgpx[data-fgpx-theme="light"] .fgpx-select {
+  background: #fff;
   border-color: #ccc;
   color: #23282d;
+  color-scheme: light;
 }
 .fgpx[data-fgpx-theme="light"] .fgpx-progress {
   background: #e0e0e0;

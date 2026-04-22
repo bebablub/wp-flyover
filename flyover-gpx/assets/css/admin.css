@@ -111,6 +111,22 @@
     font-size: 13px;
 }
 
+.fgpx-preview-mode-box {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #dcdcde;
+    background: #f6f7f7;
+}
+
+.fgpx-preview-mode-box select {
+    min-width: 320px;
+    max-width: 100%;
+}
+
+.fgpx-preview-custom-wrap {
+    margin: 8px 0;
+}
+
 /* Drag and drop styling improvements */
 .fgpx-upload-form input[type="file"]:focus,
 .postbox input[type="file"]:focus {
