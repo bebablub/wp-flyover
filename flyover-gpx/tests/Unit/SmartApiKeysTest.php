@@ -158,4 +158,58 @@ final class SmartApiKeysTest extends TestCase
 
         $this->assertSame(SmartApiKeys::DEFAULT_TEST_TEMPLATE_URL, $resolved);
     }
+
+    public function test_resolve_style_returns_non_null_resolved_key_for_single_mode(): void
+    {
+        $resolved = SmartApiKeys::resolveStyle(
+            '', // no inline JSON
+            'https://maps.test/style.json?key={{API_KEY}}',
+            SmartApiKeys::MODE_SINGLE,
+            "key-a\nkey-b"
+        );
+
+        $this->assertArrayHasKey('resolvedKey', $resolved);
+        $this->assertNotNull($resolved['resolvedKey']);
+        $this->assertContains($resolved['resolvedKey'], ['key-a', 'key-b']);
+    }
+
+    public function test_resolve_style_returns_non_null_resolved_key_for_per_occurrence_mode(): void
+    {
+        $resolved = SmartApiKeys::resolveStyle(
+            '',
+            'https://maps.test/style.json?key={{API_KEY}}',
+            SmartApiKeys::MODE_PER_OCCURRENCE,
+            "key-x"
+        );
+
+        $this->assertArrayHasKey('resolvedKey', $resolved);
+        $this->assertNotNull($resolved['resolvedKey']);
+        $this->assertSame('key-x', $resolved['resolvedKey']);
+    }
+
+    public function test_resolve_style_returns_null_resolved_key_when_mode_off(): void
+    {
+        $resolved = SmartApiKeys::resolveStyle(
+            '',
+            'https://maps.test/style.json?key={{API_KEY}}',
+            SmartApiKeys::MODE_OFF,
+            "key-a"
+        );
+
+        $this->assertArrayHasKey('resolvedKey', $resolved);
+        $this->assertNull($resolved['resolvedKey']);
+    }
+
+    public function test_resolve_style_returns_null_resolved_key_when_pool_empty(): void
+    {
+        $resolved = SmartApiKeys::resolveStyle(
+            '',
+            'https://maps.test/style.json?key={{API_KEY}}',
+            SmartApiKeys::MODE_SINGLE,
+            ''
+        );
+
+        $this->assertArrayHasKey('resolvedKey', $resolved);
+        $this->assertNull($resolved['resolvedKey']);
+    }
 }

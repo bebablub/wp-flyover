@@ -428,7 +428,7 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_default_style_url">' . \esc_html__('Remote style URL', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="text" id="fgpx_default_style_url" name="fgpx_default_style_url" class="regular-text" value="' . \esc_attr($defStyleUrl) . '" placeholder="https://.../style.json" />';
-		echo '<p class="description">' . \esc_html__('MapLibre-compatible style URL (any provider: MapTiler, Mapbox, custom). Used when style source = "Remote Style URL".', 'flyover-gpx') . '</p>';
+		echo '<p class="description">' . \esc_html__('MapLibre-compatible style URL (any provider: MapTiler, Mapbox, custom). Used when style source = "Remote Style URL". To rotate API keys automatically, use {{API_KEY}} as a placeholder — e.g. https://maps.example.com/style.json?key={{API_KEY}} — and configure the Smart API key pool below.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		$exampleStyleJson = "{\n  \"version\": 8,\n  \"sources\": {\n    \"osm\": {\n      \"type\": \"raster\",\n      \"tiles\": [\"https:\\/\\/tile.openstreetmap.org\\/{z}\\/{x}\\/{y}.png\"],\n      \"tileSize\": 256,\n      \"maxzoom\": 19,\n      \"attribution\": \"© OpenStreetMap contributors\"\n    }\n  },\n  \"layers\": [\n    { \"id\": \"osm\", \"type\": \"raster\", \"source\": \"osm\" }\n  ]\n}";
 		$styleJsonValue = $defStyleJson !== '' ? $defStyleJson : $exampleStyleJson;

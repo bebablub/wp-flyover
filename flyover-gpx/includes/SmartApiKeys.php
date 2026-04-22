@@ -62,7 +62,11 @@ final class SmartApiKeys
     /**
      * Resolve style JSON and style URL templates by replacing API placeholders.
      *
-     * @return array{styleJson: string, styleUrl: string}
+     * Returns the resolved style data plus a single resolved key (for JS-side
+     * transformRequest to handle tile URLs inside remotely-fetched style JSON).
+     * resolvedKey is null when mode is off or no keys are configured.
+     *
+     * @return array{styleJson: string, styleUrl: string, resolvedKey: string|null}
      */
     public static function resolveStyle(string $styleJson, string $styleUrl, string $mode, string $keyPoolText): array
     {
@@ -73,6 +77,7 @@ final class SmartApiKeys
             return [
                 'styleJson' => $styleJson,
                 'styleUrl' => $styleUrl,
+                'resolvedKey' => null,
             ];
         }
 
@@ -84,9 +89,15 @@ final class SmartApiKeys
         $resolvedJson = self::replaceInStyleJson($styleJson, $keys, $normalizedMode, $forcedKey);
         $resolvedUrl = self::replacePlaceholders($styleUrl, $keys, $normalizedMode, $forcedKey);
 
+        // For per_occurrence mode a single key is exposed for JS transformRequest;
+        // each server-side occurrence already used a random key, so this one-key
+        // fallback only applies to URLs MapLibre fetches after page load.
+        $resolvedKey = $forcedKey ?? self::pickRandomKey($keys);
+
         return [
             'styleJson' => $resolvedJson,
             'styleUrl' => $resolvedUrl,
+            'resolvedKey' => $resolvedKey,
         ];
     }
 

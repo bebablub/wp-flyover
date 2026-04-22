@@ -1079,6 +1079,15 @@
       }
     } catch (_) {}
 
+    // Replace {{API_KEY}} in any URL MapLibre fetches (covers tile sources, glyphs, sprites,
+    // and remote style JSON tile templates that PHP could not see at render time).
+    var resolvedApiKey = (FGPX && typeof FGPX.resolvedApiKey === 'string' && FGPX.resolvedApiKey !== '') ? FGPX.resolvedApiKey : null;
+    var transformRequest = resolvedApiKey ? function(url) {
+      if (typeof url === 'string' && url.indexOf('{{API_KEY}}') !== -1) {
+        return { url: url.replace(/\{\{API_KEY\}\}/g, resolvedApiKey) };
+      }
+    } : undefined;
+
     var map = new window.maplibregl.Map({
       container: ui.mapEl,
       style: initialStyle,
@@ -1092,7 +1101,8 @@
       renderWorldCopies: false,
       maxTileCacheSize: prefetchEnabled ? 2048 : 512, // tighter cache when disabled
       crossSourceCollisions: false,
-      localIdeographFontFamily: 'sans-serif'
+      localIdeographFontFamily: 'sans-serif',
+      transformRequest: transformRequest
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
     map.addControl(new window.maplibregl.FullscreenControl({ container: root }));

@@ -205,10 +205,17 @@ final class Plugin
         );
         $resolvedStyleJson = (string) ($resolvedStyle['styleJson'] ?? '');
         $resolvedStyleUrl = (string) ($resolvedStyle['styleUrl'] ?? '');
+        $resolvedApiKey = isset($resolvedStyle['resolvedKey']) ? (string) $resolvedStyle['resolvedKey'] : '';
         if ($resolvedStyleUrl !== '') {
-            $maybeResolvedUrl = \esc_url_raw($resolvedStyleUrl);
-            if (\is_string($maybeResolvedUrl) && $maybeResolvedUrl !== '') {
-                $styleUrl = $maybeResolvedUrl;
+            if (\strpos($resolvedStyleUrl, SmartApiKeys::PLACEHOLDER) !== false) {
+                // Placeholder survived (mode=off or empty pool) — discard rather than
+                // passing a broken esc_url_raw-encoded URL to MapLibre.
+                $styleUrl = '';
+            } else {
+                $maybeResolvedUrl = \esc_url_raw($resolvedStyleUrl);
+                if (\is_string($maybeResolvedUrl) && $maybeResolvedUrl !== '') {
+                    $styleUrl = $maybeResolvedUrl;
+                }
             }
         }
 
@@ -412,6 +419,7 @@ final class Plugin
             ],
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
+            'resolvedApiKey' => $resolvedApiKey,
         ];
 
         $localizeHandle = $lazyViewportEnabled ? 'fgpx-lazy' : 'fgpx-front';

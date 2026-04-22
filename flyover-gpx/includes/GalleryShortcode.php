@@ -111,14 +111,11 @@ final class GalleryShortcode
             $style = 'raster';
         }
 
-        $styleUrl = '';
-        $styleUrlRaw = (string) ($atts['style_url'] ?? '');
-        if ($styleUrlRaw !== '') {
-            $maybe = \esc_url_raw($styleUrlRaw);
-            if (\is_string($maybe) && $maybe !== '') {
-                $styleUrl = $maybe;
-            }
-        }
+        $styleUrlRaw = \trim((string) ($atts['style_url'] ?? ''));
+        $resolvedStyle = $this->resolveGalleryStyle($options, $styleUrlRaw);
+        $styleUrl = $resolvedStyle['styleUrl'];
+        $styleJson = $resolvedStyle['styleJson'];
+        $resolvedApiKey = $resolvedStyle['resolvedKey'];
 
         $showViewToggle = \in_array(\strtolower((string) $atts['show_view_toggle']), ['1', 'true', 'yes', 'on'], true);
         $showSearch = \in_array(\strtolower((string) $atts['show_search']), ['1', 'true', 'yes', 'on'], true);
@@ -142,6 +139,8 @@ final class GalleryShortcode
             'height' => $height,
             'style' => $style,
             'styleUrl' => $styleUrl,
+            'styleJson' => $styleJson,
+            'resolvedApiKey' => $resolvedApiKey,
             'defaultSort' => $defaultSort,
             'showSearch' => $showSearch,
         ], $rootId);
@@ -595,7 +594,7 @@ final class GalleryShortcode
             'daynightMapEnabled' => $options['fgpx_daynight_map_enabled'] === '1',
             'daynightMapColor' => $options['fgpx_daynight_map_color'],
             'daynightMapOpacity' => (float) $options['fgpx_daynight_map_opacity'],
-            'styleJson' => $options['fgpx_default_style_json'],
+            'styleJson' => (string) ($galleryCfg['styleJson'] ?? $options['fgpx_default_style_json']),
             'defaultZoom' => (int) $options['fgpx_default_zoom'],
             'defaultSpeed' => (int) $options['fgpx_default_speed'],
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
@@ -637,6 +636,7 @@ final class GalleryShortcode
             'deferViewport' => false,
             'hostPostId' => $hostPostId,
             'gpxDownloadUrl' => '',
+            'resolvedApiKey' => (string) ($galleryCfg['resolvedApiKey'] ?? ''),
             'i18n' => [
                 'play' => \esc_html__('Play', 'flyover-gpx'),
                 'pause' => \esc_html__('Pause', 'flyover-gpx'),
@@ -695,6 +695,53 @@ final class GalleryShortcode
             'window.FGPXGalleryInstances=window.FGPXGalleryInstances||{};window.FGPXGalleryInstances[' . \wp_json_encode($rootId) . ']=' . \wp_json_encode($instanceData) . ';',
             'before'
         );
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @return array{styleUrl:string,styleJson:string,resolvedKey:string}
+     */
+    private function resolveGalleryStyle(array $options, string $styleUrlRaw): array
+    {
+        $styleUrl = '';
+        if ($styleUrlRaw !== '') {
+            if (\strpos($styleUrlRaw, SmartApiKeys::PLACEHOLDER) !== false) {
+                // Allow placeholder templates and sanitize after substitution.
+                $styleUrl = \preg_match('#^https?://#i', $styleUrlRaw) ? $styleUrlRaw : '';
+            } else {
+                $maybe = \esc_url_raw($styleUrlRaw);
+                if (\is_string($maybe) && $maybe !== '') {
+                    $styleUrl = $maybe;
+                }
+            }
+        }
+
+        $resolvedStyle = SmartApiKeys::resolveStyle(
+            (string) ($options['fgpx_default_style_json'] ?? ''),
+            $styleUrl,
+            (string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF),
+            (string) ($options['fgpx_smart_api_keys_pool'] ?? '')
+        );
+
+        $resolvedStyleUrl = (string) ($resolvedStyle['styleUrl'] ?? '');
+        if ($resolvedStyleUrl !== '') {
+            if (\strpos($resolvedStyleUrl, SmartApiKeys::PLACEHOLDER) !== false) {
+                // Placeholder survived (mode=off or empty pool) — discard rather than
+                // passing a broken esc_url_raw-encoded URL to MapLibre.
+                $styleUrl = '';
+            } else {
+                $maybeResolved = \esc_url_raw($resolvedStyleUrl);
+                if (\is_string($maybeResolved) && $maybeResolved !== '') {
+                    $styleUrl = $maybeResolved;
+                }
+            }
+        }
+
+        return [
+            'styleUrl' => $styleUrl,
+            'styleJson' => (string) ($resolvedStyle['styleJson'] ?? ''),
+            'resolvedKey' => isset($resolvedStyle['resolvedKey']) ? (string) $resolvedStyle['resolvedKey'] : '',
+        ];
     }
 
     /**
