@@ -114,4 +114,48 @@ final class SmartApiKeysTest extends TestCase
 
         unset($GLOBALS['fgpx_test_wp_remote_get']);
     }
+
+    public function test_normalize_test_template_url_keeps_existing_placeholder(): void
+    {
+        $url = 'https://api.maptiler.com/maps/streets-v4/?key={{API_KEY}}';
+
+        $this->assertSame($url, SmartApiKeys::normalizeTestTemplateUrl($url));
+    }
+
+    public function test_normalize_test_template_url_appends_placeholder_to_empty_key_param(): void
+    {
+        $url = 'https://api.maptiler.com/maps/streets-v4/?key=';
+
+        $this->assertSame(
+            'https://api.maptiler.com/maps/streets-v4/?key={{API_KEY}}',
+            SmartApiKeys::normalizeTestTemplateUrl($url)
+        );
+    }
+
+    public function test_normalize_test_template_url_replaces_existing_key_value(): void
+    {
+        $url = 'https://api.maptiler.com/maps/streets-v4/?key=abc123';
+
+        $this->assertSame(
+            'https://api.maptiler.com/maps/streets-v4/?key={{API_KEY}}',
+            SmartApiKeys::normalizeTestTemplateUrl($url)
+        );
+    }
+
+    public function test_normalize_test_template_url_adds_key_param_when_missing(): void
+    {
+        $url = 'https://api.maptiler.com/maps/streets-v4/?lang=en';
+
+        $this->assertSame(
+            'https://api.maptiler.com/maps/streets-v4/?lang=en&key={{API_KEY}}',
+            SmartApiKeys::normalizeTestTemplateUrl($url)
+        );
+    }
+
+    public function test_resolve_test_template_url_falls_back_to_default_probe(): void
+    {
+        $resolved = SmartApiKeys::resolveTestTemplateUrl('', '');
+
+        $this->assertSame(SmartApiKeys::DEFAULT_TEST_TEMPLATE_URL, $resolved);
+    }
 }

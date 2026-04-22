@@ -307,43 +307,30 @@ Example style for 3D terrain rendering and points of interrest (for all features
 ```json
 {
   "version": 8,
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=YOUR_KEY",
+  "glyphs": "https://maps.6bes.de/fonts/{fontstack}/{range}.pbf?key={{API_KEY}}",
   "sources": {
     "terrain": {
       "type": "raster-dem",
-      "url": "https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=YOUR_KEY",
+      "url": "https://maps.6bes.de/tiles/terrain-rgb-v2/tiles.json?key={{API_KEY}}",
       "tileSize": 512
     },
     "satellite": {
       "type": "raster",
       "tiles": [
-        "https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=YOUR_KEY"
+        "https://maps.6bes.de/maps/satellite/{z}/{x}/{y}.jpg?key={{API_KEY}}"
       ],
-      "tileSize": 512,
-      "minzoom": 0,
-      "maxzoom": 20
+      "tileSize": 512
     },
     "openmaptiles": {
       "type": "vector",
-      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=YOUR_KEY"
+      "url": "https://maps.6bes.de/tiles/v3/tiles.json?key={{API_KEY}}"
     }
   },
-  "terrain": { "source": "terrain", "exaggeration": 1.0 },
   "layers": [
-    {
-      "id": "bg",
-      "type": "background",
-      "paint": { "background-color": "#000000" }
-    },
     {
       "id": "satellite",
       "type": "raster",
-      "source": "satellite",
-      "minzoom": 0,
-      "maxzoom": 20,
-      "paint": {
-        "raster-fade-duration": 350
-      }
+      "source": "satellite"
     },
     {
       "id": "cycleways",
@@ -359,14 +346,9 @@ Example style for 3D terrain rendering and points of interrest (for all features
           ["in", ["get", "bicycle"], ["literal", ["yes", "designated", "official"]]]
         ]
       ],
-      "layout": {
-        "line-cap": "round",
-        "line-join": "round"
-      },
       "paint": {
         "line-color": "#00c853",
-        "line-width": 2,
-        "line-blur": 0.2
+        "line-width": 2
       }
     },
     {
@@ -378,8 +360,7 @@ Example style for 3D terrain rendering and points of interrest (for all features
         "text-field": ["get", "name"],
         "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
         "text-size": 14,
-        "text-anchor": "center",
-        "text-allow-overlap": false
+        "text-anchor": "center"
       },
       "paint": {
         "text-color": "#ffffff",
@@ -396,8 +377,7 @@ Example style for 3D terrain rendering and points of interrest (for all features
         "text-field": ["get", "name"],
         "text-font": ["Open Sans Italic", "Arial Unicode MS Regular"],
         "text-size": 12,
-        "symbol-placement": "line",
-        "text-allow-overlap": false
+        "symbol-placement": "line"
       },
       "paint": {
         "text-color": "#4FC3F7",

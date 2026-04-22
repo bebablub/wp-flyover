@@ -353,6 +353,7 @@ final class Admin
 		$defStyleJson = $options['fgpx_default_style_json'];
 		$smartApiMode = SmartApiKeys::normalizeMode((string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF));
 		$smartApiPool = (string) ($options['fgpx_smart_api_keys_pool'] ?? '');
+		$smartApiTestUrlOverride = (string) ($options['fgpx_smart_api_keys_test_url_override'] ?? '');
 		$defHeight = $options['fgpx_default_height'];
 		$defZoom = $options['fgpx_default_zoom'];
 		$defSpeed = $options['fgpx_default_speed'];
@@ -438,8 +439,8 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_smart_api_keys_mode">' . \esc_html__('Smart API key mode', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_smart_api_keys_mode" name="fgpx_smart_api_keys_mode">';
 		echo '<option value="off"' . selected($smartApiMode, SmartApiKeys::MODE_OFF, false) . '>' . \esc_html__('Off', 'flyover-gpx') . '</option>';
-		echo '<option value="single"' . selected($smartApiMode, SmartApiKeys::MODE_SINGLE, false) . '>' . \esc_html__('Mode A: one random key per style', 'flyover-gpx') . '</option>';
-		echo '<option value="per_occurrence"' . selected($smartApiMode, SmartApiKeys::MODE_PER_OCCURRENCE, false) . '>' . \esc_html__('Mode B: random key per placeholder', 'flyover-gpx') . '</option>';
+			   echo '<option value="single"' . selected($smartApiMode, SmartApiKeys::MODE_SINGLE, false) . '>' . \esc_html__('One random key per style', 'flyover-gpx') . '</option>';
+			   echo '<option value="per_occurrence"' . selected($smartApiMode, SmartApiKeys::MODE_PER_OCCURRENCE, false) . '>' . \esc_html__('Random key per placeholder', 'flyover-gpx') . '</option>';
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Controls replacement behavior for {{API_KEY}} placeholders in style JSON and vector style URLs.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
@@ -447,8 +448,8 @@ final class Admin
 		echo '<textarea id="fgpx_smart_api_keys_pool" name="fgpx_smart_api_keys_pool" rows="6" style="width:100%;font-family:monospace;" placeholder="key-one\nkey-two\nkey-three">' . \esc_textarea($smartApiPool) . '</textarea>';
 		echo '<p class="description">' . \esc_html__('One API key per line. Empty lines are ignored and duplicates are removed on save.', 'flyover-gpx') . '</p>';
 		echo '<p><label for="fgpx-smart-keys-template-url"><strong>' . \esc_html__('Optional test URL override', 'flyover-gpx') . '</strong></label><br />';
-		echo '<input type="text" id="fgpx-smart-keys-template-url" class="regular-text" placeholder="https://.../?key={{API_KEY}}" /></p>';
-		echo '<p class="description">' . \esc_html__('If provided, this URL is used for key tests instead of automatic extraction from default style settings.', 'flyover-gpx') . '</p>';
+		echo '<input type="text" id="fgpx-smart-keys-template-url" name="fgpx_smart_api_keys_test_url_override" class="regular-text" value="' . \esc_attr($smartApiTestUrlOverride) . '" placeholder="https://api.maptiler.com/maps/streets-v4/?key=" /></p>';
+		echo '<p class="description">' . \esc_html__('If provided, this URL is used for key tests. If empty, internal testing uses https://api.maptiler.com/maps/streets-v4/?key=. You can use {{API_KEY}} or a base URL ending with ?key= and the test key will be inserted automatically.', 'flyover-gpx') . '</p>';
 		echo '<p><button type="button" class="button" id="fgpx-test-smart-keys" data-nonce="' . \esc_attr(\wp_create_nonce('fgpx_test_smart_api_keys')) . '">' . \esc_html__('Test keys now', 'flyover-gpx') . '</button></p>';
 		echo '<div id="fgpx-smart-keys-result" class="description" style="white-space:pre-wrap;"></div>';
 		echo '</td></tr>';
@@ -2069,6 +2070,13 @@ final class Admin
 		$smartPoolRaw = isset($_POST['fgpx_smart_api_keys_pool']) ? (string) \wp_unslash($_POST['fgpx_smart_api_keys_pool']) : '';
 		$smartPoolKeys = SmartApiKeys::parseKeyPool($smartPoolRaw);
 		\update_option('fgpx_smart_api_keys_pool', \implode("\n", $smartPoolKeys), true);
+		$smartTestUrlOverride = isset($_POST['fgpx_smart_api_keys_test_url_override'])
+			? \trim((string) \wp_unslash($_POST['fgpx_smart_api_keys_test_url_override']))
+			: '';
+		if ($smartTestUrlOverride !== '' && !\preg_match('#^https?://#i', $smartTestUrlOverride)) {
+			$smartTestUrlOverride = '';
+		}
+		\update_option('fgpx_smart_api_keys_test_url_override', $smartTestUrlOverride, true);
 		if (isset($_POST['fgpx_default_height'])) { \update_option('fgpx_default_height', sanitize_text_field((string) $_POST['fgpx_default_height']), true); }
 		// Use type-safe validation helpers for numeric values
 		$zoom = $this->getValidInt('fgpx_default_zoom', 11, 1, 20);
@@ -3949,7 +3957,7 @@ final class Admin
 		$mode = SmartApiKeys::normalizeMode((string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF));
 		if ($mode === SmartApiKeys::MODE_OFF) {
 			\wp_send_json_success([
-				'message' => 'Smart API key mode is Off. Enable Mode A or Mode B to test keys.',
+				'message' => 'Smart API key mode is Off. Enable smart API key replacement to test keys.',
 				'results' => [],
 			]);
 		}
@@ -3959,19 +3967,16 @@ final class Admin
 			\wp_send_json_error(['message' => 'No API keys configured. Add at least one key first.'], 400);
 		}
 
-		$overrideTemplateRaw = isset($_POST['template_url']) ? \trim((string) \wp_unslash($_POST['template_url'])) : '';
-		$templateUrl = '';
-		if ($overrideTemplateRaw !== '' && \strpos($overrideTemplateRaw, SmartApiKeys::PLACEHOLDER) !== false) {
-			$templateUrl = \preg_match('#^https?://#i', $overrideTemplateRaw) ? $overrideTemplateRaw : '';
+		$ajaxOverrideRaw = isset($_POST['template_url']) ? \trim((string) \wp_unslash($_POST['template_url'])) : '';
+		$ajaxOverrideTemplate = SmartApiKeys::normalizeTestTemplateUrl($ajaxOverrideRaw);
+		$savedOverrideRaw = (string) ($options['fgpx_smart_api_keys_test_url_override'] ?? '');
+
+		$templateUrl = $ajaxOverrideTemplate;
+		if ($templateUrl === '') {
+			$templateUrl = SmartApiKeys::resolveTestTemplateUrl($savedOverrideRaw, '');
 		}
 		if ($templateUrl === '') {
-			$templateUrl = SmartApiKeys::extractTemplateUrl(
-				(string) ($options['fgpx_default_style_json'] ?? ''),
-				(string) ($options['fgpx_default_style_url'] ?? '')
-			);
-		}
-		if ($templateUrl === '') {
-			\wp_send_json_error(['message' => 'No URL with {{API_KEY}} found in current default style settings. Add an override URL for shortcode-specific templates.'], 400);
+			\wp_send_json_error(['message' => 'Unable to resolve a valid key test URL. Use a URL with {{API_KEY}} or a base URL ending with ?key=.'], 400);
 		}
 
 		$results = SmartApiKeys::testKeysAgainstTemplate($templateUrl, $keys, 6);

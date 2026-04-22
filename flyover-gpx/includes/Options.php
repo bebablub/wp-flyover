@@ -32,6 +32,7 @@ final class Options
 		'fgpx_default_style_json' => '',
 		'fgpx_smart_api_keys_mode' => 'off',
 		'fgpx_smart_api_keys_pool' => '',
+		'fgpx_smart_api_keys_test_url_override' => '',
 		'fgpx_default_height' => '625px',
 		'fgpx_default_zoom' => '11',
 		'fgpx_default_speed' => '25',

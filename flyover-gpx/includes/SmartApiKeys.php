@@ -14,6 +14,7 @@ if (!\defined('ABSPATH')) {
 final class SmartApiKeys
 {
     public const PLACEHOLDER = '{{API_KEY}}';
+    public const DEFAULT_TEST_TEMPLATE_URL = 'https://api.maptiler.com/maps/streets-v4/?key={{API_KEY}}';
     public const MODE_OFF = 'off';
     public const MODE_SINGLE = 'single';
     public const MODE_PER_OCCURRENCE = 'per_occurrence';
@@ -179,6 +180,57 @@ final class SmartApiKeys
         ];
 
         return (string) \strtr($url, $replacements);
+    }
+
+    /**
+     * Normalize admin test template URL.
+     *
+     * Supports direct {{API_KEY}} templates and base URL overrides such as
+     * https://api.maptiler.com/maps/streets-v4/?key= by injecting the placeholder.
+     */
+    public static function normalizeTestTemplateUrl(string $url): string
+    {
+        $trimmed = \trim($url);
+        if ($trimmed === '' || !\preg_match('#^https?://#i', $trimmed)) {
+            return '';
+        }
+
+        if (\strpos($trimmed, self::PLACEHOLDER) !== false) {
+            return $trimmed;
+        }
+
+        if (\preg_match('/([?&]key=)([^&#]*)/i', $trimmed) === 1) {
+            return (string) \preg_replace('/([?&]key=)([^&#]*)/i', '$1' . self::PLACEHOLDER, $trimmed, 1);
+        }
+
+        $parts = \explode('#', $trimmed, 2);
+        $base = $parts[0];
+        $fragment = isset($parts[1]) ? '#' . $parts[1] : '';
+
+        $separator = \strpos($base, '?') === false ? '?' : '&';
+        if ($base !== '' && (\substr($base, -1) === '?' || \substr($base, -1) === '&')) {
+            $separator = '';
+        }
+
+        return $base . $separator . 'key=' . self::PLACEHOLDER . $fragment;
+    }
+
+    /**
+     * Resolve final key test template URL with fallback chain.
+     */
+    public static function resolveTestTemplateUrl(string $overrideUrl, string $autoExtractedUrl): string
+    {
+        $normalizedOverride = self::normalizeTestTemplateUrl($overrideUrl);
+        if ($normalizedOverride !== '') {
+            return $normalizedOverride;
+        }
+
+        $normalizedExtracted = self::normalizeTestTemplateUrl($autoExtractedUrl);
+        if ($normalizedExtracted !== '') {
+            return $normalizedExtracted;
+        }
+
+        return self::DEFAULT_TEST_TEMPLATE_URL;
     }
 
     /**

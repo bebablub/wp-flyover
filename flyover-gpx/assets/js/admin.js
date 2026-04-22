@@ -327,9 +327,21 @@
             const nonce = String($btn.data('nonce') || '');
             const $result = $('#fgpx-smart-keys-result');
             const overrideTemplate = String($('#fgpx-smart-keys-template-url').val() || '').trim();
+            const ajaxUrl = String(
+                previewCfg.ajaxUrl
+                || (typeof window.ajaxurl === 'string' ? window.ajaxurl : '')
+                || ''
+            );
 
             if (!nonce) {
                 showAdminNotice('Missing nonce for API key test.', 'error');
+                return;
+            }
+
+            if (!ajaxUrl) {
+                const msg = 'Unable to resolve admin AJAX URL for API key test.';
+                $result.text(msg);
+                showAdminNotice(msg, 'error');
                 return;
             }
 
@@ -337,7 +349,7 @@
             $result.text('Running key checks...');
 
             $.ajax({
-                url: ajaxurl,
+                url: ajaxUrl,
                 type: 'POST',
                 data: {
                     action: 'fgpx_test_smart_api_keys',
