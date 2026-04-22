@@ -120,10 +120,10 @@ Embed a track:
 Parameters:
 
 - `id` (required): The Track post ID.
-- `style` (optional): `raster` (default) or `vector`.
+- `style` (optional): `default` (OSM fallback), `url` (remote style), or `inline` (JSON). Default is set in Settings → Flyover GPX. Backward compat: `raster` → `default`, `vector` → `url`.
 - `height` (optional): Container height (e.g. `625px`, `60vh`). Default `625px`.
 - `zoom` (optional): Initial zoom level. Default is set in Settings → Flyover GPX.
-- `style_url` (optional): A MapLibre style URL when `style="vector"`. Ignored if an inline style JSON is configured in settings.
+- `style_url` (optional): A MapLibre-compatible style URL (any provider: MapTiler, Mapbox, custom). Used when `style="url"`. Ignored if inline style JSON is configured in settings.
 - `privacy` (optional): Override privacy mode for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to the admin setting.
 - `privacy_km` (optional): Override privacy distance in kilometers for this embed. Example: `privacy_km="3"`. Defaults to the admin setting.
 - `hud` (optional): Toggle the live HUD overlay (speed/distance/elevation/heading). Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
@@ -154,7 +154,8 @@ Examples:
 
 ```text
 [flyover_gpx id="123" height="60vh"]
-[flyover_gpx id="123" style="vector" style_url="https://demostyle.server/styles/outdoors/style.json"]
+[flyover_gpx id="123" style="url" style_url="https://api.maptiler.com/maps/outdoor/style.json?key=YOUR_KEY"]
+[flyover_gpx id="123" style="inline"]
 [flyover_gpx id="123" privacy="true" privacy_km="2.5"]
 [flyover_gpx id="123" hud="false"]
 [flyover_gpx id="123" elevation_coloring="true" speed="75"]
@@ -165,10 +166,35 @@ Examples:
 
 Notes:
 
-- If a vector `style_url` fails to load, the player falls back to OSM raster tiles.
+- If a remote style URL fails to load, the player falls back to OSM raster tiles.
 - Multiple instances per page are supported. The first container uses `fgpx-app`, additional embeds use `fgpx-app-N`.
-- Disabling tile prefetching sets MapLibre’s `prefetchZoomDelta` to 0 and skips prewarm to minimize extra requests.
-## Gallery Shortcode
+- Disabling tile prefetching sets MapLibre's `prefetchZoomDelta` to 0 and skips prewarm to minimize extra requests.
+
+## Map Style Selection
+
+The plugin resolves map styles in this priority order:
+
+1. **Inline JSON** (highest precedence): If "Inline style JSON" is defined in admin settings, it is always used.
+2. **Remote URL**: If style source = "Remote Style URL" and a URL is provided, that URL is fetched and used (any MapLibre-compatible provider).
+3. **Default (OSM Raster)** (fallback): If neither inline JSON nor URL is available, the player uses OpenStreetMap raster tiles.
+
+### Style Source Modes
+
+- **Default (OSM Raster)**: Simple raster tiles from OpenStreetMap. No API key required, but limited to OSM's base map. Good for basic use cases and bandwidth-constrained scenarios.
+- **Remote Style URL**: Fetch a complete MapLibre style JSON from a URL. Supports any provider (MapTiler, Mapbox, Maptiles) or custom. Ideal for satellite + terrain, vector overlays, custom branding.
+- **Inline JSON**: Paste a full MapLibre style JSON directly into admin settings. Useful for complex styles, offline development, or provider-specific features (3D buildings, DEM sources, heatmaps, etc.).
+
+### Example: Satellite with 3D Terrain
+
+You can use "Remote Style URL" (or inline JSON) to set up satellite + hillshade + terrain:
+
+```text
+[flyover_gpx id="123" style="url" style_url="https://api.maptiler.com/maps/satellite/style.json?key=YOUR_KEY"]
+```
+
+This will fetch the MapTiler satellite style (which includes terrain/DEM by default) and render it with 3D mountain shading. No need to switch to "Vector" mode—the style URL works with any provider, satellite or vector.
+
+
 
 Embed a browsable track gallery with inline player and social sharing:
 
@@ -243,8 +269,10 @@ Examples:
 
 You can paste a complete MapLibre `style.json` into Settings → Flyover GPX → Shortcode Defaults → “Inline style JSON (optional)”.
 
-- If present, this inline style is used for all players and takes precedence over the `style_url` and raster default.
-- If blank, the player uses `style="vector"` + `style_url="..."` when provided; otherwise it falls back to OSM raster.
+- If provided, this inline style takes precedence over both remote URL and the default OSM raster.
+- If blank, the player respects the "Map style source" setting:
+  - "Remote Style URL" → fetches from the provided URL
+  - "Default (OSM Raster)" → uses OpenStreetMap tiles
 
 Example minimal style JSON with OSM raster source (only for dev, does not provide all features):
 
@@ -300,6 +328,7 @@ Example style for 3D terrain rendering and points of interrest (for all features
       "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=YOUR_KEY"
     }
   },
+  "terrain": { "source": "terrain", "exaggeration": 1.0 },
   "layers": [
     {
       "id": "bg",
@@ -624,6 +653,7 @@ flyover-gpx/
 - Weather data is cached server‑side (≈2h) to limit API calls.
 - Chart zoom is unavailable for polar charts (wind rose) by design.
 - Video recording requires a modern browser with MediaRecorder API support.
+- Style resolution: Inline JSON (if provided) always takes precedence over remote URL, which takes precedence over OSM fallback.
 
 ## Known Bugs
 

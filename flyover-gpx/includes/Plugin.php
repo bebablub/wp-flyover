@@ -173,6 +173,11 @@ final class Plugin
         $trackId = (string) isset($atts['id']) ? $atts['id'] : '';
         $trackId = \preg_replace('/[^0-9]/', '', (string) $trackId) ?? '';
         $mapStyle = \sanitize_key((string) $atts['style']);
+        // Validate style mode (backward compat: map old 'raster'/'vector' to new modes)
+        if ($mapStyle === 'raster') { $mapStyle = 'default'; }
+        if ($mapStyle === 'vector') { $mapStyle = 'url'; }
+        if (!\in_array($mapStyle, ['default', 'url', 'inline'], true)) { $mapStyle = 'default'; }
+        
         $height = \sanitize_text_field((string) $atts['height']);
         $styleUrlRaw = \trim((string) ($atts['style_url'] ?? ''));
         $styleUrl = '';

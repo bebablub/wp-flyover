@@ -592,7 +592,7 @@
     applyTheme(el, FGPX);
 
     var trackId = el.getAttribute('data-track-id');
-    var style = el.getAttribute('data-style') || 'raster';
+    var style = el.getAttribute('data-style') || 'default';
     var styleUrl = el.getAttribute('data-style-url');
 
     var ui;
@@ -1063,7 +1063,12 @@
     // Robust default zoom parsing (accept numbers and numeric strings)
     var defaultZoomSetting = (window.FGPX && isFinite(Number(FGPX.defaultZoom))) ? Number(FGPX.defaultZoom) : 11;
 
-    var initialStyle = inlineStyle || ((style === 'vector' && styleUrl) ? styleUrl : buildOSMRasterStyle());
+    // Style resolution: inline JSON takes precedence, then remote URL, then OSM fallback
+    // (Backward compat: 'vector' → check URL; 'raster' → use fallback)
+    var styleMode = style;
+    if (styleMode === 'vector') { styleMode = 'url'; }
+    if (styleMode === 'raster') { styleMode = 'default'; }
+    var initialStyle = inlineStyle || (styleMode === 'url' && styleUrl ? styleUrl : buildOSMRasterStyle());
 
     // Prefetch master switch (default true if undefined)
     var prefetchEnabled = !(window.FGPX && FGPX.prefetchEnabled === false);
@@ -1114,9 +1119,9 @@
       map.on('rotateend', function(){ clearUserInteractingSoon(); });
     } catch(_) {}
 
-    // Vector URL style: constructor already applied styleUrl via initialStyle;
+    // URL style: constructor already applied styleUrl via initialStyle;
     // check once for buildings layer to adjust pitch
-    if (!inlineStyle && style === 'vector' && styleUrl) {
+    if (!inlineStyle && styleMode === 'url' && styleUrl) {
       map.once('styledata', function () {
         try {
           var hasBuildings = false;

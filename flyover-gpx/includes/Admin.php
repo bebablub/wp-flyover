@@ -417,15 +417,17 @@ final class Admin
 		// Map Display & Styling Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🗺️ Map Display & Styling', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
-		echo '<tr><th scope="row"><label for="fgpx_default_style">' . \esc_html__('Map style', 'flyover-gpx') . '</label></th><td>';
+		echo '<tr><th scope="row"><label for="fgpx_default_style">' . \esc_html__('Map style source', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_default_style" name="fgpx_default_style">';
-		echo '<option value="raster"' . selected($defStyle, 'raster', false) . '>Raster (OSM)</option>';
-		echo '<option value="vector"' . selected($defStyle, 'vector', false) . '>Vector (style URL)</option>';
+		echo '<option value="default"' . selected($defStyle, 'default', false) . '>Default (OSM Raster)</option>';
+		echo '<option value="url"' . selected($defStyle, 'url', false) . '>Remote Style URL</option>';
+		echo '<option value="inline"' . selected($defStyle, 'inline', false) . '>Inline JSON</option>';
 		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Choose where map style comes from: OSM fallback, remote URL, or inline JSON below.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_default_style_url">' . \esc_html__('Vector style URL', 'flyover-gpx') . '</label></th><td>';
+		echo '<tr><th scope="row"><label for="fgpx_default_style_url">' . \esc_html__('Remote style URL', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="text" id="fgpx_default_style_url" name="fgpx_default_style_url" class="regular-text" value="' . \esc_attr($defStyleUrl) . '" placeholder="https://.../style.json" />';
-		echo '<p class="description">' . \esc_html__('Used when style = vector (e.g., MapLibre style.json).', 'flyover-gpx') . '</p>';
+		echo '<p class="description">' . \esc_html__('MapLibre-compatible style URL (any provider: MapTiler, Mapbox, custom). Used when style source = "Remote Style URL".', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		$exampleStyleJson = "{\n  \"version\": 8,\n  \"sources\": {\n    \"osm\": {\n      \"type\": \"raster\",\n      \"tiles\": [\"https:\\/\\/tile.openstreetmap.org\\/{z}\\/{x}\\/{y}.png\"],\n      \"tileSize\": 256,\n      \"maxzoom\": 19,\n      \"attribution\": \"© OpenStreetMap contributors\"\n    }\n  },\n  \"layers\": [\n    { \"id\": \"osm\", \"type\": \"raster\", \"source\": \"osm\" }\n  ]\n}";
 		$styleJsonValue = $defStyleJson !== '' ? $defStyleJson : $exampleStyleJson;
@@ -1356,7 +1358,11 @@ final class Admin
 	$defPrivacyEnabled = $options['fgpx_privacy_enabled'] === '1';
 	$defPrivacyKm = $options['fgpx_privacy_km'];
 
-	$style = isset($_GET['fgpx_prev_style']) ? \sanitize_text_field((string) $_GET['fgpx_prev_style']) : $defStyle;
+	$styleRaw = isset($_GET['fgpx_prev_style']) ? \sanitize_text_field((string) $_GET['fgpx_prev_style']) : $defStyle;
+	$style = \in_array($styleRaw, ['default', 'url', 'inline'], true) ? $styleRaw : $defStyle;
+	// Backward compat: convert old modes
+	if ($style === 'raster') { $style = 'default'; }
+	if ($style === 'vector') { $style = 'url'; }
 	$styleUrl = isset($_GET['fgpx_prev_style_url']) ? \esc_url_raw((string) $_GET['fgpx_prev_style_url']) : $defStyleUrl;
 	$height = isset($_GET['fgpx_prev_height']) ? \sanitize_text_field((string) $_GET['fgpx_prev_height']) : $defHeight;
 	$zoom = isset($_GET['fgpx_prev_zoom']) ? \sanitize_text_field((string) $_GET['fgpx_prev_zoom']) : $defZoom;
@@ -1365,7 +1371,7 @@ final class Admin
 
 	// Controls (no nested form to avoid breaking the main post edit form)
 	echo '<div class="fgpx-preview-controls" style="margin-bottom:8px">';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style', 'flyover-gpx') . ' <select id="fgpx_prev_style"><option value="raster"' . selected($style, 'raster', false) . '>raster</option><option value="vector"' . selected($style, 'vector', false) . '>vector</option></select></label>';
+	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style source', 'flyover-gpx') . ' <select id="fgpx_prev_style"><option value="default"' . selected($style, 'default', false) . '>Default (OSM)</option><option value="url"' . selected($style, 'url', false) . '>Remote URL</option><option value="inline"' . selected($style, 'inline', false) . '>Inline JSON</option></select></label>';
 	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style URL', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_style_url" value="' . \esc_attr($styleUrl) . '" style="width:260px" /></label>';
 	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Height', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_height" value="' . \esc_attr($height) . '" class="small-text" /></label>';
 	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Zoom', 'flyover-gpx') . ' <input type="number" step="1" min="1" max="20" id="fgpx_prev_zoom" value="' . \esc_attr($zoom) . '" class="small-text" /></label>';
@@ -2034,7 +2040,11 @@ final class Admin
 		$css = isset($_POST['fgpx_custom_css']) ? (string) $_POST['fgpx_custom_css'] : '';
 		$css = str_replace(["\r\n", "\r"], "\n", $css);
 		\update_option('fgpx_custom_css', $css, true);
-		if (isset($_POST['fgpx_default_style'])) { \update_option('fgpx_default_style', sanitize_text_field((string) $_POST['fgpx_default_style']), true); }
+		if (isset($_POST['fgpx_default_style'])) {
+			$rawStyle = \sanitize_text_field((string) $_POST['fgpx_default_style']);
+			$validatedStyle = \in_array($rawStyle, ['default', 'url', 'inline'], true) ? $rawStyle : 'default';
+			\update_option('fgpx_default_style', $validatedStyle, true);
+		}
 		if (isset($_POST['fgpx_default_style_url'])) {
 			$rawStyleUrl = \trim((string) \wp_unslash($_POST['fgpx_default_style_url']));
 			$savedStyleUrl = '';

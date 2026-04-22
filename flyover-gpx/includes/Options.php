@@ -27,7 +27,7 @@ final class Options
 	 */
 	private static $definitions = [
 		// Map Display & Styling
-		'fgpx_default_style' => 'raster',
+			'fgpx_default_style' => 'default',
 		'fgpx_default_style_url' => '',
 		'fgpx_default_style_json' => '',
 		'fgpx_smart_api_keys_mode' => 'off',
