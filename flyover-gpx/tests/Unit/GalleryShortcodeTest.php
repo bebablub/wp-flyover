@@ -150,3 +150,4 @@ final class GalleryShortcodeTest extends TestCase
 
         $this->assertSame('', (string) $resolved['styleUrl']);
     }
+}

@@ -29,7 +29,7 @@ final class StyleSelectorRefactorTest extends TestCase
         };
 
         // Shortcode with old style="raster" should map to 'default' internally
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'raster']);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'raster']);
         
         // Should render without error and not break;
         $this->assertStringContainsString('data-style="default"', $html);
@@ -47,7 +47,7 @@ final class StyleSelectorRefactorTest extends TestCase
         };
 
         $styleUrl = 'https://maps.test/style.json';
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'vector', 'style_url' => $styleUrl]);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'vector', 'style_url' => $styleUrl]);
 
         // Old vector + URL should render as new 'url' mode
         $this->assertStringContainsString('data-style="url"', $html);
@@ -65,7 +65,7 @@ final class StyleSelectorRefactorTest extends TestCase
             return $cap === 'manage_options';
         };
 
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'default']);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'default']);
 
         // Default mode should output data attribute
         $this->assertStringContainsString('data-style="default"', $html);
@@ -85,7 +85,7 @@ final class StyleSelectorRefactorTest extends TestCase
         };
 
         $styleUrl = 'https://api.maptiler.com/maps/satellite/style.json?key=pk_test';
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'url', 'style_url' => $styleUrl]);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'url', 'style_url' => $styleUrl]);
 
         // URL mode should pass through style_url
         $this->assertStringContainsString('data-style="url"', $html);
@@ -103,7 +103,7 @@ final class StyleSelectorRefactorTest extends TestCase
             return $cap === 'manage_options';
         };
 
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'inline']);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'inline']);
 
         // Inline mode should still allow shortcode to work
         $this->assertStringContainsString('data-style="inline"', $html);
@@ -120,7 +120,7 @@ final class StyleSelectorRefactorTest extends TestCase
             return $cap === 'manage_options';
         };
 
-        $html = Plugin::render_shortcode(['id' => '1', 'style' => 'invalid_mode_xyz']);
+        $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'invalid_mode_xyz']);
 
         // Invalid mode should safely fall back to 'default'
         $this->assertStringContainsString('data-style="default"', $html);

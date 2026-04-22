@@ -20,6 +20,36 @@ if (!defined('ABSPATH')) {
     define('ABSPATH', sys_get_temp_dir() . '/');
 }
 
+// Plugin constants normally defined in flyover-gpx.php runtime bootstrap.
+// Unit tests load classes directly, so define test-safe values here.
+if (!defined('FGPX_VERSION')) {
+    define('FGPX_VERSION', '1.0.0-test');
+}
+if (!defined('FGPX_DIR_PATH')) {
+    define('FGPX_DIR_PATH', dirname(__DIR__) . '/');
+}
+if (!defined('FGPX_DIR_URL')) {
+    define('FGPX_DIR_URL', 'https://example.test/wp-content/plugins/flyover-gpx/');
+}
+if (!defined('FGPX_FILE')) {
+    define('FGPX_FILE', dirname(__DIR__) . '/flyover-gpx.php');
+}
+
+// Some class files are namespaced (FGpx) and reference unqualified constants,
+// so provide namespaced aliases as well for test runtime parity.
+if (!defined('FGpx\\FGPX_VERSION')) {
+    define('FGpx\\FGPX_VERSION', FGPX_VERSION);
+}
+if (!defined('FGpx\\FGPX_DIR_PATH')) {
+    define('FGpx\\FGPX_DIR_PATH', FGPX_DIR_PATH);
+}
+if (!defined('FGpx\\FGPX_DIR_URL')) {
+    define('FGpx\\FGPX_DIR_URL', FGPX_DIR_URL);
+}
+if (!defined('FGpx\\FGPX_FILE')) {
+    define('FGpx\\FGPX_FILE', FGPX_FILE);
+}
+
 // --------------------------------------------------------------------------
 // WordPress function stubs
 // --------------------------------------------------------------------------
@@ -112,6 +142,62 @@ if (!function_exists('is_wp_error')) {
     }
 }
 
+if (!function_exists('add_action')) {
+    function add_action(string $hook, $callback, int $priority = 10, int $accepted_args = 1): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('add_filter')) {
+    function add_filter(string $hook, $callback, int $priority = 10, int $accepted_args = 1): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('apply_filters')) {
+    function apply_filters(string $hook, $value, ...$args)
+    {
+        return $value;
+    }
+}
+
+if (!function_exists('add_shortcode')) {
+    function add_shortcode(string $tag, $callback): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('register_post_type')) {
+    function register_post_type(string $postType, array $args = []): array
+    {
+        return ['name' => $postType, 'args' => $args];
+    }
+}
+
+if (!function_exists('register_rest_route')) {
+    function register_rest_route(string $namespace, string $route, array $args = [], bool $override = false): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('add_submenu_page')) {
+    function add_submenu_page(
+        string $parent_slug,
+        string $page_title,
+        string $menu_title,
+        string $capability,
+        string $menu_slug,
+        $callback = null,
+        ?int $position = null
+    ): string {
+        return $menu_slug;
+    }
+}
+
 if (!function_exists('sanitize_key')) {
     function sanitize_key(string $key): string
     {
@@ -119,10 +205,310 @@ if (!function_exists('sanitize_key')) {
     }
 }
 
+if (!function_exists('shortcode_atts')) {
+    /**
+     * Minimal WordPress-compatible shortcode attributes merge for tests.
+     *
+     * @param array<string,mixed> $pairs
+     * @param array<string,mixed> $atts
+     * @param string $shortcode
+     * @return array<string,mixed>
+     */
+    function shortcode_atts(array $pairs, array $atts, string $shortcode = ''): array
+    {
+        $atts = array_change_key_case($atts, CASE_LOWER);
+        $out = [];
+        foreach ($pairs as $name => $default) {
+            $key = strtolower((string) $name);
+            $out[$name] = array_key_exists($key, $atts) ? $atts[$key] : $default;
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('sanitize_text_field')) {
+    /**
+     * Minimal sanitize_text_field() behavior for unit tests.
+     */
+    function sanitize_text_field(string $str): string
+    {
+        // Strip tags and normalize control chars similarly to WordPress intent.
+        $str = strip_tags($str);
+        $str = preg_replace('/[\r\n\t\0\x0B]+/', ' ', $str);
+        return trim((string) $str);
+    }
+}
+
 if (!function_exists('esc_url_raw')) {
     function esc_url_raw(string $url): string
     {
         return $url;
+    }
+}
+
+if (!function_exists('sanitize_hex_color')) {
+    function sanitize_hex_color(string $color): ?string
+    {
+        $color = trim($color);
+        if ($color === '') {
+            return null;
+        }
+        if (preg_match('/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/', $color) === 1) {
+            return strtolower($color);
+        }
+        return null;
+    }
+}
+
+if (!function_exists('plugin_dir_url')) {
+    function plugin_dir_url(string $file): string
+    {
+        return 'https://example.test/wp-content/plugins/flyover-gpx/';
+    }
+}
+
+if (!function_exists('wp_enqueue_style')) {
+    function wp_enqueue_style(string $handle, string $src = '', array $deps = [], $ver = false, string $media = 'all'): bool
+    {
+        $GLOBALS['fgpx_test_enqueued_styles'][$handle] = [
+            'src' => $src,
+            'deps' => $deps,
+            'ver' => $ver,
+            'media' => $media,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script(string $handle, string $src = '', array $deps = [], $ver = false, bool $in_footer = false): bool
+    {
+        $GLOBALS['fgpx_test_enqueued_scripts'][$handle] = [
+            'src' => $src,
+            'deps' => $deps,
+            'ver' => $ver,
+            'in_footer' => $in_footer,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_register_style')) {
+    function wp_register_style(string $handle, string $src = '', array $deps = [], $ver = false, string $media = 'all'): bool
+    {
+        $GLOBALS['fgpx_test_registered_styles'][$handle] = [
+            'src' => $src,
+            'deps' => $deps,
+            'ver' => $ver,
+            'media' => $media,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_register_script')) {
+    function wp_register_script(string $handle, string $src = '', array $deps = [], $ver = false, bool $in_footer = false): bool
+    {
+        $GLOBALS['fgpx_test_registered_scripts'][$handle] = [
+            'src' => $src,
+            'deps' => $deps,
+            'ver' => $ver,
+            'in_footer' => $in_footer,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_style_is')) {
+    function wp_style_is(string $handle, string $status = 'enqueued'): bool
+    {
+        if ($status === 'registered') {
+            return isset($GLOBALS['fgpx_test_registered_styles'][$handle]);
+        }
+        return isset($GLOBALS['fgpx_test_enqueued_styles'][$handle]);
+    }
+}
+
+if (!function_exists('wp_script_is')) {
+    function wp_script_is(string $handle, string $status = 'enqueued'): bool
+    {
+        if ($status === 'registered') {
+            return isset($GLOBALS['fgpx_test_registered_scripts'][$handle]);
+        }
+        return isset($GLOBALS['fgpx_test_enqueued_scripts'][$handle]);
+    }
+}
+
+if (!function_exists('wp_localize_script')) {
+    function wp_localize_script(string $handle, string $object_name, array $l10n): bool
+    {
+        $GLOBALS['fgpx_test_localized_scripts'][$handle][$object_name] = $l10n;
+        return true;
+    }
+}
+
+if (!function_exists('wp_add_inline_script')) {
+    function wp_add_inline_script(string $handle, string $data, string $position = 'after'): bool
+    {
+        $GLOBALS['fgpx_test_inline_scripts'][$handle][] = [
+            'data' => $data,
+            'position' => $position,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_create_nonce')) {
+    function wp_create_nonce(string $action = '-1'): string
+    {
+        return 'fgpx-test-nonce-' . md5($action);
+    }
+}
+
+if (!function_exists('admin_url')) {
+    function admin_url(string $path = ''): string
+    {
+        return 'https://example.test/wp-admin/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('site_url')) {
+    function site_url(string $path = ''): string
+    {
+        return 'https://example.test/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('trailingslashit')) {
+    function trailingslashit(string $string): string
+    {
+        return rtrim($string, '/\\') . '/';
+    }
+}
+
+if (!function_exists('esc_js')) {
+    function esc_js(string $text): string
+    {
+        return $text;
+    }
+}
+
+if (!function_exists('__')) {
+    function __(string $text, string $domain = 'default'): string
+    {
+        return $text;
+    }
+}
+
+if (!function_exists('_e')) {
+    function _e(string $text, string $domain = 'default'): void
+    {
+        echo $text;
+    }
+}
+
+if (!function_exists('esc_html__')) {
+    function esc_html__(string $text, string $domain = 'default'): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_attr__')) {
+    function esc_attr__(string $text, string $domain = 'default'): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_html')) {
+    function esc_html(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_attr')) {
+    function esc_attr(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url(string $url): string
+    {
+        return $url;
+    }
+}
+
+if (!function_exists('wp_kses_post')) {
+    function wp_kses_post(string $content): string
+    {
+        return $content;
+    }
+}
+
+if (!function_exists('wp_unslash')) {
+    function wp_unslash($value)
+    {
+        if (is_array($value)) {
+            return array_map('wp_unslash', $value);
+        }
+
+        return is_string($value) ? stripslashes($value) : $value;
+    }
+}
+
+if (!function_exists('absint')) {
+    function absint($maybeint): int
+    {
+        return abs((int) $maybeint);
+    }
+}
+
+if (!function_exists('sanitize_title')) {
+    function sanitize_title(string $title): string
+    {
+        $title = strtolower(trim($title));
+        $title = preg_replace('/[^a-z0-9\s-]/', '', $title);
+        $title = preg_replace('/[\s-]+/', '-', (string) $title);
+        return trim((string) $title, '-');
+    }
+}
+
+if (!function_exists('selected')) {
+    function selected($selected, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $selected === (string) $current) ? ' selected="selected"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('checked')) {
+    function checked($checked, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $checked === (string) $current) ? ' checked="checked"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('wp_json_encode')) {
+    /**
+     * Minimal WordPress-compatible JSON encoder for tests.
+     *
+     * @param mixed $value
+     */
+    function wp_json_encode($value, int $flags = 0, int $depth = 512)
+    {
+        return json_encode($value, $flags, $depth);
     }
 }
 
@@ -174,6 +560,20 @@ if (!function_exists('wp_send_json_success')) {
     function wp_send_json_success($data = null, int $status_code = 200): void
     {
         throw new FGPX_Test_Ajax_Response(true, $data, $status_code);
+    }
+}
+
+if (!function_exists('wp_send_json')) {
+    function wp_send_json($data = null, int $status_code = 200, int $flags = 0): void
+    {
+        throw new FGPX_Test_Ajax_Response(true, $data, $status_code);
+    }
+}
+
+if (!function_exists('wp_die')) {
+    function wp_die(string $message = '', string $title = '', $args = []): void
+    {
+        throw new \RuntimeException('wp_die: ' . $message);
     }
 }
 
@@ -338,6 +738,18 @@ if (!function_exists('get_post')) {
     }
 }
 
+if (!function_exists('get_post_field')) {
+    function get_post_field(string $field, int $postId)
+    {
+        $post = get_post($postId);
+        if ($post instanceof WP_Post) {
+            return property_exists($post, $field) ? $post->{$field} : '';
+        }
+
+        return '';
+    }
+}
+
 if (!function_exists('get_post_thumbnail_id')) {
     function get_post_thumbnail_id(int $postId): int
     {
@@ -349,6 +761,18 @@ if (!function_exists('wp_get_attachment_image_url')) {
     function wp_get_attachment_image_url(int $attachmentId, string $size = 'full')
     {
         return $GLOBALS['fgpx_test_attachment_urls'][$attachmentId] ?? '';
+    }
+}
+
+if (!function_exists('wp_get_attachment_image_src')) {
+    function wp_get_attachment_image_src(int $attachmentId, string $size = 'full')
+    {
+        $url = $GLOBALS['fgpx_test_attachment_urls'][$attachmentId] ?? '';
+        if ($url === '') {
+            return false;
+        }
+
+        return [$url, 0, 0, false];
     }
 }
 
@@ -479,6 +903,28 @@ if (!function_exists('get_the_date')) {
     function get_the_date(string $format = '', int $postId = 0): string
     {
         return (string) ($GLOBALS['fgpx_test_dates'][$postId] ?? '');
+    }
+}
+
+if (!function_exists('get_current_screen')) {
+    function get_current_screen()
+    {
+        if (isset($GLOBALS['fgpx_test_current_screen'])) {
+            return $GLOBALS['fgpx_test_current_screen'];
+        }
+
+        return (object) ['id' => '', 'base' => ''];
+    }
+}
+
+if (!function_exists('wp_generate_uuid4')) {
+    function wp_generate_uuid4(): string
+    {
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 }
 
