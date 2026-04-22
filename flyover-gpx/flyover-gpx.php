@@ -89,6 +89,7 @@ if (\file_exists($autoload)) {
  * 8. CLI - Command-line interface for batch operations
  */
 require_once FGPX_DIR_PATH . 'includes/Options.php';          // Configuration management
+require_once FGPX_DIR_PATH . 'includes/SmartApiKeys.php';     // Smart API key template resolver
 require_once FGPX_DIR_PATH . 'includes/ErrorHandler.php';    // Error logging system
 require_once FGPX_DIR_PATH . 'includes/AssetManager.php';    // Asset loading and CDN fallbacks
 require_once FGPX_DIR_PATH . 'includes/DatabaseOptimizer.php'; // Database performance optimizations

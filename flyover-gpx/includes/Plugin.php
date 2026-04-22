@@ -174,17 +174,37 @@ final class Plugin
         $trackId = \preg_replace('/[^0-9]/', '', (string) $trackId) ?? '';
         $mapStyle = \sanitize_key((string) $atts['style']);
         $height = \sanitize_text_field((string) $atts['height']);
-        $styleUrlRaw = (string) ($atts['style_url'] ?? '');
+        $styleUrlRaw = \trim((string) ($atts['style_url'] ?? ''));
         $styleUrl = '';
         if ($styleUrlRaw !== '') {
-            $maybe = \esc_url_raw($styleUrlRaw);
-            if (\is_string($maybe) && $maybe !== '') {
-                $styleUrl = $maybe;
+            if (\strpos($styleUrlRaw, SmartApiKeys::PLACEHOLDER) !== false) {
+                // Allow placeholder templates and sanitize after substitution.
+                $styleUrl = \preg_match('#^https?://#i', $styleUrlRaw) ? $styleUrlRaw : '';
+            } else {
+                $maybe = \esc_url_raw($styleUrlRaw);
+                if (\is_string($maybe) && $maybe !== '') {
+                    $styleUrl = $maybe;
+                }
             }
         }
 
         if ($trackId === '') {
             return '';
+        }
+
+        $resolvedStyle = SmartApiKeys::resolveStyle(
+            (string) $options['fgpx_default_style_json'],
+            $styleUrl,
+            (string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF),
+            (string) ($options['fgpx_smart_api_keys_pool'] ?? '')
+        );
+        $resolvedStyleJson = (string) ($resolvedStyle['styleJson'] ?? '');
+        $resolvedStyleUrl = (string) ($resolvedStyle['styleUrl'] ?? '');
+        if ($resolvedStyleUrl !== '') {
+            $maybeResolvedUrl = \esc_url_raw($resolvedStyleUrl);
+            if (\is_string($maybeResolvedUrl) && $maybeResolvedUrl !== '') {
+                $styleUrl = $maybeResolvedUrl;
+            }
         }
 
         $lazyViewportEnabled = $options['fgpx_lazy_viewport'] === '1';
@@ -355,7 +375,7 @@ final class Plugin
             'daynightMapEnabled' => $daynightMapEnabledFinal,
             'daynightMapColor' => $daynightMapColorFinal,
             'daynightMapOpacity' => (float) $options['fgpx_daynight_map_opacity'],
-            'styleJson' => $options['fgpx_default_style_json'],
+            'styleJson' => $resolvedStyleJson,
             'defaultZoom' => (int) $options['fgpx_default_zoom'],
             'defaultSpeed' => $defaultSpeedFinal,
             'defaultPitch' => (int) $options['fgpx_default_pitch'],

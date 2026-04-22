@@ -320,6 +320,88 @@
             });
         });
 
+        $('#fgpx-test-smart-keys').on('click', function(e) {
+            e.preventDefault();
+
+            const $btn = $(this);
+            const nonce = String($btn.data('nonce') || '');
+            const $result = $('#fgpx-smart-keys-result');
+            const overrideTemplate = String($('#fgpx-smart-keys-template-url').val() || '').trim();
+
+            if (!nonce) {
+                showAdminNotice('Missing nonce for API key test.', 'error');
+                return;
+            }
+
+            $btn.prop('disabled', true).text('Testing...');
+            $result.text('Running key checks...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_test_smart_api_keys',
+                    nonce: nonce,
+                    template_url: overrideTemplate
+                },
+                success: function(response) {
+                    if (!response || !response.success) {
+                        const msg = response && response.data && response.data.message
+                            ? String(response.data.message)
+                            : 'Smart API key test failed.';
+                        $result.text(msg);
+                        showAdminNotice(msg, 'error');
+                        return;
+                    }
+
+                    const payload = response.data || {};
+                    const rows = Array.isArray(payload.results) ? payload.results : [];
+                    const lines = [];
+                    if (payload.message) {
+                        lines.push(String(payload.message));
+                    }
+                    if (payload.template) {
+                        lines.push('Template: ' + String(payload.template));
+                    }
+                    if (rows.length > 0) {
+                        lines.push('');
+                    }
+                    rows.forEach(function(row) {
+                        const marker = row && row.ok ? 'OK' : 'FAIL';
+                        const status = row && Number(row.status) > 0 ? ' (HTTP ' + Number(row.status) + ')' : '';
+                        const key = row && row.keyMasked ? String(row.keyMasked) : '***';
+                        const message = row && row.message ? ' - ' + String(row.message) : '';
+                        lines.push(marker + ' ' + key + status + message);
+                    });
+
+                    $result.text(lines.join('\n'));
+                    const okCount = rows.filter(function(row) { return !!(row && row.ok); }).length;
+                    let noticeType = 'success';
+                    if (String(payload.mode || '') === 'off') {
+                        noticeType = 'warning';
+                    } else if (rows.length > 0 && okCount === 0) {
+                        noticeType = 'warning';
+                    }
+                    showAdminNotice(String(payload.message || 'Smart API key test finished.'), noticeType);
+                },
+                error: function(xhr) {
+                    let msg = 'Network error during smart API key test.';
+                    try {
+                        const parsed = JSON.parse(xhr.responseText || '{}');
+                        if (parsed && parsed.data && parsed.data.message) {
+                            msg = String(parsed.data.message);
+                        }
+                    } catch (_) {}
+
+                    $result.text(msg);
+                    showAdminNotice(msg, 'error');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text('Test keys now');
+                }
+            });
+        });
+
         $('#doaction, #doaction2').on('click', async function(e) {
             const triggerId = this.id;
             const select = triggerId === 'doaction2' ? $('#bulk-action-selector-bottom') : $('#bulk-action-selector-top');

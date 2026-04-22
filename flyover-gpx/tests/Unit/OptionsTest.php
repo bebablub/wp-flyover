@@ -67,6 +67,8 @@ final class OptionsTest extends TestCase
         return [
             // Map display
             'default_style'            => ['fgpx_default_style'],
+            'smart_api_mode'           => ['fgpx_smart_api_keys_mode'],
+            'smart_api_pool'           => ['fgpx_smart_api_keys_pool'],
             'default_height'           => ['fgpx_default_height'],
             'default_zoom'             => ['fgpx_default_zoom'],
             'default_speed'            => ['fgpx_default_speed'],
@@ -106,6 +108,8 @@ final class OptionsTest extends TestCase
     {
         // get_option stub returns $default → Options returns definition defaults
         $this->assertSame('raster', Options::get('fgpx_default_style'));
+        $this->assertSame('off',   Options::get('fgpx_smart_api_keys_mode'));
+        $this->assertSame('',      Options::get('fgpx_smart_api_keys_pool'));
         $this->assertSame('625px',  Options::get('fgpx_default_height'));
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));

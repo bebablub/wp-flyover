@@ -47,6 +47,7 @@ final class Admin
 		\add_action('wp_ajax_fgpx_generate_preview', [$this, 'ajax_generate_preview']);
 		\add_action('wp_ajax_fgpx_save_preview_mode', [$this, 'ajax_save_preview_mode']);
 		\add_action('wp_ajax_fgpx_clear_cache', [$this, 'ajax_clear_track_cache']);
+		\add_action('wp_ajax_fgpx_test_smart_api_keys', [$this, 'ajax_test_smart_api_keys']);
 		\add_action('save_post', [$this, 'sync_track_preview_references_on_post_save'], 20, 3);
 		\add_action('post_updated', [$this, 'sync_track_preview_references_on_post_updated'], 20, 3);
 		// Invalidate track caches when embedding posts change status or are deleted
@@ -306,7 +307,7 @@ final class Admin
 		\add_options_page(
 			\esc_html__('Flyover GPX', 'flyover-gpx'),
 			\esc_html__('Flyover GPX', 'flyover-gpx'),
-			'upload_files',
+			'manage_options',
 			'flyover-gpx',
 			[$this, 'render_settings_page']
 		);
@@ -336,7 +337,7 @@ final class Admin
 	 */
 	public function render_settings_page(): void
 	{
-		if (!\current_user_can('upload_files')) {
+		if (!\current_user_can('manage_options')) {
 			\wp_die(\esc_html__('You do not have permission to access this page.', 'flyover-gpx'));
 		}
 
@@ -350,6 +351,8 @@ final class Admin
 		$defStyle = $options['fgpx_default_style'];
 		$defStyleUrl = $options['fgpx_default_style_url'];
 		$defStyleJson = $options['fgpx_default_style_json'];
+		$smartApiMode = SmartApiKeys::normalizeMode((string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF));
+		$smartApiPool = (string) ($options['fgpx_smart_api_keys_pool'] ?? '');
 		$defHeight = $options['fgpx_default_height'];
 		$defZoom = $options['fgpx_default_zoom'];
 		$defSpeed = $options['fgpx_default_speed'];
@@ -429,6 +432,23 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_default_style_json">' . \esc_html__('Inline style JSON (optional)', 'flyover-gpx') . '</label></th><td>';
 		echo '<textarea id="fgpx_default_style_json" name="fgpx_default_style_json" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($styleJsonValue) . '</textarea>';
 		echo '<p class="description">' . \esc_html__('If provided, this full MapLibre style JSON takes precedence over URL and default raster.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_smart_api_keys_mode">' . \esc_html__('Smart API key mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_smart_api_keys_mode" name="fgpx_smart_api_keys_mode">';
+		echo '<option value="off"' . selected($smartApiMode, SmartApiKeys::MODE_OFF, false) . '>' . \esc_html__('Off', 'flyover-gpx') . '</option>';
+		echo '<option value="single"' . selected($smartApiMode, SmartApiKeys::MODE_SINGLE, false) . '>' . \esc_html__('Mode A: one random key per style', 'flyover-gpx') . '</option>';
+		echo '<option value="per_occurrence"' . selected($smartApiMode, SmartApiKeys::MODE_PER_OCCURRENCE, false) . '>' . \esc_html__('Mode B: random key per placeholder', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Controls replacement behavior for {{API_KEY}} placeholders in style JSON and vector style URLs.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_smart_api_keys_pool">' . \esc_html__('Smart API key pool', 'flyover-gpx') . '</label></th><td>';
+		echo '<textarea id="fgpx_smart_api_keys_pool" name="fgpx_smart_api_keys_pool" rows="6" style="width:100%;font-family:monospace;" placeholder="key-one\nkey-two\nkey-three">' . \esc_textarea($smartApiPool) . '</textarea>';
+		echo '<p class="description">' . \esc_html__('One API key per line. Empty lines are ignored and duplicates are removed on save.', 'flyover-gpx') . '</p>';
+		echo '<p><label for="fgpx-smart-keys-template-url"><strong>' . \esc_html__('Optional test URL override', 'flyover-gpx') . '</strong></label><br />';
+		echo '<input type="text" id="fgpx-smart-keys-template-url" class="regular-text" placeholder="https://.../?key={{API_KEY}}" /></p>';
+		echo '<p class="description">' . \esc_html__('If provided, this URL is used for key tests instead of automatic extraction from default style settings.', 'flyover-gpx') . '</p>';
+		echo '<p><button type="button" class="button" id="fgpx-test-smart-keys" data-nonce="' . \esc_attr(\wp_create_nonce('fgpx_test_smart_api_keys')) . '">' . \esc_html__('Test keys now', 'flyover-gpx') . '</button></p>';
+		echo '<div id="fgpx-smart-keys-result" class="description" style="white-space:pre-wrap;"></div>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_default_height">' . \esc_html__('Default height', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="text" id="fgpx_default_height" name="fgpx_default_height" class="regular-text" value="' . \esc_attr($defHeight) . '" placeholder="500px or 70vh" />';
@@ -2015,7 +2035,18 @@ final class Admin
 		$css = str_replace(["\r\n", "\r"], "\n", $css);
 		\update_option('fgpx_custom_css', $css, true);
 		if (isset($_POST['fgpx_default_style'])) { \update_option('fgpx_default_style', sanitize_text_field((string) $_POST['fgpx_default_style']), true); }
-		if (isset($_POST['fgpx_default_style_url'])) { \update_option('fgpx_default_style_url', esc_url_raw((string) $_POST['fgpx_default_style_url']), true); }
+		if (isset($_POST['fgpx_default_style_url'])) {
+			$rawStyleUrl = \trim((string) \wp_unslash($_POST['fgpx_default_style_url']));
+			$savedStyleUrl = '';
+			if ($rawStyleUrl !== '') {
+				if (\strpos($rawStyleUrl, SmartApiKeys::PLACEHOLDER) !== false) {
+					$savedStyleUrl = \preg_match('#^https?://#i', $rawStyleUrl) ? $rawStyleUrl : '';
+				} else {
+					$savedStyleUrl = (string) \esc_url_raw($rawStyleUrl);
+				}
+			}
+			\update_option('fgpx_default_style_url', $savedStyleUrl, true);
+		}
 		if (isset($_POST['fgpx_default_style_json'])) {
 			$rawJson = (string) wp_unslash($_POST['fgpx_default_style_json']);
 			$trimmed = \trim($rawJson);
@@ -2023,6 +2054,11 @@ final class Admin
 				\update_option('fgpx_default_style_json', $trimmed, true);
 			}
 		}
+		$smartModeRaw = isset($_POST['fgpx_smart_api_keys_mode']) ? (string) $_POST['fgpx_smart_api_keys_mode'] : SmartApiKeys::MODE_OFF;
+		\update_option('fgpx_smart_api_keys_mode', SmartApiKeys::normalizeMode($smartModeRaw), true);
+		$smartPoolRaw = isset($_POST['fgpx_smart_api_keys_pool']) ? (string) \wp_unslash($_POST['fgpx_smart_api_keys_pool']) : '';
+		$smartPoolKeys = SmartApiKeys::parseKeyPool($smartPoolRaw);
+		\update_option('fgpx_smart_api_keys_pool', \implode("\n", $smartPoolKeys), true);
 		if (isset($_POST['fgpx_default_height'])) { \update_option('fgpx_default_height', sanitize_text_field((string) $_POST['fgpx_default_height']), true); }
 		// Use type-safe validation helpers for numeric values
 		$zoom = $this->getValidInt('fgpx_default_zoom', 11, 1, 20);
@@ -3888,6 +3924,57 @@ final class Admin
 				\wp_send_json_error(['message' => 'Failed to enrich with weather data (unknown error)'], 500);
 			}
 		}
+	}
+
+	/**
+	 * AJAX handler to test configured smart API keys against a placeholder URL.
+	 */
+	public function ajax_test_smart_api_keys(): void
+	{
+		if (!$this->validateSecurity('fgpx_test_smart_api_keys', 'manage_options', 'nonce', false)) {
+			\wp_send_json_error(['message' => 'Security check failed'], 403);
+		}
+
+		$options = Options::getAll();
+		$mode = SmartApiKeys::normalizeMode((string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF));
+		if ($mode === SmartApiKeys::MODE_OFF) {
+			\wp_send_json_success([
+				'message' => 'Smart API key mode is Off. Enable Mode A or Mode B to test keys.',
+				'results' => [],
+			]);
+		}
+
+		$keys = SmartApiKeys::parseKeyPool((string) ($options['fgpx_smart_api_keys_pool'] ?? ''));
+		if ($keys === []) {
+			\wp_send_json_error(['message' => 'No API keys configured. Add at least one key first.'], 400);
+		}
+
+		$overrideTemplateRaw = isset($_POST['template_url']) ? \trim((string) \wp_unslash($_POST['template_url'])) : '';
+		$templateUrl = '';
+		if ($overrideTemplateRaw !== '' && \strpos($overrideTemplateRaw, SmartApiKeys::PLACEHOLDER) !== false) {
+			$templateUrl = \preg_match('#^https?://#i', $overrideTemplateRaw) ? $overrideTemplateRaw : '';
+		}
+		if ($templateUrl === '') {
+			$templateUrl = SmartApiKeys::extractTemplateUrl(
+				(string) ($options['fgpx_default_style_json'] ?? ''),
+				(string) ($options['fgpx_default_style_url'] ?? '')
+			);
+		}
+		if ($templateUrl === '') {
+			\wp_send_json_error(['message' => 'No URL with {{API_KEY}} found in current default style settings. Add an override URL for shortcode-specific templates.'], 400);
+		}
+
+		$results = SmartApiKeys::testKeysAgainstTemplate($templateUrl, $keys, 6);
+		$okCount = \count(\array_filter($results, static function (array $row): bool {
+			return !empty($row['ok']);
+		}));
+
+		\wp_send_json_success([
+			'message' => \sprintf('Tested %d keys, %d accepted by provider.', \count($results), $okCount),
+			'mode' => $mode,
+			'template' => $templateUrl,
+			'results' => $results,
+		]);
 	}
 
 	public function sync_track_preview_references_on_post_save(int $postId, \WP_Post $post, bool $update): void

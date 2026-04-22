@@ -126,6 +126,21 @@ if (!function_exists('esc_url_raw')) {
     }
 }
 
+if (!function_exists('wp_rand')) {
+    function wp_rand(int $min = 0, int $max = 0): int
+    {
+        if (isset($GLOBALS['fgpx_test_wp_rand']) && is_callable($GLOBALS['fgpx_test_wp_rand'])) {
+            return (int) $GLOBALS['fgpx_test_wp_rand']($min, $max);
+        }
+
+        try {
+            return random_int($min, $max);
+        } catch (\Throwable $e) {
+            return $min;
+        }
+    }
+}
+
 if (!function_exists('wp_verify_nonce')) {
     function wp_verify_nonce(string $nonce, string $action): bool
     {
