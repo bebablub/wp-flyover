@@ -30,7 +30,7 @@ final class Options
 		'fgpx_default_style' => 'raster',
 		'fgpx_default_style_url' => '',
 		'fgpx_default_style_json' => '',
-		'fgpx_default_height' => '620px',
+		'fgpx_default_height' => '625px',
 		'fgpx_default_zoom' => '11',
 		'fgpx_default_speed' => '25',
 		'fgpx_default_pitch' => '60',
@@ -45,6 +45,10 @@ final class Options
 		'fgpx_hud_enabled' => '1',
 		'fgpx_prefetch_enabled' => '1',
 		'fgpx_lazy_viewport' => '1',
+		'fgpx_gallery_per_page' => '12',
+		'fgpx_gallery_default_sort' => 'newest',
+		'fgpx_gallery_show_view_toggle' => '1',
+		'fgpx_gallery_show_search' => '1',
 
 		// Performance & Backend
 		'fgpx_backend_simplify_enabled' => '1',

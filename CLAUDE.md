@@ -40,15 +40,21 @@ flyover-gpx/
   tests/
     bootstrap.php            defines ABSPATH + get_option() stub
     Unit/
+      AdminWeatherWindTest.php      weather and wind enrichment behavior
+      GalleryShortcodeIntegrationTest.php  gallery data shape and integration behavior
+      GalleryShortcodeTest.php      gallery shortcode unit coverage
       OptionsTest.php        Options class: defaults, keys, types, cache, getForFrontend() contract
+      RestCoreBehaviorTest.php      REST endpoint core behavior checks
       VersionConsistencyTest.php  version strings consistent + semver format
     js/
+      gallery.test.js        gallery UI behavior (search/sort/load more/hash/preview)
       setup.js               global IntersectionObserver mock
       fgpx-lazy.test.js      8 tests: bootstrap modes, IO setup, deferred triggering
       front-boot.test.js     8 tests: boot registration, _bootDone guard, eager no-crash
+      front-runtime.test.js  runtime front-end behavior coverage
 ```
 
-**PHP tests**: `tests/bootstrap.php` stubs only `get_option()` — enough to test `Options` without WordPress. Add further stubs there when testing additional classes.
+**PHP tests**: `tests/bootstrap.php` provides a broader WordPress-like stub layer used by unit tests across `Options`, `Rest`, `Admin`, and gallery-related classes.
 
 **JS tests**: IIFE scripts are loaded via `fs.readFileSync` + `eval()` into the jsdom global context. `lazyStyles: []` / `lazyScripts: []` make the async Promise chain resolve in two microtask ticks (`await Promise.resolve()` twice). The `IntersectionObserver` mock in `setup.js` exposes `_callback` so tests can simulate viewport intersection events.
 
@@ -58,7 +64,7 @@ flyover-gpx/
 
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
-| `ci.yml` | push / PR → `main` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) → `js-tests` (Jest, Node 20) |
+| `ci.yml` | push / PR → `main`, `feat/**` | `php-lint` (PHP 7.4–8.3 matrix) → `unit-tests` (PHP 8.2) + `js-syntax` (Node 20 `--check`) → `js-tests` (Jest, Node 20) |
 | `release.yml` | push tag `v*.*.*` | tests → prod composer install → ZIP → GitHub Release |
 
 ### Releasing a version
@@ -135,9 +141,12 @@ CDN assets (MapLibre, Chart.js) use a fallback chain: primary CDN → fallback C
 
 The `[flyover_gpx]` shortcode accepts 30+ attributes for per-embed overrides (id, style, height, zoom, speed, privacy, hud, elevation_coloring, chart colors, feature toggles, gpx_download). All optional attributes fall back to admin settings in `Options`.
 
-## Features (v1.0.3)
+The `[flyover_gpx_gallery]` shortcode renders a browsable track gallery with inline player. Attributes: `per_page` (4–48, default 12), `height` (player height), `style` (raster|vector), `style_url`, `show_view_toggle` (1|0). Per-instance config is stored in `window.FGPXGalleryInstances[rootId]` so multiple galleries on the same page are isolated. Track list is cached as a 5-min transient (`fgpx_gallery_tracks_v1`), invalidated automatically on track save/delete via `GalleryShortcode::invalidate_tracks_cache()`.
+
+## Features (v1.0.5)
 
 - **Fullscreen button** — MapLibre `FullscreenControl` added to map
 - **Click-on-chart-to-seek** — clicking the elevation/speed chart seeks playback to that position
 - **GPX download button** — optional `⬇` button; enabled via `fgpx_gpx_download_enabled` setting or `gpx_download="1"` shortcode attribute; served via AJAX with nonce authentication
 - **Multiple shortcodes per page** — `Plugin::$instanceCounter` issues unique IDs; `initContainer(el)` merges per-instance overrides; `fgpx-lazy.js` observes all `.fgpx` containers
+- **Gallery shortcode** — `[flyover_gpx_gallery]` with grid/list cards, search, sort, load more, inline player, social share links, hash-based deep-link auto-open

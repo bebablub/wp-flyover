@@ -203,4 +203,90 @@ describe('front.js runtime minimal regressions', () => {
   test('dynamic progress segments are inserted before marker layer', () => {
     expect(FRONT_SRC).toContain("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')");
   });
+
+  test('gallery player strategy param is passed to REST and AJAX URLs', async () => {
+    document.body.innerHTML =
+      '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = mockRejectedFetch('network down');
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: 'http://example.com/wp-admin/admin-ajax.php',
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const calledUrls = fetchMock.mock.calls.map((args) => String(args[0]));
+    expect(calledUrls.length).toBe(2);
+    expect(calledUrls[0]).toContain('strategy=latest_embed');
+    expect(calledUrls[1]).toContain('strategy=latest_embed');
+  });
+
+  test('cache key builder includes strategy token for differentiation', () => {
+    expect(FRONT_SRC).toContain("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';");
+    expect(FRONT_SRC).toContain("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;");
+  });
+
+  test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    // Seed a would-be valid cache entry; latest_embed should ignore it.
+    localStorage.setItem(
+      'fgpx_cache_v3_7_hp_0_s_0_t_1200_st_latest_embed',
+      JSON.stringify({
+        timestamp: Date.now(),
+        payload: {
+          geojson: { coordinates: [], properties: {} },
+          bounds: [],
+          stats: {},
+          photos: [],
+        },
+      })
+    );
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: { coordinates: [], properties: {} },
+        bounds: [],
+        stats: {},
+        photos: [],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed' },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+    await flushAsync();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('strategy=latest_embed');
+  });
+
+  test('video recorder session ID generation uses crypto-backed helper', () => {
+    expect(FRONT_SRC).toContain('function createSessionIdSuffix(length)');
+    expect(FRONT_SRC).toContain("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);");
+    expect(FRONT_SRC).toContain('cryptoObj.getRandomValues(bytes);');
+    expect(FRONT_SRC).not.toContain("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);");
+  });
 });

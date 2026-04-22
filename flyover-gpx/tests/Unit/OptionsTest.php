@@ -78,6 +78,10 @@ final class OptionsTest extends TestCase
             'photos_enabled'           => ['fgpx_photos_enabled'],
             'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
             'lazy_viewport'            => ['fgpx_lazy_viewport'],
+            'gallery_per_page'         => ['fgpx_gallery_per_page'],
+            'gallery_default_sort'     => ['fgpx_gallery_default_sort'],
+            'gallery_show_view_toggle' => ['fgpx_gallery_show_view_toggle'],
+            'gallery_show_search'      => ['fgpx_gallery_show_search'],
             'weather_enabled'          => ['fgpx_weather_enabled'],
             'daynight_enabled'         => ['fgpx_daynight_enabled'],
             'elevation_coloring'       => ['fgpx_elevation_coloring'],
@@ -102,12 +106,16 @@ final class OptionsTest extends TestCase
     {
         // get_option stub returns $default → Options returns definition defaults
         $this->assertSame('raster', Options::get('fgpx_default_style'));
-        $this->assertSame('620px',  Options::get('fgpx_default_height'));
+        $this->assertSame('625px',  Options::get('fgpx_default_height'));
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
+        $this->assertSame('12',     Options::get('fgpx_gallery_per_page'));
+        $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
+        $this->assertSame('1',      Options::get('fgpx_gallery_show_view_toggle'));
+        $this->assertSame('1',      Options::get('fgpx_gallery_show_search'));
         // Theme defaults
         $this->assertSame('system', Options::get('fgpx_theme_mode'));
         $this->assertSame('22:00',  Options::get('fgpx_theme_auto_dark_start'));

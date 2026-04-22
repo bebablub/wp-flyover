@@ -116,7 +116,7 @@ Parameters:
 
 - `id` (required): The Track post ID.
 - `style` (optional): `raster` (default) or `vector`.
-- `height` (optional): Container height (e.g. `620px`, `60vh`). Default `620px`.
+- `height` (optional): Container height (e.g. `625px`, `60vh`). Default `625px`.
 - `zoom` (optional): Initial zoom level. Default is set in Settings → Flyover GPX.
 - `style_url` (optional): A MapLibre style URL when `style="vector"`. Ignored if an inline style JSON is configured in settings.
 - `privacy` (optional): Override privacy mode for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to the admin setting.
@@ -163,7 +163,77 @@ Notes:
 - If a vector `style_url` fails to load, the player falls back to OSM raster tiles.
 - Multiple instances per page are supported. The first container uses `fgpx-app`, additional embeds use `fgpx-app-N`.
 - Disabling tile prefetching sets MapLibre’s `prefetchZoomDelta` to 0 and skips prewarm to minimize extra requests.
+## Gallery Shortcode
 
+Embed a browsable track gallery with inline player and social sharing:
+
+```text
+[flyover_gpx_gallery]
+```
+
+Parameters (all optional):
+
+- `per_page` (optional): Number of tracks shown before "Load more". Range 4–48. Default `12`.
+- `height` (optional): Player height when a track is opened. Default `625px`.
+- `style` (optional): Map style for the player — `raster` (default) or `vector`.
+- `style_url` (optional): MapLibre style URL when `style="vector"`.
+- `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
+- `show_search` (optional): Show search input. Accepts `1|0|true|false`. Default `1`.
+- `default_sort` (optional): Initial sort key. One of `newest|distance|duration|gain|title`. Default `newest`.
+
+Default resolution order:
+
+- Shortcode attribute value (if provided)
+- Admin Gallery defaults (Settings → Flyover GPX)
+- Built-in fallback
+
+Features:
+
+- Grid and list card view with distance, duration, elevation gain, and upload date
+- Full-text search across title and metadata
+- Sort by newest, distance, duration, elevation gain, or title
+- Inline player panel — opens below the list when a track is selected
+- Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-link button (copies share URL with `#track-{id}` hash)
+- Shared URLs include a `#track-{id}` hash that auto-opens the correct track on page load
+- Multiple `[flyover_gpx_gallery]` shortcodes on the same page are fully isolated
+- **Photo enrichment from embedding posts** – When opening a track from the gallery, the player automatically loads photos from the latest post that embeds the track, providing richer visual context
+
+#### Photo Enrichment from Embedding Posts
+
+When you open a track in the gallery player, the plugin automatically searches for the most recent published post that contains the same track shortcode and loads photos from that post instead of (or in addition to) the track's own attachments. This feature enriches tracks with contextual photos from blog posts, reviews, or articles that reference them.
+
+**How it works:**
+
+1. Gallery player detects the **latest embedding post** — the most recent published post that contains `[flyover_gpx id="123"]` (the track shortcode)
+2. Photos are collected from that post in this order:
+   - Direct media attachments to the post
+   - Images in gallery blocks
+   - Inline images in post content
+   - Fallback: track's own attached images if the embedding post has no photos
+3. Each photo includes its **source post reference** — the player UI indicates "📷 Photo from linked post" when viewing photos enriched from an embedding post
+4. **Cache strategy**: Photos are cached for 6 hours. If you delete or unpublish the embedding post, the cache is automatically invalidated
+
+**Example:**
+
+- Track: "Downtown Bike Trail" has 5 attached photos
+- Blog post: "My Saturday Ride" embeds this track with 12 photos
+- Gallery result: Player shows the 12 photos from the blog post when opening the track from the gallery
+
+**Tips:**
+
+- Create posts with `[flyover_gpx id="123"]` to embed tracks alongside journey photos, observations, or race reports
+- The plugin automatically picks the **latest post** by publish date; if multiple posts embed the same track, the newest one is used
+- For consistent photo experience: upload photos to the post that embeds the track using the WordPress gallery block or inline images
+- Photos are deduplicated by approximate location (~10m precision) to avoid duplicate markers on the map
+
+Examples:
+
+```text
+[flyover_gpx_gallery]
+[flyover_gpx_gallery per_page="6" height="500px"]
+[flyover_gpx_gallery show_view_toggle="0"]
+[flyover_gpx_gallery show_search="0" default_sort="distance"]
+```
 ### Inline Style JSON (Admin)
 
 You can paste a complete MapLibre `style.json` into Settings → Flyover GPX → Shortcode Defaults → “Inline style JSON (optional)”.
