@@ -6121,7 +6121,7 @@
         celestial.textContent = '\u2600\uFE0F';
         var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';
         celestial.setAttribute('role', 'img');
-        celestial.setAttribute('title', dayTooltip);
+        celestial.setAttribute('title', ''); // Prevent native tooltip
         celestial.setAttribute('aria-label', dayTooltip);
         celestial.setAttribute('data-fgpx-tooltip', dayTooltip);
         cinema.appendChild(celestial);
@@ -6132,7 +6132,7 @@
         conditionIcons.textContent = '';
         var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';
         conditionIcons.setAttribute('role', 'img');
-        conditionIcons.setAttribute('title', conditionIconsTooltip);
+        conditionIcons.setAttribute('title', ''); // Prevent native tooltip
         conditionIcons.setAttribute('aria-label', conditionIconsTooltip);
         conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);
         cinema.appendChild(conditionIcons);
@@ -6365,7 +6365,7 @@
         }
         setTextIfChanged(celestial, night ? '\uD83C\uDF19' : '\u2600\uFE0F');
         var celestialTooltip = night ? (simI18N.simCelestialNightAria || 'Night indicator (moon)') : (simI18N.simCelestialDayAria || 'Daytime indicator (sun)');
-        setAttrIfChanged(celestial, 'title', celestialTooltip);
+        setAttrIfChanged(celestial, 'title', ''); // Keep title empty to prevent native tooltip
         setAttrIfChanged(celestial, 'aria-label', celestialTooltip);
         setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);
 
@@ -6406,7 +6406,7 @@
         var conditionTooltip = activeConditionLabels.length > 0
           ? (activeIconsPrefix + ': ' + activeConditionLabels.join(', '))
           : (activeIconsPrefix + ': ' + (simI18N.simConditionIconsClear || 'Clear conditions'));
-        setAttrIfChanged(conditionIcons, 'title', conditionTooltip);
+        setAttrIfChanged(conditionIcons, 'title', ''); // Keep title empty to prevent native tooltip
         setAttrIfChanged(conditionIcons, 'aria-label', conditionTooltip);
         setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);
 

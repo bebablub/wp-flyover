@@ -537,6 +537,8 @@
   overflow: visible;
 }
 
+/* CSS tooltip system disabled - using custom JavaScript floating tooltip instead */
+/* 
 .fgpx-weather-celestial[data-fgpx-tooltip],
 .fgpx-weather-conditions-icons[data-fgpx-tooltip] {
   position: absolute;
@@ -572,6 +574,7 @@
   z-index: 40;
   pointer-events: none;
 }
+*/
 
 .fgpx-weather-floating-tooltip {
   position: fixed;
