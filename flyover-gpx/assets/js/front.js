@@ -264,6 +264,33 @@
     return bestI;
   }
 
+  // Faster nearest-index approximation for large tracks.
+  // Uses coarse sampling first, then local refinement around the best coarse hit.
+  function nearestCoordIndexFast(pointLonLat, coords) {
+    if (!Array.isArray(coords) || coords.length === 0) return 0;
+    if (coords.length <= 1200) return nearestCoordIndex(pointLonLat, coords);
+
+    var stride = Math.max(8, Math.floor(coords.length / 400));
+    var coarseBestI = 0;
+    var coarseBestD = Infinity;
+    for (var i = 0; i < coords.length; i += stride) {
+      var c0 = coords[i];
+      var d0 = haversineMeters([c0[0], c0[1]], pointLonLat);
+      if (d0 < coarseBestD) { coarseBestD = d0; coarseBestI = i; }
+    }
+
+    var from = Math.max(0, coarseBestI - (stride * 2));
+    var to = Math.min(coords.length - 1, coarseBestI + (stride * 2));
+    var bestI = coarseBestI;
+    var bestD = coarseBestD;
+    for (var j = from; j <= to; j++) {
+      var c1 = coords[j];
+      var d1 = haversineMeters([c1[0], c1[1]], pointLonLat);
+      if (d1 < bestD) { bestD = d1; bestI = j; }
+    }
+    return bestI;
+  }
+
   // Douglas–Peucker simplification (iterative) that returns kept indices
   function simplifyDouglasPeucker(points, sqTol) {
     var len = points.length;
@@ -1230,6 +1257,13 @@
         if (prefetchEnabled) { try { prefetchDemForRoute(); } catch(_) {} }
       }
 
+      map.on('styledata', function() {
+        _placeLayers = null;
+        weatherTextLayersSupported = null;
+        weatherOverlayReduced = null;
+        weatherOverlayProfileKey = '';
+      });
+
       // Precompute cities from MapTiler POI layer for Simulation tab.
       // Re-run on map idle so tiles loaded during playback are included.
       if (simulationCitiesEnabled) {
@@ -1506,7 +1540,6 @@
 
       var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);
       var debugWeatherDataEnabled = toBoolOption(window.FGPX && FGPX.debugWeatherData, false);
-      var debugWeatherSimEnabled = !!(window.FGPX && window.FGPX.debugWeatherSim);
       var simulationEnabled = toBoolOption(window.FGPX && FGPX.simulationEnabled, true);
       var simulationWaypointsEnabled = simulationEnabled && toBoolOption(window.FGPX && FGPX.simulationWaypointsEnabled, true);
       var simulationCitiesEnabled = simulationEnabled && toBoolOption(window.FGPX && FGPX.simulationCitiesEnabled, true);
@@ -1521,8 +1554,9 @@
       var weatherOverlayPerfMode = String((window.FGPX && FGPX.weatherOverlayPerfMode) || 'full').toLowerCase(); // auto|full|performance
       var weatherHeatmapConsolidated = toBoolOption(window.FGPX && FGPX.weatherHeatmapConsolidated, false);
       var windSatelliteLayersEnabled = weatherOverlayPerfMode !== 'performance';
-      var weatherTextLayersSupported = false;
+      var weatherTextLayersSupported = null;
       var weatherOverlayReduced = null;
+      var weatherOverlayProfileKey = '';
       // Explicit product policy: temperature and wind overlays are disabled on mobile.
       var isMobileOverlayDisabled = window.innerWidth <= 680;
       var temperatureVisible = false;
@@ -1893,7 +1927,7 @@
       }
       // ========== END DEBUG WEATHER DATA ==========
 
-      weatherGradeAvailable = simulationEnabled && !!((weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) || debugWeatherSimEnabled);
+      weatherGradeAvailable = simulationEnabled && !!(weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0);
       
       // Extract biometric data after simulation (so we get simulated data if it was generated)
       var heartRates = Array.isArray(props.heartRates) ? props.heartRates : null; // bpm
@@ -5763,21 +5797,16 @@
             var featLat = Array.isArray(coords2) ? Number(coords2[1]) : NaN;
             if (!isFinite(featLon) || !isFinite(featLat)) continue;
 
-            // Find nearest track coordinate by Euclidean distance
-            var minDistSq = Infinity;
-            var nearestIdx = 0;
-            for (var ci = 0; ci < coords.length; ci++) {
-              var dLat = featLat - coords[ci][1];
-              var dLon = featLon - coords[ci][0];
-              var dsq = dLat * dLat + dLon * dLon;
-              if (dsq < minDistSq) { minDistSq = dsq; nearestIdx = ci; }
-            }
+            // Find nearest track coordinate index with a coarse+refine strategy.
+            var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);
             var cityDistM = Array.isArray(cumDist) && nearestIdx < cumDist.length
               ? Number(cumDist[nearestIdx]) : NaN;
             if (!isFinite(cityDistM)) continue;
 
-            // Skip if far from track (>2km Euclidean, ~0.02 deg)
-            if (minDistSq > 0.04) { skippedType++; continue; }
+            // Skip if far from track (>2km geodesic)
+            var nearestCoord = coords[nearestIdx];
+            var trackDistanceMeters = haversineMeters([nearestCoord[0], nearestCoord[1]], [featLon, featLat]);
+            if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 2000) { skippedType++; continue; }
 
             // Deduplicate: same name within 1.5km along track
             var isDup = false;
@@ -6049,36 +6078,6 @@
         var cloudThresh = (window.FGPX && FGPX.weatherCloudThreshold != null) ? FGPX.weatherCloudThreshold : 50;
 
         var cond = weatherInterpolateAt(cinemaEl._weatherLookup, currentTimeSec) || { rain_mm: 0, snowfall_cm: 0, temperature_c: 15, wind_speed_kmh: 0, wind_direction_deg: 0, fog_intensity: 0, cloud_cover_pct: 0 };
-
-        // ===== DEBUG SIMULATION: Rapid weather changes to test bike angle responsiveness =====
-        // REMOVE THIS ENTIRE BLOCK (marked with DEBUG SIMULATION comment pairs) after debugging
-        if (debugWeatherSimEnabled) {
-          var simState = cinemaEl._debugWeatherSim;
-          if (!simState) {
-            simState = {
-              nextSwitchAt: currentTimeSec,
-              intervalSec: 6.0,
-              step: 0,
-              values: { temperature_c: 15, wind_speed_kmh: 20, rain_mm: 0, cloud_cover_pct: 35 }
-            };
-            cinemaEl._debugWeatherSim = simState;
-          }
-          if (currentTimeSec >= simState.nextSwitchAt) {
-            simState.step += 1;
-            simState.intervalSec = 6.0 + ((simState.step % 3) * 1.5); // 6.0, 7.5, 9.0s cadence (3x slower)
-            simState.nextSwitchAt = currentTimeSec + simState.intervalSec;
-            var s = simState.step;
-            simState.values.temperature_c = 15 + Math.sin(s * 0.9) * 15;
-            simState.values.wind_speed_kmh = Math.max(0, 20 + Math.sin(s * 1.1 + 1.5) * 18);
-            simState.values.rain_mm = Math.max(0, Math.sin(s * 1.3 + 3) * 8);
-            simState.values.cloud_cover_pct = Math.max(0, Math.min(100, 50 + Math.sin(s * 0.8 + 0.8) * 50));
-          }
-          cond.temperature_c = simState.values.temperature_c;
-          cond.wind_speed_kmh = simState.values.wind_speed_kmh;
-          cond.rain_mm = simState.values.rain_mm;
-          cond.cloud_cover_pct = simState.values.cloud_cover_pct;
-        }
-        // ===== END DEBUG SIMULATION =====
 
         var gradeAtNow = 0;
         var elevationAtNow = 0;
@@ -6444,6 +6443,13 @@
             // Remove all existing POI markers
             while (poiContainerEl.firstChild) {
               poiContainerEl.removeChild(poiContainerEl.firstChild);
+            }
+
+            if (Array.isArray(waypoints) && waypoints.length === 0) {
+              var poiEmptyEl2 = document.createElement('div');
+              poiEmptyEl2.className = 'fgpx-weather-poi-empty';
+              poiEmptyEl2.textContent = 'No GPX waypoints in this track';
+              poiContainerEl.appendChild(poiEmptyEl2);
             }
 
             if (poiTrackWidth > 0 && Array.isArray(poisInWindow) && poisInWindow.length > 0) {
@@ -9636,7 +9642,7 @@
       }
 
       function refreshWeatherTextLayerSupport(logResult) {
-        if (weatherTextLayersSupported) return true;
+        if (weatherTextLayersSupported === true) return true;
         var hasGlyphs = false;
         try {
           var style = map.getStyle();
@@ -9648,7 +9654,7 @@
           if (logResult) {
             DBG.warn('Could not check glyph availability:', e);
           }
-          hasGlyphs = false;
+          return weatherTextLayersSupported === true;
         }
         weatherTextLayersSupported = hasGlyphs;
         return hasGlyphs;
@@ -9875,13 +9881,19 @@
         }
 
         var isReduced = (weatherOverlayPerfMode === 'performance') || (weatherOverlayPerfMode === 'auto' && playing && currentChartTab === 'weathergrade');
-        if (!force && weatherOverlayReduced === isReduced) {
-          // Even when profile mode did not change, toggles may have changed; continue applying desired visibilities.
-        }
-        weatherOverlayReduced = isReduced;
-
         var baseWeatherVisibility = weatherVisible ? 'visible' : 'none';
         var fullWeatherVisibility = (weatherVisible && !isReduced) ? 'visible' : 'none';
+        var tempBase = (!isMobileOverlayDisabled && temperatureVisible) ? 'visible' : 'none';
+        var tempTextVisibility = (tempBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        var windBase = (!isMobileOverlayDisabled && windVisible) ? 'visible' : 'none';
+        var windTextVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        var circleWindVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        var profileKey = [baseWeatherVisibility, fullWeatherVisibility, tempBase, tempTextVisibility, windBase, windTextVisibility, circleWindVisibility].join('|');
+        if (!force && weatherOverlayReduced === isReduced && weatherOverlayProfileKey === profileKey) {
+          return;
+        }
+        weatherOverlayReduced = isReduced;
+        weatherOverlayProfileKey = profileKey;
 
         // Weather layers: in reduced mode keep primary layer + circle and suppress secondary layers.
         if (weatherHeatmapConsolidated) {
@@ -9896,23 +9908,18 @@
           setLayerVisibilityIfPresent('fgpx-weather-heatmap-clouds', fullWeatherVisibility);
         }
 
-        var tempBase = (!isMobileOverlayDisabled && temperatureVisible) ? 'visible' : 'none';
         setLayerVisibilityIfPresent('fgpx-temperature-circle', tempBase);
-        var tempTextVisibility = (tempBase === 'visible' && !isReduced) ? 'visible' : 'none';
         if (tempTextVisibility === 'visible') {
           ensureTemperatureTextLayer();
         }
         setLayerVisibilityIfPresent('fgpx-temperature-text', tempTextVisibility);
 
-        var windBase = (!isMobileOverlayDisabled && windVisible) ? 'visible' : 'none';
         setLayerVisibilityIfPresent('fgpx-wind-arrows', windBase);
-        var windTextVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
         if (windTextVisibility === 'visible') {
           ensureWindTextLayer();
         }
         setLayerVisibilityIfPresent('fgpx-wind-text', windTextVisibility);
 
-        var circleWindVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
         if (windSatelliteLayersEnabled) {
           if (circleWindVisibility === 'visible') {
             ensureWindSatelliteLayers();

@@ -411,9 +411,13 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("var weatherOverlayPerfMode = String((window.FGPX && FGPX.weatherOverlayPerfMode) || 'full').toLowerCase();");
     expect(FRONT_SRC).toContain('var weatherHeatmapConsolidated = toBoolOption(window.FGPX && FGPX.weatherHeatmapConsolidated, false);');
     expect(FRONT_SRC).toContain("var windSatelliteLayersEnabled = weatherOverlayPerfMode !== 'performance';");
-    expect(FRONT_SRC).toContain('var weatherTextLayersSupported = false;');
+    expect(FRONT_SRC).toContain('var weatherTextLayersSupported = null;');
+    expect(FRONT_SRC).toContain("var weatherOverlayProfileKey = '';");
     expect(FRONT_SRC).toContain('function applyWeatherOverlayProfile(force) {');
     expect(FRONT_SRC).toContain("var isReduced = (weatherOverlayPerfMode === 'performance') || (weatherOverlayPerfMode === 'auto' && playing && currentChartTab === 'weathergrade');");
+    expect(FRONT_SRC).toContain("var profileKey = [baseWeatherVisibility, fullWeatherVisibility, tempBase, tempTextVisibility, windBase, windTextVisibility, circleWindVisibility].join('|');");
+    expect(FRONT_SRC).toContain("if (!force && weatherOverlayReduced === isReduced && weatherOverlayProfileKey === profileKey) {");
+    expect(FRONT_SRC).toContain('weatherOverlayProfileKey = profileKey;');
     expect(FRONT_SRC).toContain("if (weatherHeatmapConsolidated) {");
     expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent('fgpx-weather-heatmap', baseWeatherVisibility);");
     expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent('fgpx-weather-heatmap-rain', baseWeatherVisibility);");
@@ -445,6 +449,9 @@ describe('front.js runtime minimal regressions', () => {
 
   test('phase3 defers temperature and wind text layer creation until needed', () => {
     expect(FRONT_SRC).toContain('function refreshWeatherTextLayerSupport(logResult) {');
+    expect(FRONT_SRC).toContain('if (weatherTextLayersSupported === true) return true;');
+    expect(FRONT_SRC).toContain('return weatherTextLayersSupported === true;');
+    expect(FRONT_SRC).toContain('weatherTextLayersSupported = hasGlyphs;');
     expect(FRONT_SRC).toContain('function ensureTemperatureTextLayer() {');
     expect(FRONT_SRC).toContain('if (!refreshWeatherTextLayerSupport(false)) return;');
     expect(FRONT_SRC).toContain('if (map.getLayer(\'fgpx-temperature-text\')) return;');
@@ -478,31 +485,28 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("DBG.log('Wind satellite layers created lazily', { count: windCircleLayerIds.length });");
   });
 
-  test('[DEBUG SIM] rapid weather changes should update bike angle responsively', () => {
-    // Temporary test to simulate fast-changing weather conditions and verify bike angle updates.
-    // This test creates a mock weather cinema environment with rapidly changing elevation data.
-    // REMOVE THIS TEST after debugging bike angle responsiveness.
+  test('simulation city precompute uses fast nearest-index helper and geodesic distance cutoff', () => {
+    expect(FRONT_SRC).toContain('function nearestCoordIndexFast(pointLonLat, coords) {');
+    expect(FRONT_SRC).toContain('var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);');
+    expect(FRONT_SRC).toContain('var trackDistanceMeters = haversineMeters([nearestCoord[0], nearestCoord[1]], [featLon, featLat]);');
+    expect(FRONT_SRC).toContain('if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 2000) { skippedType++; continue; }');
+  });
 
-    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="99"></div>';
+  test('simulation city layer cache is invalidated on style data events', () => {
+    expect(FRONT_SRC).toContain("map.on('styledata', function() {");
+    expect(FRONT_SRC).toContain('_placeLayers = null;');
+    expect(FRONT_SRC).toContain('weatherTextLayersSupported = null;');
+    expect(FRONT_SRC).toContain("weatherOverlayProfileKey = '';");
+  });
 
-    window.maplibregl = {};
-    window.Chart = function ChartStub() {};
+  test('simulation shows no-waypoints note when track has none', () => {
+    expect(FRONT_SRC).toContain("poiEmptyEl2.className = 'fgpx-weather-poi-empty';");
+    expect(FRONT_SRC).toContain("poiEmptyEl2.textContent = 'No GPX waypoints in this track';");
+  });
 
-    const fetchMock = mockRejectedFetch('no-op');
-
-    window.FGPX = baseFGPX({ weatherEnabled: true, weatherVisible: true });
-    loadFront();
-
-    // Simulate rapid weather grade updates with oscillating elevation data
-    var mockGradeData = [];
-    for (var i = 0; i < 400; i++) {
-      // Simulate terrain that rapidly oscillates to test bike angle responsiveness
-      var wave = Math.sin(i * 0.5) * 30;
-      mockGradeData.push({ x: i, y: 200 - wave });
-    }
-
-    // Verify the bike angle smoothing factor has been adjusted for responsiveness
-    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.70) + (targetBikeAngle * 0.30);');
-    expect(FRONT_SRC).not.toContain('var smoothedBikeAngle = (prevBikeAngle * 0.92) + (targetBikeAngle * 0.08);');
+  test('simulation runtime no longer ships the temporary debug weather path', () => {
+    expect(FRONT_SRC).not.toContain('debugWeatherSimEnabled');
+    expect(FRONT_SRC).not.toContain('DEBUG SIMULATION');
+    expect(FRONT_SRC).not.toContain('cinemaEl._debugWeatherSim');
   });
 });

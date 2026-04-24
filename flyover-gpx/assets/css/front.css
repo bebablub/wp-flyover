@@ -675,6 +675,16 @@
   z-index: 21;
 }
 
+.fgpx-weather-poi-empty {
+  position: absolute;
+  left: 10px;
+  bottom: calc(var(--fgpx-cinema-floor-offset) + 8px);
+  color: rgba(255,255,255,0.88);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  font: 600 11px/1.2 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
 /* City markers from MapTiler */
 .fgpx-weather-cities-container {
   position: absolute;
