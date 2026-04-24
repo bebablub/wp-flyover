@@ -379,7 +379,7 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('var bikeX = 200;');
     expect(FRONT_SRC).toContain('for (var gx = 0; gx <= 400; gx += 25) {');
     expect(FRONT_SRC).toContain("var shapeHeight = (envelope * maxPeak) + elevAdj + (rel * 1.6 * tilt);");
-    expect(FRONT_SRC).toContain("if (Math.abs(rel) > 0.95) shapeHeight = 0;");
+    expect(FRONT_SRC).toContain('shapeHeight = Math.max(0, Math.min(baseY, shapeHeight));');
     expect(FRONT_SRC).not.toContain("gradePath.setAttribute('d', 'M0,40 L0,' + Math.round(left) + ' L200,20 L400,' + Math.round(right) + ' L400,40 Z');");
   });
 
@@ -391,14 +391,15 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('var bikeSurfaceY = baseY;');
     expect(FRONT_SRC).toContain('var bikeLift = Math.max(0, baseY - bikeSurfaceY);');
     expect(FRONT_SRC).toContain('var wheelContactCalibration = -2;');
-    expect(FRONT_SRC).toContain("bikeEl.style.bottom = String(Math.max(0, Math.round(bikeLift + wheelContactCalibration))) + 'px';");
+    expect(FRONT_SRC).toContain('var cinemaFloorOffset = cinemaEl._floorOffsetPx;');
+    expect(FRONT_SRC).toContain("bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';");
   });
 
   test('weathergrade bicycle rotation follows terrain tangent with clamp and smoothing', () => {
     expect(FRONT_SRC).toContain('var bikeSlopeDeg = 0;');
-    expect(FRONT_SRC).toContain('bikeSlopeDeg = Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI;');
-    expect(FRONT_SRC).toContain('var targetBikeAngle = Math.max(-10, Math.min(10, bikeSlopeDeg));');
-    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.92) + (targetBikeAngle * 0.08);');
+    expect(FRONT_SRC).toContain('bikeSlopeDeg = gradeAtNow * 0.85;');
+    expect(FRONT_SRC).toContain('var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));');
+    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.55) + (targetBikeAngle * 0.45);');
     expect(FRONT_SRC).toContain("bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';");
   });
 
