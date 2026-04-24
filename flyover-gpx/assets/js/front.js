@@ -6013,7 +6013,86 @@
         }
       }
 
+      function getWeatherFloatingTooltipEl() {
+        var tooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
+        if (!tooltipEl) {
+          tooltipEl = document.createElement('div');
+          tooltipEl.id = 'fgpx-weather-floating-tooltip';
+          tooltipEl.className = 'fgpx-weather-floating-tooltip';
+          tooltipEl.setAttribute('role', 'tooltip');
+          tooltipEl.setAttribute('aria-hidden', 'true');
+          tooltipEl.style.display = 'none';
+          document.body.appendChild(tooltipEl);
+        }
+        return tooltipEl;
+      }
+
+      function hideWeatherFloatingTooltip() {
+        var tooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
+        if (!tooltipEl) return;
+        tooltipEl.style.display = 'none';
+        tooltipEl.style.visibility = 'hidden';
+        tooltipEl.setAttribute('aria-hidden', 'true');
+        tooltipEl._target = null;
+      }
+
+      function showWeatherFloatingTooltip(targetEl, text, clientX, clientY) {
+        if (!targetEl || !text) return;
+        var tooltipEl = getWeatherFloatingTooltipEl();
+        tooltipEl.textContent = text;
+        tooltipEl.style.display = 'block';
+        tooltipEl.style.visibility = 'hidden';
+
+        var x = Number(clientX);
+        var y = Number(clientY);
+        if (!isFinite(x) || !isFinite(y)) {
+          var rect = targetEl.getBoundingClientRect();
+          x = rect.left + (rect.width / 2);
+          y = rect.bottom + 8;
+        }
+
+        var tooltipRect = tooltipEl.getBoundingClientRect();
+        var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        var pad = 10;
+        var left = x + 12;
+        var top = y + 12;
+
+        if ((left + tooltipRect.width + pad) > viewportWidth) {
+          left = Math.max(pad, x - tooltipRect.width - 12);
+        }
+        if ((top + tooltipRect.height + pad) > viewportHeight) {
+          top = Math.max(pad, y - tooltipRect.height - 12);
+        }
+
+        tooltipEl.style.left = Math.round(left) + 'px';
+        tooltipEl.style.top = Math.round(top) + 'px';
+        tooltipEl.style.visibility = 'visible';
+        tooltipEl.setAttribute('aria-hidden', 'false');
+        tooltipEl._target = targetEl;
+      }
+
+      function bindWeatherFloatingTooltip(targetEl) {
+        if (!targetEl) return;
+        var getTooltipText = function() {
+          return targetEl.getAttribute('data-fgpx-tooltip') || targetEl.getAttribute('title') || '';
+        };
+
+        targetEl.addEventListener('mouseenter', function(ev) {
+          showWeatherFloatingTooltip(targetEl, getTooltipText(), ev.clientX, ev.clientY);
+        });
+        targetEl.addEventListener('mousemove', function(ev) {
+          showWeatherFloatingTooltip(targetEl, getTooltipText(), ev.clientX, ev.clientY);
+        });
+        targetEl.addEventListener('mouseleave', hideWeatherFloatingTooltip);
+        targetEl.addEventListener('focus', function() {
+          showWeatherFloatingTooltip(targetEl, getTooltipText(), NaN, NaN);
+        });
+        targetEl.addEventListener('blur', hideWeatherFloatingTooltip);
+      }
+
       function createWeatherCinema(containerEl, payloadData, currentTimeSec, isCurrentlyPlaying) {
+        var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
         var cinema = document.createElement('div');
         cinema.className = 'fgpx-weather-cinema' + (isCurrentlyPlaying ? '' : ' is-paused');
         cinema.style.display = 'flex';
@@ -6046,6 +6125,7 @@
         celestial.setAttribute('aria-label', dayTooltip);
         celestial.setAttribute('data-fgpx-tooltip', dayTooltip);
         cinema.appendChild(celestial);
+        bindWeatherFloatingTooltip(celestial);
 
         var conditionIcons = document.createElement('div');
         conditionIcons.className = 'fgpx-weather-conditions-icons';
@@ -6056,6 +6136,7 @@
         conditionIcons.setAttribute('aria-label', conditionIconsTooltip);
         conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);
         cinema.appendChild(conditionIcons);
+        bindWeatherFloatingTooltip(conditionIcons);
 
         var mileageRuler = document.createElement('div');
         mileageRuler.className = 'fgpx-weather-mileage-ruler';
@@ -6097,7 +6178,6 @@
         bicycle.appendChild(bikeIcon);
         cinema.appendChild(bicycle);
 
-        var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
         var legend = document.createElement('div');
         legend.className = 'fgpx-weather-legend';
         legend.setAttribute('role', 'group');
@@ -6167,6 +6247,10 @@
 
       function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate) {
         if (!cinemaEl || cinemaEl.style.display === 'none') return;
+        var floatingTooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
+        if (floatingTooltipEl && floatingTooltipEl._target && !document.contains(floatingTooltipEl._target)) {
+          hideWeatherFloatingTooltip();
+        }
         var now = Date.now();
         var lastUpdate = Number(cinemaEl._lastUpdate || 0);
         if (!forceUpdate && now - lastUpdate < 100) return;

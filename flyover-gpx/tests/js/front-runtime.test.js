@@ -346,15 +346,19 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('weather cinema icon groups expose tooltips describing icon meaning', () => {
+    expect(FRONT_SRC).toContain("var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};");
     expect(FRONT_SRC).toContain("var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';");
     expect(FRONT_SRC).toContain("var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';");
     expect(FRONT_SRC).toContain("celestial.setAttribute('data-fgpx-tooltip', dayTooltip);");
     expect(FRONT_SRC).toContain("conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);");
+    expect(FRONT_SRC).toContain('bindWeatherFloatingTooltip(celestial);');
+    expect(FRONT_SRC).toContain('bindWeatherFloatingTooltip(conditionIcons);');
+    expect(FRONT_SRC).toContain("function showWeatherFloatingTooltip(targetEl, text, clientX, clientY)");
     expect(FRONT_SRC).toContain("activeConditionLabels.push(simI18N.simCondFog || 'Fog');");
     expect(FRONT_SRC).toContain("var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';");
     expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'title', conditionTooltip);");
     expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', night ? (simI18N.simCelestialNightAria || 'Night indicator (moon)') : (simI18N.simCelestialDayAria || 'Daytime indicator (sun)'));");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', celestialTooltip);");
     expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);");
   });
 
