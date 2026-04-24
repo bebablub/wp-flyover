@@ -10,6 +10,17 @@ use ReflectionMethod;
 
 final class RestCoreBehaviorTest extends TestCase
 {
+    public function test_weather_json_decode_errors_are_guarded_in_rest_and_ajax_paths(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString('JSON decode error for weather points in REST endpoint', $source);
+        $this->assertStringContainsString('JSON decode error for weather summary in REST endpoint', $source);
+        $this->assertStringContainsString('JSON decode error for weather points in AJAX endpoint', $source);
+        $this->assertStringContainsString('JSON decode error for weather summary in AJAX endpoint', $source);
+    }
+
     public function test_calculate_optimal_target_respects_safety_bounds_for_small_tracks(): void
     {
         $method = new ReflectionMethod(Rest::class, 'calculateOptimalTarget');

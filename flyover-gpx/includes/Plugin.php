@@ -416,6 +416,21 @@ final class Plugin
                 'time' => \esc_html__('Time', 'flyover-gpx'),
                 'avgSpeedKmh' => \esc_html__('Avg speed (km/h)', 'flyover-gpx'),
                 'elevGainM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
+                'simulationTab' => \esc_html__('Simulation', 'flyover-gpx'),
+                'simulationLegendAria' => \esc_html__('Weather and route grade metrics', 'flyover-gpx'),
+                'simMileage' => \esc_html__('Mileage', 'flyover-gpx'),
+                'simMileageAria' => \esc_html__('Current mileage in kilometers', 'flyover-gpx'),
+                'simDuration' => \esc_html__('Duration', 'flyover-gpx'),
+                'simDurationAria' => \esc_html__('Current elapsed duration', 'flyover-gpx'),
+                'simGrade' => \esc_html__('Grade', 'flyover-gpx'),
+                'simGradeAria' => \esc_html__('Current route grade percentage', 'flyover-gpx'),
+                'simElevation' => \esc_html__('Elevation', 'flyover-gpx'),
+                'simElevationAria' => \esc_html__('Current elevation in meters', 'flyover-gpx'),
+                'simTemp' => \esc_html__('Temp', 'flyover-gpx'),
+                'simTempAria' => \esc_html__('Current temperature in degrees Celsius', 'flyover-gpx'),
+                'simWind' => \esc_html__('Wind', 'flyover-gpx'),
+                'simWindAria' => \esc_html__('Current wind speed in kilometers per hour', 'flyover-gpx'),
+                'simConditionsAria' => \esc_html__('Current weather conditions summary', 'flyover-gpx'),
             ],
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
@@ -475,6 +490,10 @@ final class Plugin
             // Multi-weather visualization settings
             $weatherPriorityOrder = $options['fgpx_weather_priority_order'];
             $weatherFogThreshold = $options['fgpx_weather_fog_threshold'];
+            $weatherRainThreshold = $options['fgpx_weather_rain_threshold'];
+            $weatherSnowThreshold = $options['fgpx_weather_snow_threshold'];
+            $weatherWindThreshold = $options['fgpx_weather_wind_threshold'];
+            $weatherCloudThreshold = $options['fgpx_weather_cloud_threshold'];
             $weatherColorSnow = $options['fgpx_weather_color_snow'];
             $weatherColorRain = $options['fgpx_weather_color_rain'];
             $weatherColorFog = $options['fgpx_weather_color_fog'];
@@ -503,6 +522,10 @@ final class Plugin
                   '},' .
                   'weatherPriorityOrder:"' . \esc_js($weatherPriorityOrder) . '",' .
                   'weatherFogThreshold:' . \floatval($weatherFogThreshold) . ',' .
+                  'weatherRainThreshold:' . \floatval($weatherRainThreshold) . ',' .
+                  'weatherSnowThreshold:' . \floatval($weatherSnowThreshold) . ',' .
+                  'weatherWindThreshold:' . \floatval($weatherWindThreshold) . ',' .
+                  'weatherCloudThreshold:' . \floatval($weatherCloudThreshold) . ',' .
                   'weatherColorSnow:"' . \esc_js($weatherColorSnow) . '",' .
                   'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
                   'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
@@ -549,6 +572,15 @@ final class Plugin
                   'weatherEnabled:' . ($options['fgpx_weather_enabled'] === '1' ? 'true' : 'false') . ',' .
                   'weatherOpacity:' . \floatval($options['fgpx_weather_opacity']) . ',' .
                   'weatherVisibleByDefault:' . ($weatherVisibleByDefaultFinal ? 'true' : 'false') . ',' .
+                                    'weatherFogThreshold:' . \floatval($options['fgpx_weather_fog_threshold']) . ',' .
+                                    'weatherRainThreshold:' . \floatval($options['fgpx_weather_rain_threshold']) . ',' .
+                                    'weatherSnowThreshold:' . \floatval($options['fgpx_weather_snow_threshold']) . ',' .
+                                    'weatherWindThreshold:' . \floatval($options['fgpx_weather_wind_threshold']) . ',' .
+                                    'weatherCloudThreshold:' . \floatval($options['fgpx_weather_cloud_threshold']) . ',' .
+                                    'weatherColorSnow:"' . \esc_js($options['fgpx_weather_color_snow']) . '",' .
+                                    'weatherColorRain:"' . \esc_js($options['fgpx_weather_color_rain']) . '",' .
+                                    'weatherColorFog:"' . \esc_js($options['fgpx_weather_color_fog']) . '",' .
+                                    'weatherColorClouds:"' . \esc_js($options['fgpx_weather_color_clouds']) . '",' .
                   'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
                   'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '"' .
                 '};',

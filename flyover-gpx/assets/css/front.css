@@ -308,8 +308,458 @@
   border-color: #ddd;
 }
 
+/* ============================================================
+   Weather & Elevation Grade Animation Tab
+   ============================================================ */
+
+.fgpx-weather-cinema {
+  --fgpx-cinema-now-x: 50%;
+  --fgpx-cinema-floor-offset: 22px;
+  --fgpx-grade-fill: rgba(100,140,100,0.4);
+  position: relative;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #1a2030;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.fgpx-weather-cinema::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--fgpx-cinema-floor-offset);
+  background: var(--fgpx-grade-fill);
+  pointer-events: none;
+  z-index: 17;
+}
+
+/* Scrolling background layer (temperature tint + weather patterns) */
+.fgpx-weather-bg {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat-x;
+  background-size: 200px 100%;
+  will-change: background-color, background-image;
+  transition: background-color 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  z-index: 1;
+}
+
+/* Rain pattern layer */
+.fgpx-weather-layer-rain {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    110deg,
+    transparent 0px,
+    transparent 6px,
+    rgba(65, 105, 225, 0.55) 6px,
+    rgba(65, 105, 225, 0.55) 8px
+  );
+  background-size: 200px 200px;
+  opacity: 0;
+  transition: opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity;
+  animation: fgpx-scroll-rain 2s linear infinite;
+  z-index: 4;
+}
+
+/* Snow pattern layer */
+.fgpx-weather-layer-snow {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.7) 2px, transparent 2px),
+                    radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size: 18px 18px, 9px 9px;
+  background-position: 0 0, 9px 9px;
+  opacity: 0;
+  transition: opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity;
+  animation: fgpx-scroll-snow 4s linear infinite;
+  z-index: 4;
+}
+
+/* Fog pattern layer */
+.fgpx-weather-layer-fog {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 10px,
+    rgba(180, 180, 180, 0.35) 10px,
+    rgba(180, 180, 180, 0.35) 14px
+  );
+  background-size: 200px 200px;
+  opacity: 0;
+  transition: opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity;
+  mix-blend-mode: screen;
+  filter: blur(0.45px) contrast(0.92);
+  animation: fgpx-scroll-fog 6s linear infinite;
+  z-index: 4;
+}
+
+/* Wind pattern layer */
+.fgpx-weather-layer-wind {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 28%;
+  bottom: 25px;
+  background-image: none;
+  background-size: 36px 16px;
+  background-position: 0 0;
+  opacity: 0;
+  transition: opacity 1.25s cubic-bezier(0.22, 0.61, 0.36, 1), filter 0.8s ease;
+  mix-blend-mode: lighten;
+  will-change: transform, opacity, filter;
+  mask-image: radial-gradient(ellipse 58% 68% at var(--fgpx-cinema-now-x) 50%, rgba(0,0,0,1) 38%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: radial-gradient(ellipse 58% 68% at var(--fgpx-cinema-now-x) 50%, rgba(0,0,0,1) 38%, rgba(0,0,0,0) 100%);
+  animation: fgpx-scroll-wind 1.8s linear infinite;
+  z-index: 4;
+}
+
+.fgpx-weather-layer-wind.is-headwind {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='16' viewBox='0 0 36 16'%3E%3Cpath d='M26%208H10M10%208L15%203M10%208L15%2013' stroke='white' stroke-opacity='0.78' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  animation-direction: normal;
+}
+
+.fgpx-weather-layer-wind.is-tailwind {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='16' viewBox='0 0 36 16'%3E%3Cpath d='M10%208H26M26%208L21%203M26%208L21%2013' stroke='white' stroke-opacity='0.78' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  animation-direction: reverse;
+}
+
+.fgpx-weather-layer-wind.is-sidewind {
+  background-image: none;
+}
+
+/* Cloud pattern layer */
+.fgpx-weather-layer-clouds {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 44%;
+  background-image:
+    radial-gradient(ellipse 78px 26px at 12% 44%, rgba(210, 210, 210, 0.34) 0%, rgba(210, 210, 210, 0.18) 44%, transparent 70%),
+    radial-gradient(ellipse 86px 28px at 43% 36%, rgba(210, 210, 210, 0.3) 0%, rgba(210, 210, 210, 0.14) 42%, transparent 70%),
+    radial-gradient(ellipse 74px 24px at 76% 40%, rgba(210, 210, 210, 0.28) 0%, rgba(210, 210, 210, 0.13) 42%, transparent 68%),
+    linear-gradient(to bottom, rgba(205, 210, 220, 0.15) 0%, rgba(205, 210, 220, 0.08) 48%, rgba(205, 210, 220, 0) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-position: center top;
+  opacity: 0;
+  transition: opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity;
+  animation: fgpx-scroll-clouds 14s linear infinite;
+  z-index: 4;
+}
+
+/* Clear sky / neutral pattern (always visible) */
+.fgpx-weather-layer-clear {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
+  animation: fgpx-scroll-clear 5s linear infinite;
+  z-index: 2;
+}
+
+/* Day/Night sky gradient layer */
+.fgpx-weather-layer-daynight {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transition: opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1), background 1.2s cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(to bottom, #1a2030 0%, #2a3550 100%);
+  animation: fgpx-scroll-daynight 10s linear infinite;
+  z-index: 1;
+}
+
+/* Sun/Moon indicator */
+.fgpx-weather-celestial {
+  position: absolute;
+  top: 12px;
+  right: 20px;
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.9;
+  transition: opacity 0.8s ease;
+  pointer-events: none;
+  z-index: 26;
+}
+
+.fgpx-weather-conditions-icons {
+  position: absolute;
+  top: 14px;
+  right: 52px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.95;
+  pointer-events: none;
+  z-index: 26;
+  white-space: nowrap;
+  max-width: 55%;
+  overflow: hidden;
+}
+
+/* Grade indicator hill (terrain behind bicycle) */
+.fgpx-weather-grade-indicator {
+  position: absolute;
+  bottom: var(--fgpx-cinema-floor-offset);
+  left: 0;
+  right: 0;
+  height: 40px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 18;
+  transition: filter 0.5s ease-out;
+}
+.fgpx-weather-grade-svg {
+  width: 100%;
+  height: 100%;
+}
+.fgpx-weather-grade-svg path {
+  transition: fill 0.5s ease-out;
+}
+
+.fgpx-weather-mileage-ruler {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--fgpx-cinema-floor-offset) - 8px);
+  height: 18px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.fgpx-weather-mileage-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 7px;
+  border-top: 1px solid rgba(255,255,255,0.75);
+}
+
+.fgpx-weather-mileage-marks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.fgpx-weather-mileage-mark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.fgpx-weather-mileage-mark-tick {
+  display: block;
+  width: 1px;
+  height: 10px;
+  margin: 7px auto 0;
+  background: rgba(255,255,255,0.9);
+}
+
+.fgpx-weather-mileage-mark-label {
+  display: block;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+  font: 600 10px/1 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+  margin-top: -1px;
+  white-space: nowrap;
+}
+
+.fgpx-weather-photo-marker {
+  position: absolute;
+  top: 45px;
+  bottom: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 23;
+}
+
+.fgpx-weather-photo-marker-line {
+  position: absolute;
+  top: 50px;
+  bottom: calc(var(--fgpx-cinema-floor-offset) + 12px);
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.8) 28%, rgba(255,255,255,0.95) 78%, rgba(255,255,255,0.18) 100%);
+}
+
+.fgpx-weather-photo-marker-label {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  color: rgba(255,255,255,0.96);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.65);
+  font: 600 10px/1.05 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.fgpx-weather-photo-marker.is-current .fgpx-weather-photo-marker-line {
+  background: linear-gradient(to bottom, rgba(255,255,255,0.12) 0%, rgba(255,229,143,0.95) 28%, rgba(255,229,143,1) 78%, rgba(255,229,143,0.2) 100%);
+}
+
+/* Central bicycle */
+.fgpx-weather-bicycle {
+  position: absolute;
+  left: var(--fgpx-cinema-now-x);
+  bottom: calc(var(--fgpx-cinema-floor-offset) + 4px);
+  transform: translateX(-50%);
+  transition: bottom 120ms linear;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+}
+.fgpx-weather-bicycle-icon {
+  font-size: 42px;
+  line-height: 1;
+}
+
+/* Legend bar below animation */
+.fgpx-weather-legend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 6px 4px;
+  font-size: 12px;
+  opacity: 0.85;
+  user-select: none;
+}
+.fgpx-weather-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .fgpx-weather-celestial {
+    top: 10px;
+    right: 14px;
+    font-size: 20px;
+  }
+  .fgpx-weather-conditions-icons {
+    top: 12px;
+    right: 42px;
+    font-size: 13px;
+    max-width: 48%;
+  }
+  .fgpx-weather-mileage-ruler {
+    left: 8px;
+    right: 8px;
+  }
+  .fgpx-weather-mileage-mark-label {
+    font-size: 9px;
+  }
+  .fgpx-weather-legend {
+    gap: 12px;
+    font-size: 11px;
+  }
+}
+.fgpx-weather-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Future data fade overlay: right side fades to indicate uncertainty */
+.fgpx-weather-future-fade {
+  position: absolute;
+  top: 0;
+  left: var(--fgpx-cinema-now-x);
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* "Now" marker line in center */
+.fgpx-weather-now-line {
+  position: absolute;
+  left: var(--fgpx-cinema-now-x);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255,255,255,0.4);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 7;
+}
+
+/* Scrolling keyframes */
+@keyframes fgpx-scroll-rain {
+  from { background-position: 0 0; }
+  to { background-position: -200px 0; }
+}
+@keyframes fgpx-scroll-snow {
+  from { background-position: 0 0, 9px 9px; }
+  to { background-position: -200px 0, -191px 9px; }
+}
+@keyframes fgpx-scroll-fog {
+  from { background-position: 0 0; }
+  to { background-position: -200px 0; }
+}
+@keyframes fgpx-scroll-wind {
+  from { background-position: 0 0; }
+  to { background-position: -200px 0; }
+}
+@keyframes fgpx-scroll-clouds {
+  from { transform: translateX(0); }
+  to { transform: translateX(-26px); }
+}
+@keyframes fgpx-scroll-clear {
+  from { background-position: 0 0; }
+  to { background-position: -20px 0; }
+}
+@keyframes fgpx-scroll-daynight {
+  from { background-position: 0 0; }
+  to { background-position: -200px 0; }
+}
+
+/* Paused state (when playback is stopped) */
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-rain,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-snow,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-fog,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-wind,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-clouds,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-clear,
+.fgpx-weather-cinema.is-paused .fgpx-weather-layer-daynight {
+  animation-play-state: paused;
+}
+
 /* Responsive */
 @media (max-width: 680px) {
+  .fgpx-weather-cinema {
+    --fgpx-cinema-floor-offset: 18px;
+  }
   .fgpx .fgpx-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -322,9 +772,79 @@
   .fgpx .fgpx-btn-wind {
     display: none !important;
   }
-  /* Hide chart tabs on mobile devices - show only elevation + speed by default */
+  /* Keep chart tabs accessible on mobile via horizontal scroll */
   .fgpx .fgpx-chart-tabs {
-    display: none !important;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fgpx .fgpx-chart-tabs .fgpx-chart-tab {
+    flex: 0 0 auto;
+    min-width: 120px;
+  }
+  .fgpx-weather-grade-indicator {
+    height: 34px;
+  }
+  .fgpx-weather-bicycle-icon {
+    font-size: 34px;
+  }
+  .fgpx-weather-mileage-ruler {
+    height: 16px;
+  }
+  .fgpx-weather-mileage-track {
+    top: 7px;
+  }
+  .fgpx-weather-mileage-mark-label {
+    font-size: 8px;
+  }
+  .fgpx-weather-photo-marker-label {
+    font-size: 9px;
+  }
+  .fgpx-weather-conditions-icons {
+    right: 40px;
+    top: 10px;
+    font-size: 12px;
+    max-width: 44%;
+  }
+  .fgpx-weather-celestial {
+    right: 12px;
+    top: 9px;
+    font-size: 18px;
+  }
+  .fgpx-weather-legend {
+    gap: 8px;
+    padding-top: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .fgpx-weather-cinema {
+    --fgpx-cinema-floor-offset: 14px;
+    height: 120px;
+  }
+  .fgpx-weather-grade-indicator {
+    height: 30px;
+  }
+  .fgpx-weather-bicycle-icon {
+    font-size: 28px;
+  }
+  .fgpx-weather-mileage-ruler {
+    display: none;
+  }
+  .fgpx-weather-photo-marker-label {
+    display: none;
+  }
+  .fgpx-weather-conditions-icons {
+    right: 44px;
+    font-size: 12px;
+    max-width: 40%;
+  }
+  .fgpx-weather-legend {
+    font-size: 10px;
+    gap: 8px;
+  }
+  .fgpx-weather-legend-item {
+    min-height: 32px;
   }
 }
 

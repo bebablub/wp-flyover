@@ -675,6 +675,10 @@ final class Admin
 		// Multi-Weather Visualization Settings
 		$weatherPriorityOrder = $options['fgpx_weather_priority_order'];
 		$weatherFogThreshold = (float) $options['fgpx_weather_fog_threshold'];
+		$weatherRainThreshold = (float) $options['fgpx_weather_rain_threshold'];
+		$weatherSnowThreshold = (float) $options['fgpx_weather_snow_threshold'];
+		$weatherWindThreshold = (float) $options['fgpx_weather_wind_threshold'];
+		$weatherCloudThreshold = (float) $options['fgpx_weather_cloud_threshold'];
 		$weatherColorSnow = $options['fgpx_weather_color_snow'];
 		$weatherColorRain = $options['fgpx_weather_color_rain'];
 		$weatherColorFog = $options['fgpx_weather_color_fog'];
@@ -687,6 +691,22 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_weather_fog_threshold">' . \esc_html__('Fog detection threshold', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_weather_fog_threshold" name="fgpx_weather_fog_threshold" class="small-text" min="0.1" max="1.0" step="0.05" value="' . \esc_attr($weatherFogThreshold) . '" />';
 		echo '<p class="description">' . \esc_html__('Fog intensity threshold (0.1-1.0). Only fog above this intensity will be displayed. Lower values = more sensitive detection. Recommended: 0.3', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_weather_rain_threshold">' . \esc_html__('Rain detection threshold (mm)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_weather_rain_threshold" name="fgpx_weather_rain_threshold" class="small-text" min="0" max="20" step="0.1" value="' . \esc_attr($weatherRainThreshold) . '" />';
+		echo '<p class="description">' . \esc_html__('Minimum rain intensity to show rain visuals in weather overlays and Weather & Grade tab.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_weather_snow_threshold">' . \esc_html__('Snow detection threshold (cm)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_weather_snow_threshold" name="fgpx_weather_snow_threshold" class="small-text" min="0" max="20" step="0.1" value="' . \esc_attr($weatherSnowThreshold) . '" />';
+		echo '<p class="description">' . \esc_html__('Minimum snowfall value to show snow visuals.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_weather_wind_threshold">' . \esc_html__('Wind detection threshold (km/h)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_weather_wind_threshold" name="fgpx_weather_wind_threshold" class="small-text" min="0" max="150" step="1" value="' . \esc_attr($weatherWindThreshold) . '" />';
+		echo '<p class="description">' . \esc_html__('Minimum wind speed to show wind visuals.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_weather_cloud_threshold">' . \esc_html__('Cloud detection threshold (%)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_weather_cloud_threshold" name="fgpx_weather_cloud_threshold" class="small-text" min="0" max="100" step="1" value="' . \esc_attr($weatherCloudThreshold) . '" />';
+		echo '<p class="description">' . \esc_html__('Minimum cloud cover percentage to show cloud visuals.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row">' . \esc_html__('Weather visualization colors', 'flyover-gpx') . '</th><td>';
 		echo '<label for="fgpx_weather_color_snow" style="display: inline-block; margin-right: 20px; margin-bottom: 8px;">' . \esc_html__('Snow:', 'flyover-gpx') . ' <input type="color" id="fgpx_weather_color_snow" name="fgpx_weather_color_snow" value="' . \esc_attr($weatherColorSnow) . '" /></label>';
@@ -2138,7 +2158,13 @@ final class Admin
 		
 		// Weather settings
 		\update_option('fgpx_weather_enabled', isset($_POST['fgpx_weather_enabled']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_weather_sampling'])) { \update_option('fgpx_weather_sampling', sanitize_text_field((string) $_POST['fgpx_weather_sampling']), true); }
+		if (isset($_POST['fgpx_weather_sampling'])) {
+			$weatherSampling = \sanitize_text_field((string) $_POST['fgpx_weather_sampling']);
+			if (!\in_array($weatherSampling, ['distance', 'time'], true)) {
+				$weatherSampling = 'distance';
+			}
+			\update_option('fgpx_weather_sampling', $weatherSampling, true);
+		}
 		if (isset($_POST['fgpx_weather_step_km'])) { \update_option('fgpx_weather_step_km', (string) max(5, min(20, (float) $_POST['fgpx_weather_step_km'])), true); }
 		if (isset($_POST['fgpx_weather_step_min'])) { \update_option('fgpx_weather_step_min', (string) max(5, min(60, (int) $_POST['fgpx_weather_step_min'])), true); }
 		if (isset($_POST['fgpx_weather_opacity'])) { \update_option('fgpx_weather_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_opacity'])), true); }
@@ -2154,11 +2180,29 @@ final class Admin
 		
 		// Multi-weather visualization settings
 		if (isset($_POST['fgpx_weather_priority_order'])) {
-			$priorityOrder = sanitize_text_field((string) $_POST['fgpx_weather_priority_order']);
-			// Validate format: comma-separated list
-			\update_option('fgpx_weather_priority_order', $priorityOrder, true);
+			$priorityOrderRaw = \strtolower(\sanitize_text_field((string) $_POST['fgpx_weather_priority_order']));
+			$allowedPriority = ['snow', 'rain', 'fog', 'clouds'];
+			$parts = \array_filter(\array_map('trim', \explode(',', $priorityOrderRaw)), static function (string $value): bool {
+				return $value !== '';
+			});
+			$priorityOrderList = [];
+			foreach ($parts as $token) {
+				if (\in_array($token, $allowedPriority, true) && !\in_array($token, $priorityOrderList, true)) {
+					$priorityOrderList[] = $token;
+				}
+			}
+			foreach ($allowedPriority as $token) {
+				if (!\in_array($token, $priorityOrderList, true)) {
+					$priorityOrderList[] = $token;
+				}
+			}
+			\update_option('fgpx_weather_priority_order', \implode(',', $priorityOrderList), true);
 		}
 		if (isset($_POST['fgpx_weather_fog_threshold'])) { \update_option('fgpx_weather_fog_threshold', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_fog_threshold'])), true); }
+		if (isset($_POST['fgpx_weather_rain_threshold'])) { \update_option('fgpx_weather_rain_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_rain_threshold'])), true); }
+		if (isset($_POST['fgpx_weather_snow_threshold'])) { \update_option('fgpx_weather_snow_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_snow_threshold'])), true); }
+		if (isset($_POST['fgpx_weather_wind_threshold'])) { \update_option('fgpx_weather_wind_threshold', (string) max(0.0, min(150.0, (float) $_POST['fgpx_weather_wind_threshold'])), true); }
+		if (isset($_POST['fgpx_weather_cloud_threshold'])) { \update_option('fgpx_weather_cloud_threshold', (string) max(0.0, min(100.0, (float) $_POST['fgpx_weather_cloud_threshold'])), true); }
 		\update_option('fgpx_weather_color_snow', $this->getValidColor('fgpx_weather_color_snow', '#ff1493'), true);
 		\update_option('fgpx_weather_color_rain', $this->getValidColor('fgpx_weather_color_rain', '#4169e1'), true);
 		\update_option('fgpx_weather_color_fog', $this->getValidColor('fgpx_weather_color_fog', '#808080'), true);
@@ -2314,7 +2358,14 @@ final class Admin
 				$currentDistance = $cumulativeDistance[$i] ?? 0;
 				if ($currentDistance >= $nextDistance) {
 					$coord = $coordinates[$i];
-					$timestamp = !empty($timestamps[$i]) ? strtotime($timestamps[$i]) : null;
+					$timestamp = null;
+					if (!empty($timestamps[$i])) {
+						$parsed = strtotime($timestamps[$i]);
+						if ($parsed === false) {
+							continue;
+						}
+						$timestamp = $parsed;
+					}
 					
 					$samples[] = [
 						'lon' => $coord[0],
@@ -2357,7 +2408,14 @@ final class Admin
 			$step = max(1, intval($coordCount / 20)); // Max 20 samples
 			for ($i = 0; $i < $coordCount; $i += $step) {
 				$coord = $coordinates[$i];
-				$timestamp = !empty($timestamps[$i]) ? strtotime($timestamps[$i]) : null;
+				$timestamp = null;
+				if (!empty($timestamps[$i])) {
+					$parsed = strtotime($timestamps[$i]);
+					if ($parsed === false) {
+						continue;
+					}
+					$timestamp = $parsed;
+				}
 				
 				$samples[] = [
 					'lon' => $coord[0],

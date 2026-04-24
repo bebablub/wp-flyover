@@ -190,6 +190,17 @@
     return hh + ':' + mm + ':' + ss;
   }
 
+  function extractFilenameFromUrl(url) {
+    if (typeof url !== 'string' || !url) return '';
+    try {
+      var cleaned = url.split('?')[0].split('#')[0];
+      var name = cleaned.split('/').pop() || '';
+      return decodeURIComponent(name);
+    } catch (_) {
+      return '';
+    }
+  }
+
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
@@ -387,24 +398,24 @@
     var progressBar = createEl('div', 'fgpx-progress-bar');
     progressWrap.appendChild(progressBar);
     left.appendChild(btnPlay); left.appendChild(btnPause); left.appendChild(btnRestart); left.appendChild(btnRecord);
-    // Only show weather buttons if weather is enabled and not on small mobile devices
-    if (window.FGPX && FGPX.weatherEnabled) {
-      // Check if device is very small mobile (screen width <= 480px only)
-      var isVerySmallMobile = window.innerWidth <= 480;
+    // Show weather buttons for real weather or admin-enabled debug weather data.
+    if (window.FGPX && (FGPX.weatherEnabled || FGPX.debugWeatherData)) {
+      var isCompactViewport = window.innerWidth <= 680;
       DBG.log('Weather button visibility check:', {
         weatherEnabled: FGPX.weatherEnabled,
+        debugWeatherData: !!FGPX.debugWeatherData,
         windowWidth: window.innerWidth,
-        isVerySmallMobile: isVerySmallMobile,
+        isCompactViewport: isCompactViewport,
         hasTouch: 'ontouchstart' in window,
         maxTouchPoints: navigator.maxTouchPoints
       });
-      if (!isVerySmallMobile) {
+      if (!isCompactViewport) {
         left.appendChild(btnWeather);
         left.appendChild(btnTemperature);
         left.appendChild(btnWind);
         DBG.log('Weather buttons added to UI');
       } else {
-        DBG.log('Weather buttons hidden due to very small screen');
+        DBG.log('Weather buttons hidden due to compact viewport');
       }
     } else {
       DBG.log('Weather buttons not added:', {
@@ -414,8 +425,8 @@
     }
     // Add day/night button if enabled (separate from weather condition)
     if (window.FGPX && FGPX.daynightMapEnabled) {
-      var isVerySmallMobile = window.innerWidth <= 480;
-      if (!isVerySmallMobile) {
+      var isCompactViewport = window.innerWidth <= 680;
+      if (!isCompactViewport) {
         left.appendChild(btnDayNight);
       }
     }
@@ -442,7 +453,7 @@
     stats.appendChild(statDist); stats.appendChild(statTime); stats.appendChild(statAvg); stats.appendChild(statGain);
     
     // Tab variables
-    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll;
+    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade;
     
     // Show no data message in chart area (will be defined in startPlayer with proper chart reference)
     // var showNoDataMessage = null; // Removed - will be defined globally in startPlayer
@@ -485,6 +496,9 @@
     tabAll = createEl('button', 'fgpx-chart-tab');
     tabAll.textContent = 'All Data';
     tabAll.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
+    tabWeatherGrade = createEl('button', 'fgpx-chart-tab');
+    tabWeatherGrade.textContent = (I18N.simulationTab || 'Simulation');
+    tabWeatherGrade.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     chartTabs.appendChild(tabElevation);
     chartTabs.appendChild(tabBiometrics);
     chartTabs.appendChild(tabTemperature);
@@ -493,6 +507,7 @@
     chartTabs.appendChild(tabWindImpact);
     chartTabs.appendChild(tabWindRose);
     chartTabs.appendChild(tabAll);
+    chartTabs.appendChild(tabWeatherGrade);
     
     // Event listeners will be added in startPlayer after functions are defined
     
@@ -517,7 +532,7 @@
       controls: { btnPlay: btnPlay, btnPause: btnPause, btnRestart: btnRestart, btnRecord: btnRecord, btnWeather: btnWeather, btnTemperature: btnTemperature, btnWind: btnWind, btnDayNight: btnDayNight, speedSel: speedSel, progressBar: progressBar }, 
       stats: { dist: statDist, time: statTime, avg: statAvg, gain: statGain }, 
       canvas: canvas,
-      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll },
+      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade },
       chartLegend: chartLegend
     };
   }
@@ -817,13 +832,13 @@
     
     var coords = (payload && payload.geojson && payload.geojson.coordinates) ? payload.geojson.coordinates : [];
     var props = (payload && payload.geojson && payload.geojson.properties) ? payload.geojson.properties : {};
+    var container = root.querySelector('.fgpx-container');
     
     // Check if we have valid route data
     if (!coords || coords.length === 0) {
       DBG.warn('No route data available for track ID:', payload ? payload.id : 'unknown');
       
       // Show user-friendly message
-      var container = root.querySelector('.fgpx-container');
       if (container) {
         container.innerHTML = '<div class="fgpx-no-data-message" style="padding: 20px; text-align: center; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; margin: 20px 0;">' +
           '<h3 style="color: #666; margin: 0 0 10px 0;">No Route Data Available</h3>' +
@@ -1435,9 +1450,32 @@
       }
 
       // Weather heatmap layer (if weather data is available and enabled)
-      var weatherEnabled = !!(window.FGPX && FGPX.weatherEnabled);
+      function toBoolOption(value, fallback) {
+        if (value === undefined || value === null || value === '') return !!fallback;
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value === 1;
+        if (typeof value === 'string') {
+          var v = value.toLowerCase();
+          if (v === '1' || v === 'true' || v === 'yes' || v === 'on') return true;
+          if (v === '0' || v === 'false' || v === 'no' || v === 'off') return false;
+        }
+        return !!value;
+      }
+
+      var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);
+      var debugWeatherDataEnabled = toBoolOption(window.FGPX && FGPX.debugWeatherData, false);
+      var debugWeatherSimEnabled = !!(window.FGPX && window.FGPX.debugWeatherSim);
+      var effectiveWeatherEnabled = weatherEnabled || debugWeatherDataEnabled;
       var weatherOpacity = (window.FGPX && isFinite(Number(FGPX.weatherOpacity))) ? Number(FGPX.weatherOpacity) : 0.7;
       var weatherData = (payload && payload.weather) ? payload.weather : null;
+      var weatherGradeAvailable = false;
+      var weatherVisible = toBoolOption(window.FGPX && FGPX.weatherVisibleByDefault, false);
+      var windCircleLayerIds = [];
+      var weatherOverlayPerfMode = String((window.FGPX && FGPX.weatherOverlayPerfMode) || 'full').toLowerCase(); // auto|full|performance
+      var weatherHeatmapConsolidated = toBoolOption(window.FGPX && FGPX.weatherHeatmapConsolidated, false);
+      var windSatelliteLayersEnabled = weatherOverlayPerfMode !== 'performance';
+      var weatherTextLayersSupported = false;
+      var weatherOverlayReduced = null;
       // Explicit product policy: temperature and wind overlays are disabled on mobile.
       var isMobileOverlayDisabled = window.innerWidth <= 680;
       var temperatureVisible = false;
@@ -1445,7 +1483,7 @@
       
       // ========== DEBUG WEATHER DATA ==========
       // Add debug weather data when enabled in admin settings
-      if (window.FGPX && FGPX.debugWeatherData) {
+      if (debugWeatherDataEnabled) {
         // If no weather data exists or it's empty, create weather points from track coordinates
         if (!weatherData || !weatherData.features || !Array.isArray(weatherData.features) || weatherData.features.length === 0) {
           if (payload && payload.geojson && payload.geojson.geometry && payload.geojson.geometry.coordinates) {
@@ -1710,14 +1748,14 @@
       }
       
       // Add debug biometric data (heart rate, cadence, temperature) if enabled and not already present
-      if (window.FGPX && FGPX.debugWeatherData) {
+      if (debugWeatherDataEnabled) {
         DBG.log('DEBUG: Biometric simulation enabled, checking payload structure...');
         DBG.log('DEBUG: payload exists:', !!payload);
         DBG.log('DEBUG: payload.geojson exists:', !!(payload && payload.geojson));
         DBG.log('DEBUG: payload.geojson.properties exists:', !!(payload && payload.geojson && payload.geojson.properties));
       }
       
-      if (window.FGPX && FGPX.debugWeatherData && payload && payload.geojson && payload.geojson.properties) {
+      if (debugWeatherDataEnabled && payload && payload.geojson && payload.geojson.properties) {
         try {
           // Use existing props and timestamps variables (already defined at lines 711 and 728)
           // No redeclaration to avoid hoisting issues that cause undefined errors
@@ -1807,6 +1845,8 @@
         }
       }
       // ========== END DEBUG WEATHER DATA ==========
+
+      weatherGradeAvailable = !!((weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) || debugWeatherSimEnabled);
       
       // Extract biometric data after simulation (so we get simulated data if it was generated)
       var heartRates = Array.isArray(props.heartRates) ? props.heartRates : null; // bpm
@@ -1915,7 +1955,7 @@
         return chartDataCache[dataType];
       }
       
-      if (weatherEnabled && weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) {
+      if (effectiveWeatherEnabled && weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) {
         try {
           // Add weather heatmap source
           map.addSource('fgpx-weather', { type: 'geojson', data: weatherData });
@@ -1975,77 +2015,112 @@
             ]
           };
           
-          // Add snow heatmap layer (highest priority - rendered last/on top)
-          map.addLayer({
-            id: 'fgpx-weather-heatmap-snow',
-            type: 'heatmap',
-            source: 'fgpx-weather',
-            filter: ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
-            layout: {
-              'visibility': initialWeatherVisible ? 'visible' : 'none'
-            },
-            paint: Object.assign({
-              'heatmap-weight': ['/', ['coalesce', ['get', 'snowfall_cm'], 0], 5],
-              'heatmap-color': createHeatmapColorRamp(colorSnow)
-            }, baseHeatmapConfig)
-          });
-          
-          // Add rain heatmap layer
-          map.addLayer({
-            id: 'fgpx-weather-heatmap-rain',
-            type: 'heatmap',
-            source: 'fgpx-weather',
-            filter: ['all',
-              ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1], // No snow
-              ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1]
-            ],
-            layout: {
-              'visibility': initialWeatherVisible ? 'visible' : 'none'
-            },
-            paint: Object.assign({
-              'heatmap-weight': ['/', ['coalesce', ['get', 'rain_mm'], 0], 8],
-              'heatmap-color': createHeatmapColorRamp(colorRain)
-            }, baseHeatmapConfig)
-          });
-          
-          // Add fog heatmap layer
-          map.addLayer({
-            id: 'fgpx-weather-heatmap-fog',
-            type: 'heatmap',
-            source: 'fgpx-weather',
-            filter: ['all',
-              ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1], // No snow
-              ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],      // No rain
-              ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold]
-            ],
-            layout: {
-              'visibility': initialWeatherVisible ? 'visible' : 'none'
-            },
-            paint: Object.assign({
-              'heatmap-weight': ['coalesce', ['get', 'fog_intensity'], 0],
-              'heatmap-color': createHeatmapColorRamp(colorFog)
-            }, baseHeatmapConfig)
-          });
-          
-          // Add clouds heatmap layer (lowest priority)
-          map.addLayer({
-            id: 'fgpx-weather-heatmap-clouds',
-            type: 'heatmap',
-            source: 'fgpx-weather',
-            filter: ['all',
-              ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
-              ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
-              ['<=', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
-              ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
-            ],
-            layout: {
-              'visibility': initialWeatherVisible ? 'visible' : 'none'
-            },
-            paint: Object.assign({
-              'heatmap-weight': ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100],
-              'heatmap-color': createHeatmapColorRamp(colorClouds)
-            }, baseHeatmapConfig)
-          });
+          if (weatherHeatmapConsolidated) {
+            DBG.log('Using consolidated weather heatmap layer (phase3)');
+            map.addLayer({
+              id: 'fgpx-weather-heatmap',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: ['any',
+                ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+                ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
+                ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
+                ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
+              ],
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': ['max',
+                  ['/', ['coalesce', ['get', 'snowfall_cm'], 0], 5],
+                  ['/', ['coalesce', ['get', 'rain_mm'], 0], 8],
+                  ['coalesce', ['get', 'fog_intensity'], 0],
+                  ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100]
+                ],
+                'heatmap-color': [
+                  'interpolate', ['linear'], ['heatmap-density'],
+                  0, 'rgba(255,255,255,0)',
+                  0.2, 'rgba(118,146,236,0.35)',
+                  0.4, 'rgba(108,138,226,0.55)',
+                  0.6, 'rgba(98,130,216,0.7)',
+                  0.8, 'rgba(88,122,206,0.85)',
+                  1, 'rgba(78,114,196,1)'
+                ]
+              }, baseHeatmapConfig)
+            });
+          } else {
+            // Add snow heatmap layer (highest priority - rendered last/on top)
+            map.addLayer({
+              id: 'fgpx-weather-heatmap-snow',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': ['/', ['coalesce', ['get', 'snowfall_cm'], 0], 5],
+                'heatmap-color': createHeatmapColorRamp(colorSnow)
+              }, baseHeatmapConfig)
+            });
+            
+            // Add rain heatmap layer
+            map.addLayer({
+              id: 'fgpx-weather-heatmap-rain',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: ['all',
+                ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1], // No snow
+                ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1]
+              ],
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': ['/', ['coalesce', ['get', 'rain_mm'], 0], 8],
+                'heatmap-color': createHeatmapColorRamp(colorRain)
+              }, baseHeatmapConfig)
+            });
+            
+            // Add fog heatmap layer
+            map.addLayer({
+              id: 'fgpx-weather-heatmap-fog',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: ['all',
+                ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1], // No snow
+                ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],      // No rain
+                ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold]
+              ],
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': ['coalesce', ['get', 'fog_intensity'], 0],
+                'heatmap-color': createHeatmapColorRamp(colorFog)
+              }, baseHeatmapConfig)
+            });
+            
+            // Add clouds heatmap layer (lowest priority)
+            map.addLayer({
+              id: 'fgpx-weather-heatmap-clouds',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: ['all',
+                ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+                ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
+                ['<=', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
+                ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
+              ],
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100],
+                'heatmap-color': createHeatmapColorRamp(colorClouds)
+              }, baseHeatmapConfig)
+            });
+          }
 
           // Add rain circle layer for higher zoom levels (rain only, like old implementation)
           // Uses hardcoded radius sizes based on rain intensity (sharp edges, no blur)
@@ -2147,60 +2222,12 @@
           });
 
           // Add temperature text labels layer (with glyph availability check)
-          var hasGlyphs = false;
-          try {
-            // Check if the map style has glyphs available
-            var style = map.getStyle();
-            hasGlyphs = style && style.glyphs;
-            DBG.log('Map style has glyphs:', hasGlyphs, 'Style glyphs URL:', style ? style.glyphs : 'none');
-          } catch (e) {
-            DBG.warn('Could not check glyph availability:', e);
-          }
-          
-          if (hasGlyphs) {
-            try {
-              map.addLayer({
-                id: 'fgpx-temperature-text',
-                type: 'symbol',
-                source: 'fgpx-weather',
-                minzoom: 12,
-                layout: {
-                  'visibility': 'none', // Start hidden
-                  'text-field': [
-                    'case',
-                    ['!=', ['get', 'temperature_c'], null],
-                    ['concat', ['round', ['get', 'temperature_c']], '°C'],
-                    ''
-                  ],
-                  'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-              'text-size': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                12, 10,
-                16, 14
-              ],
-              'text-allow-overlap': true,
-              'text-ignore-placement': true
-            },
-            paint: {
-              'text-color': '#000000',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 2,
-              'text-opacity': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                12, 0,
-                13, 1
-              ]
-            }
-          });
-            } catch (e) {
-              DBG.warn('Failed to add temperature text layer:', e);
-            }
-          } else {
+          var hasGlyphs = refreshWeatherTextLayerSupport(true);
+
+          if (!hasGlyphs) {
             DBG.log('Temperature text layer skipped - no glyphs available in map style');
+          } else {
+            DBG.log('Temperature text layer deferred until needed');
           }
 
           // Add wind arrows layer - wait for colored icons to be loaded
@@ -2252,97 +2279,14 @@
                 }
               });
               
-              // Add 12 surrounding arrows with non-overlapping positions and size based on distance
-              var circlePositions = [];
-              var numArrows = 12;
-              var minRadius = 45;
-              var maxRadius = 80;
-              var minDistance = 25; // Minimum distance between arrows to prevent overlap
-              
-              // Generate non-overlapping positions for arrows
-              for (var i = 0; i < numArrows; i++) {
-                var attempts = 0;
-                var validPosition = false;
-                var newPos;
-                
-                while (!validPosition && attempts < 50) {
-                  var angle = (i / numArrows) * 2 * Math.PI + (Math.random() - 0.5) * 0.6;
-                  var radius = minRadius + Math.random() * (maxRadius - minRadius);
-                  
-                  newPos = {
-                    x: Math.cos(angle) * radius,
-                    y: Math.sin(angle) * radius,
-                    radius: radius
-                  };
-                  
-                  // Check distance from all existing positions
-                  validPosition = true;
-                  for (var j = 0; j < circlePositions.length; j++) {
-                    var distance = Math.sqrt(
-                      Math.pow(newPos.x - circlePositions[j].x, 2) + 
-                      Math.pow(newPos.y - circlePositions[j].y, 2)
-                    );
-                    if (distance < minDistance) {
-                      validPosition = false;
-                      break;
-                    }
-                  }
-                  attempts++;
-                }
-                
-                if (validPosition) {
-                  // Size based on distance from center (closer = bigger, farther = smaller)
-                  var normalizedRadius = (newPos.radius - minRadius) / (maxRadius - minRadius);
-                  var sizeIndex = Math.ceil((1 - normalizedRadius) * 4); // 1-4, where 1 is biggest
-                  sizeIndex = Math.max(1, Math.min(4, sizeIndex));
-                  
-                  circlePositions.push({
-                    x: newPos.x,
-                    y: newPos.y,
-                    size: sizeIndex
-                  });
-                }
+              if (!windSatelliteLayersEnabled) {
+                DBG.log('Wind satellite layers skipped in performance mode');
+              } else {
+                DBG.log('Wind satellite layers deferred until needed');
               }
-              
-              circlePositions.forEach(function(pos, index) {
-                map.addLayer({
-                  id: 'fgpx-wind-arrows-circle-' + index,
-                  type: 'symbol',
-                  source: 'fgpx-weather',
-                  minzoom: 12,
-                  filter: ['!=', ['get', 'wind_speed_kmh'], null],
-                  layout: {
-                    'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
-                    'icon-image': [
-                      'case',
-                      ['!=', ['get', 'wind_speed_kmh'], null],
-                      [
-                        'case',
-                        ['<', ['get', 'wind_speed_kmh'], 5], 'arrow-calm-size' + pos.size,
-                        ['<', ['get', 'wind_speed_kmh'], 15], 'arrow-light-size' + pos.size,
-                        ['<', ['get', 'wind_speed_kmh'], 25], 'arrow-moderate-size' + pos.size,
-                        ['<', ['get', 'wind_speed_kmh'], 40], 'arrow-strong-size' + pos.size,
-                        'arrow-very-strong-size' + pos.size
-                      ],
-                      'arrow-calm-size' + pos.size
-                    ],
-                    'icon-rotate': ['get', 'wind_direction_deg'],
-                    'icon-rotation-alignment': 'map',
-                    'icon-allow-overlap': true,
-                    'icon-ignore-placement': true,
-                    'icon-offset': [pos.x, pos.y]
-                  },
-                  paint: {
-                    'icon-opacity': [
-                      'interpolate',
-                      ['linear'],
-                      ['zoom'],
-                      12, 0,
-                      13, weatherOpacity * 0.6
-                    ]
-                  }
-                });
-              });
+
+              // Re-apply profile once deferred wind layers exist.
+              try { applyWeatherOverlayProfile(true); } catch (_) {}
               
               DBG.log('Wind arrows layer with circle pattern added successfully');
             } else {
@@ -2350,72 +2294,11 @@
             }
           }, 200);
 
-          // Add wind text labels layer (in addition to arrows) with glyph availability check
-          if (hasGlyphs) {
-            try {
-              map.addLayer({
-                id: 'fgpx-wind-text',
-                type: 'symbol',
-                source: 'fgpx-weather',
-                minzoom: 12,
-                filter: ['!=', ['get', 'wind_speed_kmh'], null], // Only show points with wind data
-                layout: {
-                  'visibility': (windVisible && !isMobileOverlayDisabled) ? 'visible' : 'none',
-                  'text-field': [
-                    'case',
-                    ['!=', ['get', 'wind_speed_kmh'], null],
-                    [
-                      'concat',
-                      ['round', ['get', 'wind_speed_kmh']], 'km/h'
-                    ],
-                    ''
-                  ],
-                  'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-              'text-size': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                12, 8,
-                16, 11
-              ],
-              'text-allow-overlap': true,
-              'text-ignore-placement': true,
-              'text-anchor': 'center',
-              'text-justify': 'center',
-              'text-offset': [0, 1.5] // Offset text below the arrow
-            },
-            paint: {
-              'text-color': [
-                'case',
-                ['!=', ['get', 'wind_speed_kmh'], null],
-                [
-                  'interpolate',
-                  ['linear'],
-                  ['get', 'wind_speed_kmh'],
-                  0, '#666666',   // Dark gray for calm
-                  10, '#228b22',  // Forest green for light breeze
-                  20, '#ff8c00',  // Dark orange for moderate wind
-                  30, '#ff4500',  // Red orange for strong wind
-                  50, '#dc143c'   // Crimson for very strong wind
-                ],
-                '#666666'
-              ],
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 2,
-              'text-opacity': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                12, 0,
-                13, 1
-              ]
-            }
-          });
-            } catch (e) {
-              DBG.warn('Failed to add wind text layer:', e);
-            }
-          } else {
+          // Add wind text labels layer lazily only when needed.
+          if (!hasGlyphs) {
             DBG.log('Wind text layer skipped - no glyphs available in map style');
+          } else {
+            DBG.log('Wind text layer deferred until needed');
           }
 
           DBG.log('Weather layers created:', {
@@ -2652,7 +2535,7 @@
             el.appendChild(inner);
             el.addEventListener('mouseenter', function(){ inner.style.transform = 'scale(1.8)'; });
             el.addEventListener('mouseleave', function(){ inner.style.transform = 'scale(1)'; });
-            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || '', ph.source_post_id, ph.source_post_title || '', ph.timestamp || ''); });
+            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || '', ph.source_post_id, ph.source_post_title || '', ph.timestamp || '', extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '')); });
             var marker = new window.maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
             photoMarkers.push({ marker: marker, photo: ph, lngLat: lngLat, pDist: pDistApprox });
             if (pDistApprox != null) { tmpByDist.push({ p: ph, pDist: pDistApprox, lngLat: lngLat }); }
@@ -4636,7 +4519,7 @@
       overlayTime.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
       overlay.appendChild(overlayTime);
       ui.mapEl.appendChild(overlay);
-      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp) { 
+      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
         // Clear any existing map layer first to prevent distorted frames
@@ -4676,7 +4559,7 @@
           overlayTime.textContent = '';
           overlayTime.style.display = 'none';
         }
-        
+
         overlay.style.display = 'flex'; 
         
         // During recording, use dark grey background to match map layer
@@ -4712,6 +4595,8 @@
               overlayCaption.style.display = 'none';
               overlaySource.textContent = '';
               overlaySource.style.display = 'none';
+              overlayTime.textContent = '';
+              overlayTime.style.display = 'none';
               // Reset background to default
               overlay.style.background = 'rgba(0,0,0,0.6)';
               overlay.removeEventListener('transitionend', done); 
@@ -4740,6 +4625,8 @@
             overlayCaption.style.display = 'none';
             overlaySource.textContent = '';
             overlaySource.style.display = 'none';
+            overlayTime.textContent = '';
+            overlayTime.style.display = 'none';
             // Reset background to default
             overlay.style.background = 'rgba(0,0,0,0.6)';
             // Clear overlay from map canvas if recording
@@ -4888,7 +4775,7 @@
           // Resume playback if still recording
           if (isRecording && !playing) {
             setPlaying(true);
-            window.requestAnimationFrame(raf);
+            scheduleRaf();
           }
         }); 
       });
@@ -4902,7 +4789,7 @@
             // Resume playback if still recording
             if (isRecording && !playing) {
               setPlaying(true);
-              window.requestAnimationFrame(raf);
+              scheduleRaf();
             }
           }); 
         } 
@@ -4919,7 +4806,7 @@
         var next = photoQueue.shift();
         if (!next) { 
           setPlaying(true); 
-          window.requestAnimationFrame(raf); 
+          scheduleRaf(); 
           return; 
         }
         
@@ -4937,7 +4824,7 @@
                 processNextPhoto();
               } else {
                 setPlaying(true);
-                window.requestAnimationFrame(raf);
+                scheduleRaf();
               }
               return;
             }
@@ -4949,7 +4836,7 @@
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
-        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '', next.source_post_id, next.source_post_title || '', next.timestamp || '');
+        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '', next.source_post_id, next.source_post_title || '', next.timestamp || '', extractFilenameFromUrl(next.fullUrl || next.thumbUrl || ''));
         
         // If recording, also draw the photo overlay on the canvas
         if (videoRecorder && videoRecorder.isRecording) {
@@ -4965,7 +4852,7 @@
             // Resume playback if still recording, regardless of photo queue
             if (isRecording && !playing) {
               setPlaying(true);
-              window.requestAnimationFrame(raf);
+              scheduleRaf();
             }
             // Process next photo immediately after overlay is fully hidden
             if (photoQueue.length > 0) { 
@@ -4973,7 +4860,7 @@
             } else if (!isRecording) { 
               // Only resume normal playback if not recording
               setPlaying(true); 
-              window.requestAnimationFrame(raf); 
+              scheduleRaf(); 
             }
           });
         }, overlayDuration);
@@ -5021,12 +4908,12 @@
           gateProm.then(function(){ 
             // Only start zoom/playback after preloading is completely finished
             if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
-            else { setPlaying(true); window.requestAnimationFrame(raf); } 
+            else { setPlaying(true); scheduleRaf(); } 
           }); 
         } catch(_) { 
           // Fallback: start immediately if promise fails
           if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
-          else { setPlaying(true); window.requestAnimationFrame(raf); } 
+          else { setPlaying(true); scheduleRaf(); } 
         }
       }
       
@@ -5240,12 +5127,16 @@
       window.showNoDataMessage = showNoDataMessageLocal;
       
       // Define switchChartTab function here where event listeners can access it
-      window.switchChartTab = function(tabType) {
+      var switchChartTab = function(tabType) {
         DBG.log('Switching to tab', { tabType: tabType });
+        if (tabType === 'weathergrade' && !weatherGradeAvailable) {
+          tabType = 'elevation';
+        }
         currentChartTab = tabType;
+        try { applyWeatherOverlayProfile(true); } catch (_) {}
         
-        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll];
-        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all'];
+        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll, ui.tabs.tabWeatherGrade];
+        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all', 'weathergrade'];
         
         tabElements.forEach(function(tab, index) {
           if (tabTypes[index] === tabType) {
@@ -5268,18 +5159,41 @@
         } else {
           ui.chartLegend.style.display = 'none';
         }
-        
-        // Reset chart zoom when switching tabs
+
+        // Show weather cinema or chart canvas based on tab
+        var weather = tabType === 'weathergrade';
+        var cinemaRoot = container || root;
+        var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
+        if (weather) {
+          // Hide chart canvas
+          ui.canvas.parentElement.style.display = 'none';
+          // Show or create cinema element
+          if (!cinemaEl) {
+            cinemaEl = createWeatherCinema(cinemaRoot, payload, lastPlaybackSec || 0, playing || false);
+          } else {
+            cinemaEl.style.display = 'flex';
+          }
+          // Trigger immediate update for current playback position
+          updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
+          try { applyWeatherOverlayProfile(true); } catch (_) {}
+          return;
+        } else {
+          if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = '';
+          if (cinemaEl) cinemaEl.style.display = 'none';
+          try { applyWeatherOverlayProfile(true); } catch (_) {}
+        }
+
         if (chart && chart.chartZoomState && chart.chartZoomState.originalScales) {
           resetChartZoom(chart);
           DBG.log('Chart zoom reset on tab switch');
         }
-        
+
         // Recreate chart with new configuration if chart creation function exists
         if (typeof createChart === 'function') {
           createChart(tabType);
         }
       };
+      ui.switchChartTab = switchChartTab;
       
       // Chart data series visibility state for All Data tab
       var chartDataVisibility = {
@@ -5345,14 +5259,18 @@
       }
       
       // Add tab event listeners now that switchChartTab is defined
-      ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });
-      ui.tabs.tabBiometrics.addEventListener('click', function() { window.switchChartTab('biometrics'); });
-      ui.tabs.tabTemperature.addEventListener('click', function() { window.switchChartTab('temperature'); });
-      ui.tabs.tabPower.addEventListener('click', function() { window.switchChartTab('power'); });
-      ui.tabs.tabPowerZones.addEventListener('click', function() { window.switchChartTab('powerzones'); });
-      ui.tabs.tabWindImpact.addEventListener('click', function() { window.switchChartTab('windimpact'); });
-      ui.tabs.tabWindRose.addEventListener('click', function() { window.switchChartTab('windrose'); });
-      ui.tabs.tabAll.addEventListener('click', function() { window.switchChartTab('all'); });
+      if (!weatherGradeAvailable && ui.tabs.tabWeatherGrade) {
+        ui.tabs.tabWeatherGrade.style.display = 'none';
+      }
+      ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });
+      ui.tabs.tabBiometrics.addEventListener('click', function() { switchChartTab('biometrics'); });
+      ui.tabs.tabTemperature.addEventListener('click', function() { switchChartTab('temperature'); });
+      ui.tabs.tabPower.addEventListener('click', function() { switchChartTab('power'); });
+      ui.tabs.tabPowerZones.addEventListener('click', function() { switchChartTab('powerzones'); });
+      ui.tabs.tabWindImpact.addEventListener('click', function() { switchChartTab('windimpact'); });
+      ui.tabs.tabWindRose.addEventListener('click', function() { switchChartTab('windrose'); });
+      ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
+      ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
       
       // Immediate debug test to verify logging works
       DBG.log('=== DEBUG TEST: Chart creation started ===');
@@ -5363,6 +5281,7 @@
 
       // Calculate day/night periods if SunCalc is available and we have timestamps
       var dayNightPeriods = null;
+      var dayNightPeriodsSorted = null;
       DBG.log('Day/night calculation check', {
         hasSunCalc: typeof window.SunCalc !== 'undefined',
         hasTimestamps: hasTimestamps,
@@ -5376,6 +5295,9 @@
       if (typeof window.SunCalc !== 'undefined' && hasTimestamps && Array.isArray(timestamps) && Array.isArray(coords)) {
         try {
           dayNightPeriods = calculateDayNightPeriods(coords, timestamps, timeOffsets);
+          if (dayNightPeriods && dayNightPeriods.length > 0) {
+            dayNightPeriodsSorted = dayNightPeriods.slice().sort(function(a, b) { return a.timeOffset - b.timeOffset; });
+          }
           DBG.log('Day/night periods calculated', { 
             periods: dayNightPeriods ? dayNightPeriods.length : 0,
             periodsData: dayNightPeriods
@@ -5510,6 +5432,766 @@
         
         DBG.log('Final periods', { count: sortedPeriods.length, periods: sortedPeriods, startsAtNight: startsAtNight });
         return sortedPeriods;
+      }
+
+      // =====================================================================
+      // Weather & Grade Cinema Animation Tab
+      // =====================================================================
+
+      function parseEpochSeconds(value) {
+        if (value === null || value === undefined || value === '') return NaN;
+        var num = Number(value);
+        if (isFinite(num)) {
+          var numericEpoch = (num > 1000000000000) ? (num / 1000) : num;
+          if (numericEpoch > 0 && numericEpoch < 4102444800) return numericEpoch;
+          return NaN;
+        }
+        if (typeof value === 'string') {
+          var parsedMs = Date.parse(value);
+          if (!isNaN(parsedMs)) {
+            var parsedEpoch = parsedMs / 1000;
+            if (parsedEpoch > 0 && parsedEpoch < 4102444800) return parsedEpoch;
+          }
+        }
+        return NaN;
+      }
+
+      function buildWeatherLookup(payloadData) {
+        if (!payloadData || !payloadData.weather || !Array.isArray(payloadData.weather.features)) return [];
+        var features = payloadData.weather.features;
+        var trackStartEpoch = NaN;
+        if (timestamps && timestamps.length) {
+          for (var tsi = 0; tsi < timestamps.length; tsi++) {
+            trackStartEpoch = parseEpochSeconds(timestamps[tsi]);
+            if (isFinite(trackStartEpoch)) break;
+          }
+        }
+        var items = [];
+        for (var i = 0; i < features.length; i++) {
+          var feat = features[i];
+          if (!feat || !feat.properties) continue;
+          var p = feat.properties;
+          var tsEpoch = parseEpochSeconds(p.time_unix);
+          if (!isFinite(tsEpoch)) tsEpoch = parseEpochSeconds(p.timestamp);
+          if (!isFinite(tsEpoch) || tsEpoch <= 0) continue;
+          if (!isFinite(trackStartEpoch)) continue;
+          items.push({ timeOffset: tsEpoch - trackStartEpoch, props: p });
+        }
+        items.sort(function(a, b) { return a.timeOffset - b.timeOffset; });
+        return items;
+      }
+
+      function weatherInterpolateAt(weatherLookup, ts) {
+        if (!weatherLookup || !weatherLookup.length) return null;
+        var n = weatherLookup.length;
+        if (ts <= weatherLookup[0].timeOffset) return weatherLookup[0].props;
+        if (ts >= weatherLookup[n - 1].timeOffset) return weatherLookup[n - 1].props;
+        var lo = 0, hi = n - 1;
+        while (lo < hi - 1) {
+          var mid = (lo + hi) >>> 1;
+          if (weatherLookup[mid].timeOffset <= ts) lo = mid; else hi = mid;
+        }
+        var frac = (ts - weatherLookup[lo].timeOffset) / Math.max(1, weatherLookup[hi].timeOffset - weatherLookup[lo].timeOffset);
+        var lp = weatherLookup[lo].props, hp = weatherLookup[hi].props;
+        function lerp(a, b) {
+          var av = Number(a); if (!isFinite(av)) av = 0;
+          var bv = Number(b); if (!isFinite(bv)) bv = 0;
+          return av + frac * (bv - av);
+        }
+        return {
+          rain_mm: lerp(lp.rain_mm, hp.rain_mm),
+          snowfall_cm: lerp(lp.snowfall_cm, hp.snowfall_cm),
+          temperature_c: lerp(lp.temperature_c !== undefined ? lp.temperature_c : lp.temperature_2m_c, hp.temperature_c !== undefined ? hp.temperature_c : hp.temperature_2m_c),
+          wind_speed_kmh: lerp(lp.wind_speed_kmh, hp.wind_speed_kmh),
+          wind_direction_deg: lerp(lp.wind_direction_deg, hp.wind_direction_deg),
+          fog_intensity: lerp(lp.fog_intensity, hp.fog_intensity),
+          cloud_cover_pct: lerp(lp.cloud_cover_pct, hp.cloud_cover_pct)
+        };
+      }
+
+      function distanceAtPlaybackTime(sec) {
+        if (!Array.isArray(timeOffsets) || timeOffsets.length < 2 || !Array.isArray(cumDist) || cumDist.length < 2) return NaN;
+        if (!isFinite(Number(sec))) return NaN;
+        if (sec <= Number(timeOffsets[0])) return Number(cumDist[0]) || 0;
+        if (sec >= Number(timeOffsets[timeOffsets.length - 1])) return Number(cumDist[cumDist.length - 1]) || 0;
+        var lo = 0;
+        var hi = timeOffsets.length - 1;
+        while (lo < hi - 1) {
+          var mid = (lo + hi) >>> 1;
+          if (Number(timeOffsets[mid]) <= sec) lo = mid; else hi = mid;
+        }
+        var t0 = Number(timeOffsets[lo]);
+        var t1 = Number(timeOffsets[hi]);
+        var d0 = Number(cumDist[lo]);
+        var d1 = Number(cumDist[Math.min(cumDist.length - 1, hi)]);
+        if (!isFinite(t0) || !isFinite(t1) || !isFinite(d0) || !isFinite(d1) || t1 <= t0) return d0;
+        var frac = Math.max(0, Math.min(1, (sec - t0) / (t1 - t0)));
+        return d0 + ((d1 - d0) * frac);
+      }
+
+      function getCinemaPhotoMarker(currentTimeSec, currentDistanceMeters) {
+        var markerPhoto = currentDisplayedPhoto;
+        var markerTimeSec = NaN;
+        if (!markerPhoto && Array.isArray(photosByTime) && photosByTime.length > 0) {
+          var idx = lowerBoundPhotoIdx(currentTimeSec);
+          var prev = idx > 0 ? photosByTime[idx - 1] : null;
+          var next = idx < photosByTime.length ? photosByTime[idx] : null;
+          if (prev && next) {
+            var prevDiff = Math.abs(Number(prev.pSec) - currentTimeSec);
+            var nextDiff = Math.abs(Number(next.pSec) - currentTimeSec);
+            markerPhoto = (prevDiff <= nextDiff ? prev.p : next.p);
+            markerTimeSec = (prevDiff <= nextDiff ? Number(prev.pSec) : Number(next.pSec));
+          } else if (next) {
+            markerPhoto = next.p;
+            markerTimeSec = Number(next.pSec);
+          } else if (prev) {
+            markerPhoto = prev.p;
+            markerTimeSec = Number(prev.pSec);
+          }
+        }
+        if (!markerPhoto && Array.isArray(photos) && photos.length > 0 && isFinite(Number(currentDistanceMeters))) {
+          var closest = null;
+          var closestDiff = Infinity;
+          for (var pmi = 0; pmi < photos.length; pmi++) {
+            var candPhoto = photos[pmi];
+            var candDist = Number(candPhoto && candPhoto._distAlong);
+            if (!isFinite(candDist)) continue;
+            var diff = Math.abs(candDist - Number(currentDistanceMeters));
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              closest = candPhoto;
+            }
+          }
+          markerPhoto = closest;
+        }
+        if (!markerPhoto) return null;
+        var markerDistance = Number(markerPhoto._distAlong);
+        if (!isFinite(markerDistance) && isFinite(markerTimeSec)) {
+          markerDistance = distanceAtPlaybackTime(markerTimeSec);
+        }
+        if (!isFinite(markerDistance) && Array.isArray(photosByTime) && photosByTime.length > 0) {
+          for (var pti = 0; pti < photosByTime.length; pti++) {
+            if (photosByTime[pti] && photosByTime[pti].p === markerPhoto) {
+              markerDistance = distanceAtPlaybackTime(photosByTime[pti].pSec);
+              break;
+            }
+          }
+        }
+        if (!isFinite(markerDistance) && typeof markerPhoto.lat === 'number' && typeof markerPhoto.lon === 'number' && Array.isArray(coords) && coords.length > 0 && Array.isArray(cumDist) && cumDist.length === coords.length) {
+          var markerIdx = nearestCoordIndex([markerPhoto.lon, markerPhoto.lat], coords);
+          if (isFinite(markerIdx) && markerIdx >= 0 && markerIdx < cumDist.length) {
+            markerDistance = Number(cumDist[markerIdx]);
+          }
+        }
+        if (!isFinite(markerDistance)) return null;
+        var markerLabel = extractFilenameFromUrl(markerPhoto.fullUrl || markerPhoto.thumbUrl || '') || markerPhoto.title || markerPhoto.caption || 'Photo';
+        return {
+          distanceMeters: markerDistance,
+          label: markerLabel,
+          isCurrent: Math.abs(markerDistance - distanceAtPlaybackTime(currentTimeSec)) < 80
+        };
+      }
+
+      function tempToHsl(tempC) {
+        var t = Math.max(-20, Math.min(40, Number(tempC) || 15));
+        var norm = (t + 20) / 60;
+        var hue = 220 - (norm * 220);
+        var sat = 40 + norm * 40;
+        var light = 20 + (1 - Math.abs(norm - 0.5) * 2) * 10;
+        return 'hsl(' + Math.round(hue) + ',' + Math.round(sat) + '%,' + Math.round(light) + '%)';
+      }
+
+      function isNighttime(ts, coordsArr) {
+        if (!window.SunCalc || !coordsArr || !coordsArr.length || !timestamps || !timestamps.length) return false;
+        var idx = 0;
+        if (timeOffsets && timeOffsets.length > 0) {
+          for (var i = 0; i < timeOffsets.length; i++) {
+            if (timeOffsets[i] <= ts) idx = i; else break;
+          }
+        }
+        var coord = coordsArr[idx];
+        if (!coord) return false;
+        var pointEpoch = parseEpochSeconds(timestamps[idx]);
+        if (!isFinite(pointEpoch)) {
+          var baseEpoch = NaN;
+          for (var tbi = 0; tbi < timestamps.length; tbi++) {
+            baseEpoch = parseEpochSeconds(timestamps[tbi]);
+            if (isFinite(baseEpoch)) break;
+          }
+          if (!isFinite(baseEpoch)) return false;
+          pointEpoch = baseEpoch + (Number(ts) || 0);
+        }
+        var date = new Date(pointEpoch * 1000);
+        try {
+          var sunPos = window.SunCalc.getPosition(date, coord[1], coord[0]);
+          return sunPos.altitude < 0;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function createWeatherCinema(containerEl, payloadData, currentTimeSec, isCurrentlyPlaying) {
+        var cinema = document.createElement('div');
+        cinema.className = 'fgpx-weather-cinema' + (isCurrentlyPlaying ? '' : ' is-paused');
+        cinema.style.display = 'flex';
+        cinema.setAttribute('data-fgpx-cinema', '1');
+
+        ['fgpx-weather-bg','fgpx-weather-layer-daynight','fgpx-weather-layer-clear','fgpx-weather-layer-clouds','fgpx-weather-layer-fog','fgpx-weather-layer-wind','fgpx-weather-layer-rain','fgpx-weather-layer-snow','fgpx-weather-future-fade','fgpx-weather-now-line'].forEach(function(cls) {
+          var el = document.createElement('div');
+          el.className = cls;
+          cinema.appendChild(el);
+        });
+
+        var gradeWrap = document.createElement('div');
+        gradeWrap.className = 'fgpx-weather-grade-indicator';
+        var gradeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        gradeSvg.setAttribute('viewBox', '0 0 400 40');
+        gradeSvg.setAttribute('preserveAspectRatio', 'none');
+        gradeSvg.setAttribute('class', 'fgpx-weather-grade-svg');
+        var gradePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        gradePath.setAttribute('fill', 'rgba(100,100,100,0.5)');
+        gradeSvg.appendChild(gradePath);
+        gradeWrap.appendChild(gradeSvg);
+        cinema.appendChild(gradeWrap);
+
+        var celestial = document.createElement('div');
+        celestial.className = 'fgpx-weather-celestial';
+        celestial.textContent = '\u2600\uFE0F';
+        cinema.appendChild(celestial);
+
+        var conditionIcons = document.createElement('div');
+        conditionIcons.className = 'fgpx-weather-conditions-icons';
+        conditionIcons.textContent = '';
+        cinema.appendChild(conditionIcons);
+
+        var mileageRuler = document.createElement('div');
+        mileageRuler.className = 'fgpx-weather-mileage-ruler';
+        var mileageTrack = document.createElement('div');
+        mileageTrack.className = 'fgpx-weather-mileage-track';
+        var mileageMarks = document.createElement('div');
+        mileageMarks.className = 'fgpx-weather-mileage-marks';
+        mileageRuler.appendChild(mileageTrack);
+        mileageRuler.appendChild(mileageMarks);
+        cinema.appendChild(mileageRuler);
+
+        var photoMarker = document.createElement('div');
+        photoMarker.className = 'fgpx-weather-photo-marker';
+        photoMarker.style.display = 'none';
+        var photoMarkerLine = document.createElement('div');
+        photoMarkerLine.className = 'fgpx-weather-photo-marker-line';
+        var photoMarkerLabel = document.createElement('div');
+        photoMarkerLabel.className = 'fgpx-weather-photo-marker-label';
+        photoMarker.appendChild(photoMarkerLine);
+        photoMarker.appendChild(photoMarkerLabel);
+        cinema.appendChild(photoMarker);
+
+        var bicycle = document.createElement('div');
+        bicycle.className = 'fgpx-weather-bicycle';
+        var bikeIcon = document.createElement('div');
+        bikeIcon.className = 'fgpx-weather-bicycle-icon';
+        bikeIcon.setAttribute('role', 'img');
+        bikeIcon.setAttribute('aria-label', 'Cyclist position');
+        bikeIcon.style.transform = 'scaleX(-1)';
+        bikeIcon.textContent = '\uD83D\uDEB4';
+        bicycle.appendChild(bikeIcon);
+        cinema.appendChild(bicycle);
+
+        var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
+        var legend = document.createElement('div');
+        legend.className = 'fgpx-weather-legend';
+        legend.setAttribute('role', 'group');
+        legend.setAttribute('aria-label', i18n.simulationLegendAria || 'Weather and route grade metrics');
+        [
+          { cls: 'fgpx-legend-mileage', label: (i18n.simMileage || 'Mileage') + ': -- km', aria: i18n.simMileageAria || 'Current mileage in kilometers' },
+          { cls: 'fgpx-legend-duration', label: (i18n.simDuration || 'Duration') + ': --:--:--', aria: i18n.simDurationAria || 'Current elapsed duration' },
+          { cls: 'fgpx-legend-grade', label: (i18n.simGrade || 'Grade') + ': --', aria: i18n.simGradeAria || 'Current route grade percentage' },
+          { cls: 'fgpx-legend-elevation', label: (i18n.simElevation || 'Elevation') + ': -- m', aria: i18n.simElevationAria || 'Current elevation in meters' },
+          { cls: 'fgpx-legend-temp', label: (i18n.simTemp || 'Temp') + ': -- \u00B0C', aria: i18n.simTempAria || 'Current temperature in degrees Celsius' },
+          { cls: 'fgpx-legend-wind', label: (i18n.simWind || 'Wind') + ': -- km/h', aria: i18n.simWindAria || 'Current wind speed in kilometers per hour' },
+          { cls: 'fgpx-legend-conditions', label: '', aria: i18n.simConditionsAria || 'Current weather conditions summary' }
+        ].forEach(function(item) {
+          var span = document.createElement('span');
+          span.className = 'fgpx-weather-legend-item ' + item.cls;
+          span.textContent = item.label;
+          span.setAttribute('aria-label', item.aria);
+          if (item.cls === 'fgpx-legend-conditions') {
+            span.setAttribute('aria-live', 'polite');
+          }
+          legend.appendChild(span);
+        });
+
+        var chartWrapEl = containerEl.querySelector('.fgpx-chart-wrap');
+        if (chartWrapEl && chartWrapEl.parentElement) {
+          chartWrapEl.parentElement.insertBefore(cinema, chartWrapEl.nextSibling);
+          chartWrapEl.parentElement.insertBefore(legend, cinema.nextSibling);
+        } else {
+          containerEl.appendChild(cinema);
+          containerEl.appendChild(legend);
+        }
+
+        cinema._legend = legend;
+        cinema._els = {
+          bg: cinema.querySelector('.fgpx-weather-bg'),
+          daynight: cinema.querySelector('.fgpx-weather-layer-daynight'),
+          celestial: cinema.querySelector('.fgpx-weather-celestial'),
+          conditionIcons: cinema.querySelector('.fgpx-weather-conditions-icons'),
+          rain: cinema.querySelector('.fgpx-weather-layer-rain'),
+          snow: cinema.querySelector('.fgpx-weather-layer-snow'),
+          fog: cinema.querySelector('.fgpx-weather-layer-fog'),
+          wind: cinema.querySelector('.fgpx-weather-layer-wind'),
+          clouds: cinema.querySelector('.fgpx-weather-layer-clouds'),
+          mileageRuler: cinema.querySelector('.fgpx-weather-mileage-ruler'),
+          mileageTrack: cinema.querySelector('.fgpx-weather-mileage-track'),
+          mileageMarks: cinema.querySelector('.fgpx-weather-mileage-marks'),
+          photoMarker: cinema.querySelector('.fgpx-weather-photo-marker'),
+          photoMarkerLabel: cinema.querySelector('.fgpx-weather-photo-marker-label'),
+          gradePath: cinema.querySelector('.fgpx-weather-grade-svg path'),
+          bike: cinema.querySelector('.fgpx-weather-bicycle')
+        };
+        cinema._legendEls = {
+          mileage: legend.querySelector('.fgpx-legend-mileage'),
+          duration: legend.querySelector('.fgpx-legend-duration'),
+          grade: legend.querySelector('.fgpx-legend-grade'),
+          elevation: legend.querySelector('.fgpx-legend-elevation'),
+          temp: legend.querySelector('.fgpx-legend-temp'),
+          wind: legend.querySelector('.fgpx-legend-wind'),
+          conditions: legend.querySelector('.fgpx-legend-conditions')
+        };
+        cinema._weatherLookup = buildWeatherLookup(payloadData);
+        updateWeatherCinema(cinema, payloadData, currentTimeSec, isCurrentlyPlaying, true);
+        return cinema;
+      }
+
+      function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate) {
+        if (!cinemaEl || cinemaEl.style.display === 'none') return;
+        var now = Date.now();
+        var lastUpdate = Number(cinemaEl._lastUpdate || 0);
+        if (!forceUpdate && now - lastUpdate < 100) return;
+        cinemaEl._lastUpdate = now;
+        var els = cinemaEl._els || {};
+
+        if (isCurrentlyPlaying) cinemaEl.classList.remove('is-paused');
+        else cinemaEl.classList.add('is-paused');
+
+        function setStyleIfChanged(el, key, value) {
+          if (!el) return;
+          if (el.style[key] !== value) {
+            el.style[key] = value;
+          }
+        }
+
+        function setTextIfChanged(el, value) {
+          if (!el) return;
+          if (el.textContent !== value) {
+            el.textContent = value;
+          }
+        }
+
+        var fogThresh = (window.FGPX && FGPX.weatherFogThreshold != null) ? FGPX.weatherFogThreshold : 0.3;
+        var rainThresh = (window.FGPX && FGPX.weatherRainThreshold != null) ? FGPX.weatherRainThreshold : 0.1;
+        var snowThresh = (window.FGPX && FGPX.weatherSnowThreshold != null) ? FGPX.weatherSnowThreshold : 0.1;
+        var windThresh = (window.FGPX && FGPX.weatherWindThreshold != null) ? FGPX.weatherWindThreshold : 3;
+        var cloudThresh = (window.FGPX && FGPX.weatherCloudThreshold != null) ? FGPX.weatherCloudThreshold : 50;
+
+        var cond = weatherInterpolateAt(cinemaEl._weatherLookup, currentTimeSec) || { rain_mm: 0, snowfall_cm: 0, temperature_c: 15, wind_speed_kmh: 0, wind_direction_deg: 0, fog_intensity: 0, cloud_cover_pct: 0 };
+
+        // ===== DEBUG SIMULATION: Rapid weather changes to test bike angle responsiveness =====
+        // REMOVE THIS ENTIRE BLOCK (marked with DEBUG SIMULATION comment pairs) after debugging
+        if (debugWeatherSimEnabled) {
+          var simState = cinemaEl._debugWeatherSim;
+          if (!simState) {
+            simState = {
+              nextSwitchAt: currentTimeSec,
+              intervalSec: 6.0,
+              step: 0,
+              values: { temperature_c: 15, wind_speed_kmh: 20, rain_mm: 0, cloud_cover_pct: 35 }
+            };
+            cinemaEl._debugWeatherSim = simState;
+          }
+          if (currentTimeSec >= simState.nextSwitchAt) {
+            simState.step += 1;
+            simState.intervalSec = 6.0 + ((simState.step % 3) * 1.5); // 6.0, 7.5, 9.0s cadence (3x slower)
+            simState.nextSwitchAt = currentTimeSec + simState.intervalSec;
+            var s = simState.step;
+            simState.values.temperature_c = 15 + Math.sin(s * 0.9) * 15;
+            simState.values.wind_speed_kmh = Math.max(0, 20 + Math.sin(s * 1.1 + 1.5) * 18);
+            simState.values.rain_mm = Math.max(0, Math.sin(s * 1.3 + 3) * 8);
+            simState.values.cloud_cover_pct = Math.max(0, Math.min(100, 50 + Math.sin(s * 0.8 + 0.8) * 50));
+          }
+          cond.temperature_c = simState.values.temperature_c;
+          cond.wind_speed_kmh = simState.values.wind_speed_kmh;
+          cond.rain_mm = simState.values.rain_mm;
+          cond.cloud_cover_pct = simState.values.cloud_cover_pct;
+        }
+        // ===== END DEBUG SIMULATION =====
+
+        var gradeAtNow = 0;
+        var elevationAtNow = 0;
+        if (Array.isArray(coords) && coords.length > 1 && timeOffsets && timeOffsets.length > 0) {
+          var ci = 0;
+          if (currentTimeSec <= timeOffsets[0]) {
+            ci = 0;
+          } else if (currentTimeSec >= timeOffsets[timeOffsets.length - 1]) {
+            ci = timeOffsets.length - 1;
+          } else {
+            var loCi = 0, hiCi = timeOffsets.length - 1;
+            while (loCi < hiCi) {
+              var midCi = (loCi + hiCi + 1) >>> 1;
+              if (timeOffsets[midCi] <= currentTimeSec) loCi = midCi;
+              else hiCi = midCi - 1;
+            }
+            ci = loCi;
+          }
+          var cCoord = coords[ci];
+          elevationAtNow = (cCoord && cCoord[2] != null) ? Number(cCoord[2]) : 0;
+          if (ci > 2) {
+            var ciPrev = Math.max(0, ci - 5);
+            var cPrev = coords[ciPrev];
+            var elevDiff = elevationAtNow - ((cPrev && cPrev[2] != null) ? Number(cPrev[2]) : elevationAtNow);
+            var distDiff = (Array.isArray(cumDist) && cumDist[ci] != null && cumDist[ciPrev] != null) ? (cumDist[ci] - cumDist[ciPrev]) : 0;
+            gradeAtNow = distDiff > 0 ? (elevDiff / distDiff) * 100 : 0;
+          }
+        }
+
+        var bg = els.bg;
+        if (!bg) {
+          bg = cinemaEl.querySelector('.fgpx-weather-bg');
+          els.bg = bg;
+        }
+        setStyleIfChanged(bg, 'backgroundColor', tempToHsl(cond.temperature_c));
+
+        var night = false;
+        var nightCacheKey = Math.floor((Number(currentTimeSec) || 0) * 2);
+        if (cinemaEl._nightCache && cinemaEl._nightCache.key === nightCacheKey) {
+          night = !!cinemaEl._nightCache.value;
+        } else {
+          night = isNighttime(currentTimeSec, coords);
+          cinemaEl._nightCache = { key: nightCacheKey, value: night };
+        }
+        var dnLayer = els.daynight;
+        if (!dnLayer) {
+          dnLayer = cinemaEl.querySelector('.fgpx-weather-layer-daynight');
+          els.daynight = dnLayer;
+        }
+        if (dnLayer) {
+          if (night) {
+            setStyleIfChanged(dnLayer, 'background', 'linear-gradient(to bottom, #050d1a 0%, #0a1535 100%)');
+          } else {
+            var skyHue = 200 + Math.round((Number(cond.temperature_c) || 15) * 0.5);
+            setStyleIfChanged(dnLayer, 'background', 'linear-gradient(to bottom, hsl(' + skyHue + ',60%,45%) 0%, hsl(' + skyHue + ',50%,65%) 100%)');
+          }
+        }
+
+        var celestial = els.celestial;
+        if (!celestial) {
+          celestial = cinemaEl.querySelector('.fgpx-weather-celestial');
+          els.celestial = celestial;
+        }
+        setTextIfChanged(celestial, night ? '\uD83C\uDF19' : '\u2600\uFE0F');
+
+        var snowForIcons = Number(cond.snowfall_cm);
+        if (!isFinite(snowForIcons)) {
+          snowForIcons = ((Number(cond.rain_mm) || 0) >= rainThresh && (Number(cond.temperature_c) || 15) < 2) ? (Number(cond.rain_mm) || 0) : 0;
+        }
+        var activeIcons = [];
+        if ((Number(cond.fog_intensity) || 0) >= fogThresh) activeIcons.push('\uD83C\uDF2B\uFE0F');
+        if ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) activeIcons.push('\u2601\uFE0F');
+        if ((Number(cond.rain_mm) || 0) >= rainThresh) activeIcons.push('\uD83C\uDF27\uFE0F');
+        if (snowForIcons >= snowThresh) activeIcons.push('\u2744\uFE0F');
+        if ((Number(cond.wind_speed_kmh) || 0) >= windThresh) activeIcons.push('\uD83D\uDCA8');
+
+        var conditionIcons = els.conditionIcons;
+        if (!conditionIcons) {
+          conditionIcons = cinemaEl.querySelector('.fgpx-weather-conditions-icons');
+          els.conditionIcons = conditionIcons;
+        }
+        setTextIfChanged(conditionIcons, activeIcons.join(' '));
+
+        var rainLayer = els.rain;
+        if (!rainLayer) {
+          rainLayer = cinemaEl.querySelector('.fgpx-weather-layer-rain');
+          els.rain = rainLayer;
+        }
+        var rainIntensity = Math.max(0, Math.min(1, ((Number(cond.rain_mm) || 0) - rainThresh) / 5));
+        setStyleIfChanged(rainLayer, 'opacity', ((Number(cond.rain_mm) || 0) >= rainThresh) ? String(0.3 + rainIntensity * 0.7) : '0');
+
+        var snowLayer = els.snow;
+        if (!snowLayer) {
+          snowLayer = cinemaEl.querySelector('.fgpx-weather-layer-snow');
+          els.snow = snowLayer;
+        }
+        var snowVal = Number(cond.snowfall_cm);
+        if (!isFinite(snowVal)) {
+          snowVal = ((Number(cond.rain_mm) || 0) >= rainThresh && (Number(cond.temperature_c) || 15) < 2) ? (Number(cond.rain_mm) || 0) : 0;
+        }
+        setStyleIfChanged(snowLayer, 'opacity', (snowVal >= snowThresh) ? String(Math.min(1, 0.3 + snowVal / 5)) : '0');
+
+        var fogLayer = els.fog;
+        if (!fogLayer) {
+          fogLayer = cinemaEl.querySelector('.fgpx-weather-layer-fog');
+          els.fog = fogLayer;
+        }
+        setStyleIfChanged(fogLayer, 'opacity', ((Number(cond.fog_intensity) || 0) >= fogThresh) ? String(Math.min(1, Number(cond.fog_intensity) || 0)) : '0');
+
+        var windLayer = els.wind;
+        if (!windLayer) {
+          windLayer = cinemaEl.querySelector('.fgpx-weather-layer-wind');
+          els.wind = windLayer;
+        }
+        if (windLayer) {
+          var windSpeedNow = Math.max(0, Number(cond.wind_speed_kmh) || 0);
+          var riderHeadingDeg = 270;
+          if (Array.isArray(coords) && coords.length > 1) {
+            var headingIdx = Math.max(0, Math.min(coords.length - 1, isFinite(ci) ? ci : 0));
+            var prevIdx = Math.max(0, headingIdx - 1);
+            var nextIdx = Math.min(coords.length - 1, headingIdx + 1);
+            if (nextIdx !== headingIdx) {
+              riderHeadingDeg = bearingBetween(coords[headingIdx], coords[nextIdx]);
+            } else if (headingIdx !== prevIdx) {
+              riderHeadingDeg = bearingBetween(coords[prevIdx], coords[headingIdx]);
+            }
+          }
+
+          var windFromDeg = normalizeAngle(Number(cond.wind_direction_deg) || 0);
+          var relWindDelta = Math.abs(shortestAngleDelta(riderHeadingDeg, windFromDeg));
+          var windDirectionMode = 'side';
+          if (relWindDelta <= 50) windDirectionMode = 'head';
+          else if (relWindDelta >= 130) windDirectionMode = 'tail';
+
+          windLayer.classList.toggle('is-headwind', windDirectionMode === 'head');
+          windLayer.classList.toggle('is-tailwind', windDirectionMode === 'tail');
+          windLayer.classList.toggle('is-sidewind', windDirectionMode === 'side');
+
+          if (windSpeedNow >= windThresh && windDirectionMode !== 'side') {
+            var windOpacity = Math.min(0.9, 0.55 + (windSpeedNow - windThresh) / 20);
+            setStyleIfChanged(windLayer, 'opacity', String(windOpacity));
+            var windSpeedFactor = Math.max(0, Math.min(1, (windSpeedNow - windThresh) / 40));
+            var windAnimDuration = 2.3 - (1.7 * windSpeedFactor);
+            setStyleIfChanged(windLayer, 'animationDuration', windAnimDuration.toFixed(2) + 's');
+            setStyleIfChanged(windLayer, 'filter', 'saturate(0.95) drop-shadow(0 0 1px rgba(255,255,255,0.3))');
+          } else {
+            setStyleIfChanged(windLayer, 'opacity', '0');
+            setStyleIfChanged(windLayer, 'filter', 'none');
+          }
+        }
+
+        var cloudsLayer = els.clouds;
+        if (!cloudsLayer) {
+          cloudsLayer = cinemaEl.querySelector('.fgpx-weather-layer-clouds');
+          els.clouds = cloudsLayer;
+        }
+        setStyleIfChanged(cloudsLayer, 'opacity', ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) ? String(Math.min(0.8, (Number(cond.cloud_cover_pct) || 0) / 100)) : '0');
+
+        var gradePath = els.gradePath;
+        if (!gradePath) {
+          gradePath = cinemaEl.querySelector('.fgpx-weather-grade-svg path');
+          els.gradePath = gradePath;
+        }
+        if (gradePath) {
+          var baseY = 40;
+          var bikeX = 200; // 50% of 400 viewBox width: centered "now" anchor
+          var maxPeak = 18;
+          // Visual zoom only: tighten weather-grade horizon from roughly +/-15 min to +/-10 min.
+          var timelineZoomFactor = 1.5;
+          var sampleSpan = Math.max(8, Math.round(24 / timelineZoomFactor));
+          var relDivisor = 120;
+          var points = [];
+          for (var gx = 0; gx <= 400; gx += 25) {
+            var rel = (gx - bikeX) / relDivisor;
+            var envelope = Math.max(0.18, 1 - Math.pow(Math.min(1, Math.abs(rel)), 1.15));
+            var elevAdj = 0;
+            if (Array.isArray(coords) && coords.length > 1) {
+              var idxFloat = ci + (rel * sampleSpan);
+              var idxLo = Math.max(0, Math.min(coords.length - 1, Math.floor(idxFloat)));
+              var idxHi = Math.max(0, Math.min(coords.length - 1, Math.ceil(idxFloat)));
+              var frac = idxFloat - idxLo;
+              var loElev = (coords[idxLo] && coords[idxLo][2] != null) ? Number(coords[idxLo][2]) : elevationAtNow;
+              var hiElev = (coords[idxHi] && coords[idxHi][2] != null) ? Number(coords[idxHi][2]) : loElev;
+              var sampleElev = loElev + ((hiElev - loElev) * frac);
+              elevAdj = (sampleElev - elevationAtNow) * 0.30;
+            }
+            var tilt = Math.max(-0.28, Math.min(0.28, gradeAtNow / 18));
+            // Positive grade should rise toward future (right side).
+            var shapeHeight = (envelope * maxPeak) + elevAdj + (rel * 1.6 * tilt);
+            shapeHeight = Math.max(0, Math.min(baseY, shapeHeight));
+            var y = baseY - shapeHeight;
+            points.push({ x: gx, y: Math.round(y) });
+          }
+          var d = 'M0,' + baseY + ' L0,' + points[0].y;
+          for (var pi = 1; pi < points.length; pi++) {
+            d += ' L' + points[pi].x + ',' + points[pi].y;
+          }
+          d += ' L400,' + baseY + ' Z';
+          gradePath.setAttribute('d', d);
+
+          // Anchor bicycle wheels to the terrain at the current (bikeX) location.
+          var bikeSurfaceY = baseY;
+          var bikeSlopeDeg = 0;
+          if (points.length > 1) {
+            for (var bi = 1; bi < points.length; bi++) {
+              if (points[bi].x >= bikeX) {
+                var p0 = points[bi - 1];
+                var p1 = points[bi];
+                var span = Math.max(1, p1.x - p0.x);
+                var f = (bikeX - p0.x) / span;
+                bikeSurfaceY = p0.y + ((p1.y - p0.y) * f);
+                // Use actual grade for bike angle, not rendered terrain (which includes elevation bumps)
+                bikeSlopeDeg = gradeAtNow * 0.3;
+                break;
+              }
+            }
+          }
+          var bikeLift = Math.max(0, baseY - bikeSurfaceY);
+          var wheelContactCalibration = -2;
+          var bikeEl = els.bike;
+          if (!bikeEl) {
+            bikeEl = cinemaEl.querySelector('.fgpx-weather-bicycle');
+            els.bike = bikeEl;
+          }
+          if (bikeEl) {
+            var cinemaFloorOffset = cinemaEl._floorOffsetPx;
+            if (!isFinite(cinemaFloorOffset)) {
+              cinemaFloorOffset = parseFloat(getComputedStyle(cinemaEl).getPropertyValue('--fgpx-cinema-floor-offset'));
+              if (!isFinite(cinemaFloorOffset)) cinemaFloorOffset = 0;
+              cinemaEl._floorOffsetPx = cinemaFloorOffset;
+            }
+            bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';
+            var targetBikeAngle = Math.max(-10, Math.min(10, bikeSlopeDeg));
+            var prevBikeAngle = isFinite(Number(cinemaEl._bikeAngle)) ? Number(cinemaEl._bikeAngle) : targetBikeAngle;
+            var smoothedBikeAngle = (prevBikeAngle * 0.70) + (targetBikeAngle * 0.30);
+            cinemaEl._bikeAngle = smoothedBikeAngle;
+            bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';
+          }
+
+          var gradeAbs = Math.abs(gradeAtNow);
+          var gradeFill = 'rgba(100,140,100,0.4)';
+          if (gradeAbs > 10) gradeFill = 'rgba(220,80,80,0.45)';
+          else if (gradeAbs > 5) gradeFill = 'rgba(200,130,50,0.4)';
+          gradePath.setAttribute('fill', gradeFill);
+          if (cinemaEl.style.getPropertyValue('--fgpx-grade-fill') !== gradeFill) {
+            cinemaEl.style.setProperty('--fgpx-grade-fill', gradeFill);
+          }
+        }
+
+        var distanceNowMeters = Math.max(0, Math.min(totalDistance, progress * totalDistance));
+        if (Array.isArray(cumDist) && cumDist.length > 1 && Array.isArray(timeOffsets) && timeOffsets.length > 1 && isFinite(ci)) {
+          var ciNext = Math.min(timeOffsets.length - 1, ci + 1);
+          var t0 = Number(timeOffsets[ci]);
+          var t1 = Number(timeOffsets[ciNext]);
+          var d0 = Number(cumDist[ci]);
+          var d1 = Number(cumDist[Math.min(cumDist.length - 1, ciNext)]);
+          if (isFinite(t0) && isFinite(t1) && isFinite(d0) && isFinite(d1) && t1 > t0) {
+            var tt = Math.max(0, Math.min(1, (currentTimeSec - t0) / (t1 - t0)));
+            distanceNowMeters = d0 + ((d1 - d0) * tt);
+          }
+        }
+        var elapsedNowSec = isFinite(Number(currentTimeSec)) ? Number(currentTimeSec) : (progress * (isFinite(totalDuration) ? totalDuration : 0));
+        if (isFinite(totalDuration) && totalDuration > 0) elapsedNowSec = Math.max(0, Math.min(totalDuration, elapsedNowSec));
+
+        var mileageRulerEl = els.mileageRuler;
+        if (!mileageRulerEl) {
+          mileageRulerEl = cinemaEl.querySelector('.fgpx-weather-mileage-ruler');
+          els.mileageRuler = mileageRulerEl;
+        }
+        var mileageTrackEl = els.mileageTrack;
+        if (!mileageTrackEl) {
+          mileageTrackEl = cinemaEl.querySelector('.fgpx-weather-mileage-track');
+          els.mileageTrack = mileageTrackEl;
+        }
+        var mileageMarksEl = els.mileageMarks;
+        if (!mileageMarksEl) {
+          mileageMarksEl = cinemaEl.querySelector('.fgpx-weather-mileage-marks');
+          els.mileageMarks = mileageMarksEl;
+        }
+        if (mileageTrackEl && mileageMarksEl) {
+          var trackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+          if (trackWidth > 0) {
+            var currentKm = distanceNowMeters / 1000;
+            var totalKm = totalDistance / 1000;
+            var visibleKm = 20;
+            var halfVisibleKm = visibleKm / 2;
+            var pxPerKm = trackWidth / visibleKm;
+            var startKm = Math.max(0, currentKm - halfVisibleKm);
+            var endKm = Math.min(totalKm, currentKm + halfVisibleKm);
+            var firstMarkKm = Math.ceil(startKm / 5) * 5;
+            var marksHtml = '';
+            for (var markKm = firstMarkKm; markKm <= endKm + 0.0001; markKm += 5) {
+              var markLeft = (trackWidth / 2) + ((markKm - currentKm) * pxPerKm);
+              if (markLeft < -24 || markLeft > trackWidth + 24) continue;
+              marksHtml += '<span class="fgpx-weather-mileage-mark" style="left:' + Math.round(markLeft) + 'px">'
+                + '<span class="fgpx-weather-mileage-mark-tick"></span>'
+                + '<span class="fgpx-weather-mileage-mark-label">' + formatNumber(markKm, 0) + ' km</span>'
+                + '</span>';
+            }
+            if (mileageMarksEl.innerHTML !== marksHtml) {
+              mileageMarksEl.innerHTML = marksHtml;
+            }
+          }
+        }
+
+        var photoMarkerEl = els.photoMarker;
+        if (!photoMarkerEl) {
+          photoMarkerEl = cinemaEl.querySelector('.fgpx-weather-photo-marker');
+          els.photoMarker = photoMarkerEl;
+        }
+        var photoMarkerLabelEl = els.photoMarkerLabel;
+        if (!photoMarkerLabelEl) {
+          photoMarkerLabelEl = cinemaEl.querySelector('.fgpx-weather-photo-marker-label');
+          els.photoMarkerLabel = photoMarkerLabelEl;
+        }
+        if (photoMarkerEl && photoMarkerLabelEl && mileageTrackEl && mileageRulerEl) {
+          var photoTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+          var activePhotoMarker = getCinemaPhotoMarker(currentTimeSec, distanceNowMeters);
+          if (photoTrackWidth > 0 && activePhotoMarker) {
+            var photoVisibleKm = 20;
+            var photoPxPerKm = photoTrackWidth / photoVisibleKm;
+            var photoLeft = (photoTrackWidth / 2) + (((activePhotoMarker.distanceMeters - distanceNowMeters) / 1000) * photoPxPerKm);
+            if (photoLeft >= -18 && photoLeft <= photoTrackWidth + 18) {
+              photoMarkerEl.style.display = 'block';
+              photoMarkerEl.style.left = String(Math.round((mileageRulerEl.offsetLeft || 0) + photoLeft)) + 'px';
+              photoMarkerEl.classList.toggle('is-current', !!activePhotoMarker.isCurrent);
+              var photoName = activePhotoMarker.label.length > 10 ? activePhotoMarker.label.substring(0, 10) + '...' : activePhotoMarker.label;
+              setTextIfChanged(photoMarkerLabelEl, '\uD83D\uDCF7 ' + photoName);
+            } else {
+              photoMarkerEl.style.display = 'none';
+              photoMarkerEl.classList.remove('is-current');
+              setTextIfChanged(photoMarkerLabelEl, '');
+            }
+          } else {
+            photoMarkerEl.style.display = 'none';
+            photoMarkerEl.classList.remove('is-current');
+            setTextIfChanged(photoMarkerLabelEl, '');
+          }
+        }
+
+        var legend = cinemaEl._legend;
+        if (legend) {
+          var legendEls = cinemaEl._legendEls || {};
+          if (!legendEls.mileage) legendEls.mileage = legend.querySelector('.fgpx-legend-mileage');
+          if (!legendEls.duration) legendEls.duration = legend.querySelector('.fgpx-legend-duration');
+          if (!legendEls.grade) legendEls.grade = legend.querySelector('.fgpx-legend-grade');
+          if (!legendEls.elevation) legendEls.elevation = legend.querySelector('.fgpx-legend-elevation');
+          if (!legendEls.temp) legendEls.temp = legend.querySelector('.fgpx-legend-temp');
+          if (!legendEls.wind) legendEls.wind = legend.querySelector('.fgpx-legend-wind');
+          if (!legendEls.conditions) legendEls.conditions = legend.querySelector('.fgpx-legend-conditions');
+          cinemaEl._legendEls = legendEls;
+
+          var simI18N = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
+          setTextIfChanged(legendEls.mileage, (simI18N.simMileage || 'Mileage') + ': ' + formatNumber(distanceNowMeters / 1000, 2) + ' km');
+          setTextIfChanged(legendEls.duration, (simI18N.simDuration || 'Duration') + ': ' + formatTime(elapsedNowSec));
+          setTextIfChanged(legendEls.grade, (simI18N.simGrade || 'Grade') + ': ' + (gradeAtNow >= 0 ? '+' : '') + gradeAtNow.toFixed(1) + '%');
+          setTextIfChanged(legendEls.elevation, (simI18N.simElevation || 'Elevation') + ': ' + Math.round(elevationAtNow) + ' m');
+          setTextIfChanged(legendEls.temp, (simI18N.simTemp || 'Temp') + ': ' + (Number(cond.temperature_c) || 0).toFixed(1) + ' \u00B0C');
+          setTextIfChanged(legendEls.wind, (simI18N.simWind || 'Wind') + ': ' + Math.round(Number(cond.wind_speed_kmh) || 0) + ' km/h');
+
+          var condParts = [];
+          if (night) condParts.push('\uD83C\uDF19 Night');
+          if ((Number(cond.fog_intensity) || 0) >= fogThresh) condParts.push('\uD83C\uDF2B Fog');
+          if ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) condParts.push('\u2601 Cloudy');
+          if ((Number(cond.rain_mm) || 0) >= rainThresh) condParts.push('\uD83C\uDF27 Rain');
+          if ((Number(cond.wind_speed_kmh) || 0) >= windThresh) condParts.push('\uD83D\uDCA8 Wind');
+          setTextIfChanged(legendEls.conditions, condParts.length ? condParts.join('  ') : '\u2600 Clear');
+        }
       }
 
       // Assign the chart creation function to the variable declared in UI scope
@@ -7170,7 +7852,7 @@
           },
           plugins: allPlugins
         });
-      }
+      };
       
       // Initialize with elevation tab now that all functions are defined
       createChart('elevation');
@@ -7183,6 +7865,7 @@
 
       // Animation state
       var playing = false;
+      var rafId = null; // guards against duplicate requestAnimationFrame scheduling
       var speed = (window.FGPX && isFinite(Number(FGPX.defaultSpeed)) ? Number(FGPX.defaultSpeed) : 25); // default multiplier
       var tStart = null; // ms timestamp when started
       var tOffset = 0; // accumulated paused time in seconds
@@ -7248,7 +7931,7 @@
                 if (started) return;
                 started = true;
                 setPlaying(true);
-                window.requestAnimationFrame(raf);
+                scheduleRaf();
               }, hasTerrain ? 180 : 0);
               if (hasTerrain) {
                 map.once('idle', function(){
@@ -7256,7 +7939,7 @@
                   started = true;
                   try { clearTimeout(settleTimer); } catch (_) {}
                   setPlaying(true);
-                  window.requestAnimationFrame(raf);
+                  scheduleRaf();
                 });
               }
             });
@@ -7269,13 +7952,22 @@
         } catch(_) { 
           firstPlayZoomPending = false; 
           setPlaying(true); 
-          window.requestAnimationFrame(raf); 
+          scheduleRaf(); 
         }
       }
 
       function setPlaying(p) {
         if (playing !== p) { DBG.log('playback state change', { playing: p }); }
         playing = p;
+        try {
+          var cinemaRoot = container || root;
+          var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
+          if (cinemaEl) {
+            if (playing) cinemaEl.classList.remove('is-paused');
+            else cinemaEl.classList.add('is-paused');
+          }
+        } catch (_) {}
+        try { applyWeatherOverlayProfile(false); } catch (_) {}
         // Update button states (includes recording state)
         updateButtonStates();
         if (playing) {
@@ -7496,7 +8188,7 @@
               }
               
               // Determine if we are in a night period
-              var sortedPeriods = dayNightPeriods.slice().sort(function(a, b) { return a.timeOffset - b.timeOffset; });
+              var sortedPeriods = (dayNightPeriodsSorted && dayNightPeriodsSorted.length > 0) ? dayNightPeriodsSorted : dayNightPeriods;
               var isInNightPeriod = false;
               var firstPeriod = sortedPeriods[0];
               
@@ -7504,11 +8196,15 @@
                 isInNightPeriod = (firstPeriod.type === 'sunrise' || firstPeriod.type === 'nightStart');
               } else {
                 var lastTransition = null;
-                for (var i = 0; i < sortedPeriods.length; i++) {
-                  if (sortedPeriods[i].timeOffset <= currentTimeOffset) {
-                    lastTransition = sortedPeriods[i];
+                var trLo = 0;
+                var trHi = sortedPeriods.length - 1;
+                while (trLo <= trHi) {
+                  var trMid = (trLo + trHi) >>> 1;
+                  if (sortedPeriods[trMid].timeOffset <= currentTimeOffset) {
+                    lastTransition = sortedPeriods[trMid];
+                    trLo = trMid + 1;
                   } else {
-                    break;
+                    trHi = trMid - 1;
                   }
                 }
                 if (lastTransition) {
@@ -7549,7 +8245,7 @@
           if (typeof window.__fgpxLastLineD === 'undefined') { window.__fgpxLastLineD = privacyEnabled ? privacyStartD : 0; }
           if (window.__fgpxNeedLineInit === undefined) { window.__fgpxNeedLineInit = true; }
           if (typeof window.__fgpxProgressSegments === 'undefined') { window.__fgpxProgressSegments = []; }
-          var needUpdate = window.__fgpxNeedLineInit || (window.__fgpxLineCooldown >= 0.025) || (Math.abs(d - window.__fgpxLastLineD) >= 10);
+          var needUpdate = window.__fgpxNeedLineInit || (window.__fgpxLineCooldown >= 0.083) || (Math.abs(d - window.__fgpxLastLineD) >= 10);
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
             while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < d) lo = mid + 1; else hi = mid; }
@@ -7822,7 +8518,14 @@
         }
       }
 
+      function scheduleRaf() {
+        if (!rafId) {
+          rafId = window.requestAnimationFrame(raf);
+        }
+      }
+
       function raf(ts) {
+        rafId = null;
         if (!playing) return;
         if (lastFrame == null) lastFrame = ts;
         var dt = (ts - lastFrame) / 1000; // seconds
@@ -7875,6 +8578,18 @@
 
         setProgressBar(progress);
         updateVisuals(progress);
+        // Update weather cinema if that tab is active
+        if (currentChartTab === 'weathergrade') {
+          var cinemaRoot = container || root;
+          var _cinemaEl = cinemaRoot._cachedCinema;
+          if (!_cinemaEl || _cinemaEl.style.display === 'none') {
+            _cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
+            if (_cinemaEl) cinemaRoot._cachedCinema = _cinemaEl;
+          }
+          if (_cinemaEl && _cinemaEl.style.display !== 'none') {
+            updateWeatherCinema(_cinemaEl, payload, lastPlaybackSec || 0, playing || false, false);
+          }
+        }
         // If photos are enabled with timestamps, show overlay when marker reaches the photo time
         try {
           if (FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
@@ -8033,7 +8748,7 @@
 
         var endReached = reachedPrivacyEnd || (progress >= 1);
         if (!endReached) {
-          window.requestAnimationFrame(raf);
+          scheduleRaf();
         } else {
           setPlaying(false);
           // Stop recording if active when track completes
@@ -8118,7 +8833,7 @@
                   zoomInThenStartPlayback();
                 } else {
                   setPlaying(true);
-                  window.requestAnimationFrame(raf);
+                  scheduleRaf();
                 }
               }).catch(function(error) {
                 DBG.warn('Failed to start recording', error);
@@ -8471,13 +9186,13 @@
               // Only start zoom/playback after preloading is completely finished
               try { hideSplash(); } catch(_) {}
               if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-              else { setPlaying(true); window.requestAnimationFrame(raf); }
+              else { setPlaying(true); scheduleRaf(); }
             });
           } catch(_) {
             // Fallback: start immediately if promise fails
             try { hideSplash(); } catch(_) {}
             if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-            else { setPlaying(true); window.requestAnimationFrame(raf); }
+            else { setPlaying(true); scheduleRaf(); }
           }
         }
       });
@@ -8509,10 +9224,312 @@
         }
       });
 
+      function setLayerVisibilityIfPresent(layerId, visibility) {
+        try {
+          if (!map.getLayer(layerId)) return;
+          var current = map.getLayoutProperty(layerId, 'visibility');
+          if (current !== visibility) {
+            map.setLayoutProperty(layerId, 'visibility', visibility);
+          }
+        } catch (_) {}
+      }
+
+      function refreshWeatherTextLayerSupport(logResult) {
+        if (weatherTextLayersSupported) return true;
+        var hasGlyphs = false;
+        try {
+          var style = map.getStyle();
+          hasGlyphs = !!(style && style.glyphs);
+          if (logResult) {
+            DBG.log('Map style has glyphs:', hasGlyphs, 'Style glyphs URL:', style ? style.glyphs : 'none');
+          }
+        } catch (e) {
+          if (logResult) {
+            DBG.warn('Could not check glyph availability:', e);
+          }
+          hasGlyphs = false;
+        }
+        weatherTextLayersSupported = hasGlyphs;
+        return hasGlyphs;
+      }
+
+      function ensureTemperatureTextLayer() {
+        if (!refreshWeatherTextLayerSupport(false)) return;
+        try {
+          if (map.getLayer('fgpx-temperature-text')) return;
+          map.addLayer({
+            id: 'fgpx-temperature-text',
+            type: 'symbol',
+            source: 'fgpx-weather',
+            minzoom: 12,
+            layout: {
+              'visibility': 'none',
+              'text-field': [
+                'case',
+                ['!=', ['get', 'temperature_c'], null],
+                ['concat', ['round', ['get', 'temperature_c']], '°C'],
+                ''
+              ],
+              'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                12, 10,
+                16, 14
+              ],
+              'text-allow-overlap': true,
+              'text-ignore-placement': true
+            },
+            paint: {
+              'text-color': '#000000',
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 2,
+              'text-opacity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                12, 0,
+                13, 1
+              ]
+            }
+          });
+        } catch (e) {
+          DBG.warn('Failed to add temperature text layer:', e);
+        }
+      }
+
+      function ensureWindTextLayer() {
+        if (!refreshWeatherTextLayerSupport(false)) return;
+        try {
+          if (map.getLayer('fgpx-wind-text')) return;
+          map.addLayer({
+            id: 'fgpx-wind-text',
+            type: 'symbol',
+            source: 'fgpx-weather',
+            minzoom: 12,
+            filter: ['!=', ['get', 'wind_speed_kmh'], null],
+            layout: {
+              'visibility': 'none',
+              'text-field': [
+                'case',
+                ['!=', ['get', 'wind_speed_kmh'], null],
+                [
+                  'concat',
+                  ['round', ['get', 'wind_speed_kmh']], 'km/h'
+                ],
+                ''
+              ],
+              'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                12, 8,
+                16, 11
+              ],
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+              'text-anchor': 'center',
+              'text-justify': 'center',
+              'text-offset': [0, 1.5]
+            },
+            paint: {
+              'text-color': [
+                'case',
+                ['!=', ['get', 'wind_speed_kmh'], null],
+                [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'wind_speed_kmh'],
+                  0, '#666666',
+                  10, '#228b22',
+                  20, '#ff8c00',
+                  30, '#ff4500',
+                  50, '#dc143c'
+                ],
+                '#666666'
+              ],
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 2,
+              'text-opacity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                12, 0,
+                13, 1
+              ]
+            }
+          });
+        } catch (e) {
+          DBG.warn('Failed to add wind text layer:', e);
+        }
+      }
+
+      function ensureWindSatelliteLayers() {
+        if (!windSatelliteLayersEnabled) return;
+        try {
+          if (windCircleLayerIds.length > 0) return;
+          if (!map.getSource('fgpx-weather')) return;
+          if (!map.hasImage('arrow-calm-size1')) return;
+
+          var circlePositions = [];
+          var numArrows = 12;
+          var minRadius = 45;
+          var maxRadius = 80;
+          var minDistance = 25;
+
+          for (var i = 0; i < numArrows; i++) {
+            var attempts = 0;
+            var validPosition = false;
+            var newPos;
+
+            while (!validPosition && attempts < 50) {
+              var angle = (i / numArrows) * 2 * Math.PI + (Math.random() - 0.5) * 0.6;
+              var radius = minRadius + Math.random() * (maxRadius - minRadius);
+
+              newPos = {
+                x: Math.cos(angle) * radius,
+                y: Math.sin(angle) * radius,
+                radius: radius
+              };
+
+              validPosition = true;
+              for (var j = 0; j < circlePositions.length; j++) {
+                var distance = Math.sqrt(
+                  Math.pow(newPos.x - circlePositions[j].x, 2) +
+                  Math.pow(newPos.y - circlePositions[j].y, 2)
+                );
+                if (distance < minDistance) {
+                  validPosition = false;
+                  break;
+                }
+              }
+              attempts++;
+            }
+
+            if (validPosition) {
+              var normalizedRadius = (newPos.radius - minRadius) / (maxRadius - minRadius);
+              var sizeIndex = Math.ceil((1 - normalizedRadius) * 4);
+              sizeIndex = Math.max(1, Math.min(4, sizeIndex));
+
+              circlePositions.push({
+                x: newPos.x,
+                y: newPos.y,
+                size: sizeIndex
+              });
+            }
+          }
+
+          circlePositions.forEach(function(pos, index) {
+            var circleLayerId = 'fgpx-wind-arrows-circle-' + index;
+            windCircleLayerIds.push(circleLayerId);
+            map.addLayer({
+              id: circleLayerId,
+              type: 'symbol',
+              source: 'fgpx-weather',
+              minzoom: 12,
+              filter: ['!=', ['get', 'wind_speed_kmh'], null],
+              layout: {
+                'visibility': 'none',
+                'icon-image': [
+                  'case',
+                  ['!=', ['get', 'wind_speed_kmh'], null],
+                  [
+                    'case',
+                    ['<', ['get', 'wind_speed_kmh'], 5], 'arrow-calm-size' + pos.size,
+                    ['<', ['get', 'wind_speed_kmh'], 15], 'arrow-light-size' + pos.size,
+                    ['<', ['get', 'wind_speed_kmh'], 25], 'arrow-moderate-size' + pos.size,
+                    ['<', ['get', 'wind_speed_kmh'], 40], 'arrow-strong-size' + pos.size,
+                    'arrow-very-strong-size' + pos.size
+                  ],
+                  'arrow-calm-size' + pos.size
+                ],
+                'icon-rotate': ['get', 'wind_direction_deg'],
+                'icon-rotation-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-offset': [pos.x, pos.y]
+              },
+              paint: {
+                'icon-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  12, 0,
+                  13, weatherOpacity * 0.6
+                ]
+              }
+            });
+          });
+          DBG.log('Wind satellite layers created lazily', { count: windCircleLayerIds.length });
+        } catch (e) {
+          DBG.warn('Failed to lazily create wind satellite layers:', e);
+        }
+      }
+
+      function applyWeatherOverlayProfile(force) {
+        if (!effectiveWeatherEnabled || !weatherData || !weatherData.features || !Array.isArray(weatherData.features) || weatherData.features.length === 0) {
+          return;
+        }
+
+        var isReduced = (weatherOverlayPerfMode === 'performance') || (weatherOverlayPerfMode === 'auto' && playing && currentChartTab === 'weathergrade');
+        if (!force && weatherOverlayReduced === isReduced) {
+          // Even when profile mode did not change, toggles may have changed; continue applying desired visibilities.
+        }
+        weatherOverlayReduced = isReduced;
+
+        var baseWeatherVisibility = weatherVisible ? 'visible' : 'none';
+        var fullWeatherVisibility = (weatherVisible && !isReduced) ? 'visible' : 'none';
+
+        // Weather layers: in reduced mode keep primary layer + circle and suppress secondary layers.
+        if (weatherHeatmapConsolidated) {
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap', baseWeatherVisibility);
+        } else {
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-rain', baseWeatherVisibility);
+        }
+        setLayerVisibilityIfPresent('fgpx-weather-circle', baseWeatherVisibility);
+        if (!weatherHeatmapConsolidated) {
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-snow', fullWeatherVisibility);
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-fog', fullWeatherVisibility);
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-clouds', fullWeatherVisibility);
+        }
+
+        var tempBase = (!isMobileOverlayDisabled && temperatureVisible) ? 'visible' : 'none';
+        setLayerVisibilityIfPresent('fgpx-temperature-circle', tempBase);
+        var tempTextVisibility = (tempBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        if (tempTextVisibility === 'visible') {
+          ensureTemperatureTextLayer();
+        }
+        setLayerVisibilityIfPresent('fgpx-temperature-text', tempTextVisibility);
+
+        var windBase = (!isMobileOverlayDisabled && windVisible) ? 'visible' : 'none';
+        setLayerVisibilityIfPresent('fgpx-wind-arrows', windBase);
+        var windTextVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        if (windTextVisibility === 'visible') {
+          ensureWindTextLayer();
+        }
+        setLayerVisibilityIfPresent('fgpx-wind-text', windTextVisibility);
+
+        var circleWindVisibility = (windBase === 'visible' && !isReduced) ? 'visible' : 'none';
+        if (windSatelliteLayersEnabled) {
+          if (circleWindVisibility === 'visible') {
+            ensureWindSatelliteLayers();
+          }
+          if (windCircleLayerIds.length > 0) {
+            for (var wi = 0; wi < windCircleLayerIds.length; wi++) {
+              setLayerVisibilityIfPresent(windCircleLayerIds[wi], circleWindVisibility);
+            }
+          } else {
+            for (var wf = 0; wf < 12; wf++) {
+              setLayerVisibilityIfPresent('fgpx-wind-arrows-circle-' + wf, circleWindVisibility);
+            }
+          }
+        }
+      }
+
       // Weather toggle handler (only if weather is enabled)
-      if (weatherEnabled && weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) {
-        var weatherVisible = !!(window.FGPX && FGPX.weatherVisibleByDefault); // Start hidden by default unless admin enables it
-        
+      if (effectiveWeatherEnabled && weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) {
         // Set initial button state
         ui.controls.btnWeather.style.opacity = weatherVisible ? '1' : '0.5';
         ui.controls.btnWeather.setAttribute('title', weatherVisible ? 'Hide Weather Overlay' : 'Show Weather Overlay');
@@ -8521,17 +9538,7 @@
           weatherVisible = !weatherVisible;
           
           try {
-            // Toggle visibility of all weather layers
-            var visibility = weatherVisible ? 'visible' : 'none';
-            
-            // Toggle all 4 heatmap layers (one per weather type)
-            map.setLayoutProperty('fgpx-weather-heatmap-snow', 'visibility', visibility);
-            map.setLayoutProperty('fgpx-weather-heatmap-rain', 'visibility', visibility);
-            map.setLayoutProperty('fgpx-weather-heatmap-fog', 'visibility', visibility);
-            map.setLayoutProperty('fgpx-weather-heatmap-clouds', 'visibility', visibility);
-            
-            // Toggle circle layer
-            map.setLayoutProperty('fgpx-weather-circle', 'visibility', visibility);
+            applyWeatherOverlayProfile(true);
             
             // Update button appearance
             ui.controls.btnWeather.style.opacity = weatherVisible ? '1' : '0.5';
@@ -8555,13 +9562,8 @@
           temperatureVisible = !temperatureVisible;
           
           try {
-            var tempVisibility = temperatureVisible ? 'visible' : 'none';
-            if (map.getLayer('fgpx-temperature-circle')) {
-              map.setLayoutProperty('fgpx-temperature-circle', 'visibility', tempVisibility);
-            }
-            if (map.getLayer('fgpx-temperature-text')) {
-              map.setLayoutProperty('fgpx-temperature-text', 'visibility', tempVisibility);
-            } else {
+            applyWeatherOverlayProfile(true);
+            if (!map.getLayer('fgpx-temperature-text')) {
               DBG.log('Temperature text layer not available (no glyphs in map style)');
             }
             
@@ -8587,23 +9589,9 @@
           windVisible = !windVisible;
           
           try {
-            var windVisibility = windVisible ? 'visible' : 'none';
-            if (map.getLayer('fgpx-wind-arrows')) {
-              map.setLayoutProperty('fgpx-wind-arrows', 'visibility', windVisibility);
-            }
-            if (map.getLayer('fgpx-wind-text')) {
-              map.setLayoutProperty('fgpx-wind-text', 'visibility', windVisibility);
-            } else {
+            applyWeatherOverlayProfile(true);
+            if (!map.getLayer('fgpx-wind-text')) {
               DBG.log('Wind text layer not available (no glyphs in map style)');
-            }
-            
-            // Toggle all wind arrow layers
-            for (var i = 0; i < 12; i++) {
-              try {
-                map.setLayoutProperty('fgpx-wind-arrows-circle-' + i, 'visibility', windVisibility);
-              } catch (e) {
-                // Layer might not exist yet
-              }
             }
             
             // Update button appearance
@@ -8685,10 +9673,14 @@
                 DBG.warn('DEBUG: Failed to add arrow layer in toggle handler:', e);
               }
             }
+            applyWeatherOverlayProfile(true);
           } catch (e) {
             DBG.warn('Failed to toggle wind layer:', e);
           }
         });
+
+        // Initialize overlay profile once handlers and layers are set up.
+        applyWeatherOverlayProfile(true);
       }
 
       // Day/night overlay toggle button handler
@@ -8768,12 +9760,12 @@
               (tilePrefetchPromise||Promise.resolve()).then(function(){
                 // Only start zoom/playback after preloading is completely finished
                 if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-                else { setPlaying(true); window.requestAnimationFrame(raf); }
+                else { setPlaying(true); scheduleRaf(); }
               });
             } catch(_) {
               // Fallback: start immediately if promise fails
               if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-              else { setPlaying(true); window.requestAnimationFrame(raf); }
+              else { setPlaying(true); scheduleRaf(); }
             }
           }
         }
@@ -8861,6 +9853,14 @@
             }
             chart.update('none');
           }
+          if (currentChartTab === 'weathergrade') {
+            var cinemaRoot = container || root;
+            var seekCinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
+            if (seekCinemaEl && seekCinemaEl.style.display !== 'none') {
+              seekCinemaEl._lastUpdate = 0;
+              updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
+            }
+          }
         } catch (_) {}
         // Preserve playback state when seeking - don't auto-start if was paused
         // Only auto-play if we were already playing or if this is the first play
@@ -8868,7 +9868,7 @@
           zoomInThenStartPlayback();
         } else if (playing) {
           // If we were playing, continue playing after seek
-          window.requestAnimationFrame(raf);
+          scheduleRaf();
         }
         // If we were paused (!playing && !firstPlayZoomPending), stay paused
       }

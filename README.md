@@ -16,6 +16,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Weather visualizations: colored heatmaps, temperature circles, and wind arrows with configurable radius
 - Wind analysis: per-point wind speed/direction, wind impact factor chart, wind rose distribution (16 sectors)
 - Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Power Zones, Wind Impact, Wind Rose, and All Data
+- Simulation tab: compact weather + grade strip with wind arrows, elevation and photo cues.
 - Power fallback model: if GPX has no power stream, backend estimates power and the frontend displays an "Estimated power" indicator
 - Chart area selection & zoom with reset and synchronized map marker filtering (excludes polar charts)
 - Video recording – record MP4/WebM videos of the flyover animation with customizable settings

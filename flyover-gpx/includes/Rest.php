@@ -726,10 +726,26 @@ final class Rest
         
         if (\is_string($weatherPoints) && $weatherPoints !== '') {
             $decodedWeather = \json_decode($weatherPoints, true);
+            if (\json_last_error() !== JSON_ERROR_NONE) {
+                ErrorHandler::warning('JSON decode error for weather points in REST endpoint', [
+                    'error' => \json_last_error_msg(),
+                    'track_id' => $id,
+                    'weather_points_length' => \strlen($weatherPoints),
+                ]);
+                $decodedWeather = null;
+            }
         }
         
         if (\is_string($weatherSummary) && $weatherSummary !== '') {
             $decodedWeatherSummaryRest = \json_decode($weatherSummary, true);
+            if (\json_last_error() !== JSON_ERROR_NONE) {
+                ErrorHandler::warning('JSON decode error for weather summary in REST endpoint', [
+                    'error' => \json_last_error_msg(),
+                    'track_id' => $id,
+                    'weather_summary_length' => \strlen($weatherSummary),
+                ]);
+                $decodedWeatherSummaryRest = null;
+            }
         }
 
         // Provide proper fallback structure when no GPX data is available (matches existing structure)
@@ -1085,10 +1101,26 @@ final class Rest
         
         if (\is_string($weatherPoints) && $weatherPoints !== '') {
             $decodedWeatherAjax = \json_decode($weatherPoints, true);
+            if (\json_last_error() !== JSON_ERROR_NONE) {
+                ErrorHandler::warning('JSON decode error for weather points in AJAX endpoint', [
+                    'error' => \json_last_error_msg(),
+                    'track_id' => $id,
+                    'weather_points_length' => \strlen($weatherPoints),
+                ]);
+                $decodedWeatherAjax = null;
+            }
         }
         
         if (\is_string($weatherSummary) && $weatherSummary !== '') {
             $decodedWeatherSummary = \json_decode($weatherSummary, true);
+            if (\json_last_error() !== JSON_ERROR_NONE) {
+                ErrorHandler::warning('JSON decode error for weather summary in AJAX endpoint', [
+                    'error' => \json_last_error_msg(),
+                    'track_id' => $id,
+                    'weather_summary_length' => \strlen($weatherSummary),
+                ]);
+                $decodedWeatherSummary = null;
+            }
         }
 
         // Provide proper fallback structure when no GPX data is available (matches existing structure)

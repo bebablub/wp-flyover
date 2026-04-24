@@ -117,6 +117,11 @@ final class OptionsTest extends TestCase
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
+        $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
+        $this->assertSame('0.1',    Options::get('fgpx_weather_rain_threshold'));
+        $this->assertSame('0.1',    Options::get('fgpx_weather_snow_threshold'));
+        $this->assertSame('3',      Options::get('fgpx_weather_wind_threshold'));
+        $this->assertSame('50',     Options::get('fgpx_weather_cloud_threshold'));
         $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
         $this->assertSame('12',     Options::get('fgpx_gallery_per_page'));
         $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
@@ -201,6 +206,8 @@ final class OptionsTest extends TestCase
             'defaultZoom', 'defaultPitch', 'styleJson',
             'backendSimplify', 'backendSimplifyTarget',
             'debugWeatherData',
+            'weatherFogThreshold', 'weatherRainThreshold',
+            'weatherSnowThreshold', 'weatherWindThreshold', 'weatherCloudThreshold',
             'themeMode', 'themeAutoDarkStart', 'themeAutoDarkEnd',
         ];
 
@@ -229,6 +236,11 @@ final class OptionsTest extends TestCase
 
         // Floats / numbers
         $this->assertIsFloat($f['daynightMapOpacity'],     'daynightMapOpacity must be float');
+        $this->assertIsFloat($f['weatherFogThreshold'],    'weatherFogThreshold must be float');
+        $this->assertIsFloat($f['weatherRainThreshold'],   'weatherRainThreshold must be float');
+        $this->assertIsFloat($f['weatherSnowThreshold'],   'weatherSnowThreshold must be float');
+        $this->assertIsFloat($f['weatherWindThreshold'],   'weatherWindThreshold must be float');
+        $this->assertIsFloat($f['weatherCloudThreshold'],  'weatherCloudThreshold must be float');
 
         // Strings
         $this->assertIsString($f['chartColor'],    'chartColor must be string');

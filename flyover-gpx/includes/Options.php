@@ -93,6 +93,10 @@ final class Options
 		// Multi-Weather Visualization
 		'fgpx_weather_priority_order' => 'snow,rain,fog,clouds', // Comma-separated priority order
 		'fgpx_weather_fog_threshold' => '0.3', // Fog intensity threshold (0-1)
+		'fgpx_weather_rain_threshold' => '0.1', // Rain mm threshold for showing rain pattern
+		'fgpx_weather_snow_threshold' => '0.1', // Snow cm threshold for showing snow pattern
+		'fgpx_weather_wind_threshold' => '3', // Wind km/h threshold for showing wind pattern
+		'fgpx_weather_cloud_threshold' => '50', // Cloud cover % threshold for showing cloud pattern
 		'fgpx_weather_color_snow' => '#ff1493', // Deep pink for snow
 		'fgpx_weather_color_rain' => '#4169e1', // Royal blue for rain (existing)
 		'fgpx_weather_color_fog' => '#808080', // Gray for fog
@@ -281,6 +285,13 @@ final class Options
 			'themeMode' => $options['fgpx_theme_mode'],
 			'themeAutoDarkStart' => $options['fgpx_theme_auto_dark_start'],
 			'themeAutoDarkEnd' => $options['fgpx_theme_auto_dark_end'],
+
+			// Weather visualization thresholds
+			'weatherFogThreshold' => (float) $options['fgpx_weather_fog_threshold'],
+			'weatherRainThreshold' => (float) $options['fgpx_weather_rain_threshold'],
+			'weatherSnowThreshold' => (float) $options['fgpx_weather_snow_threshold'],
+			'weatherWindThreshold' => (float) $options['fgpx_weather_wind_threshold'],
+			'weatherCloudThreshold' => (float) $options['fgpx_weather_cloud_threshold'],
 		];
 	}
 }
