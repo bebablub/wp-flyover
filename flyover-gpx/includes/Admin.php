@@ -683,6 +683,11 @@ final class Admin
 		$weatherColorRain = $options['fgpx_weather_color_rain'];
 		$weatherColorFog = $options['fgpx_weather_color_fog'];
 		$weatherColorClouds = $options['fgpx_weather_color_clouds'];
+		$simulationEnabled = $options['fgpx_simulation_enabled'];
+		$simulationWaypointsEnabled = $options['fgpx_simulation_waypoints_enabled'];
+		$simulationCitiesEnabled = $options['fgpx_simulation_cities_enabled'];
+		$simulationWaypointWindowKm = (float) $options['fgpx_simulation_waypoint_window_km'];
+		$simulationCityWindowKm = (float) $options['fgpx_simulation_city_window_km'];
 		
 		echo '<tr><th scope="row" style="padding-top: 20px; border-top: 1px solid #ddd;"><label for="fgpx_weather_priority_order">' . \esc_html__('Weather type priority order', 'flyover-gpx') . '</label></th><td style="padding-top: 20px; border-top: 1px solid #ddd;">';
 		echo '<input type="text" id="fgpx_weather_priority_order" name="fgpx_weather_priority_order" class="regular-text" value="' . \esc_attr($weatherPriorityOrder) . '" />';
@@ -708,6 +713,34 @@ final class Admin
 		echo '<input type="number" id="fgpx_weather_cloud_threshold" name="fgpx_weather_cloud_threshold" class="small-text" min="0" max="100" step="1" value="' . \esc_attr($weatherCloudThreshold) . '" />';
 		echo '<p class="description">' . \esc_html__('Minimum cloud cover percentage to show cloud visuals.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
+		echo '</table>';
+
+		// Simulation Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🎬 Simulation', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_simulation_enabled">' . \esc_html__('Enable Simulation tab', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_simulation_enabled" name="fgpx_simulation_enabled" value="1"' . ($simulationEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Enable simulation visuals and weather/grade scene rendering.', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('When disabled, the Simulation tab is hidden and simulation-specific processing is skipped.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_simulation_waypoints_enabled">' . \esc_html__('Show GPX waypoints in Simulation', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_simulation_waypoints_enabled" name="fgpx_simulation_waypoints_enabled" value="1"' . ($simulationWaypointsEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show waypoint markers (POIs) from GPX metadata.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_simulation_cities_enabled">' . \esc_html__('Show city/landmark markers in Simulation', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_simulation_cities_enabled" name="fgpx_simulation_cities_enabled" value="1"' . ($simulationCitiesEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show map-derived city/landmark markers near current position.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_simulation_waypoint_window_km">' . \esc_html__('Waypoint visibility window (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_simulation_waypoint_window_km" name="fgpx_simulation_waypoint_window_km" class="small-text" min="1" max="50" step="1" value="' . \esc_attr($simulationWaypointWindowKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Waypoints within ±N km from current simulation position are shown.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_simulation_city_window_km">' . \esc_html__('City/landmark visibility window (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_simulation_city_window_km" name="fgpx_simulation_city_window_km" class="small-text" min="1" max="50" step="1" value="' . \esc_attr($simulationCityWindowKm) . '" />';
+		echo '<p class="description">' . \esc_html__('City and landmark markers within ±N km from current simulation position are shown.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</table>';
+
+		// Weather Colors & Wind Section (continuation of Weather Integration)
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌦️ Weather Visualization', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row">' . \esc_html__('Weather visualization colors', 'flyover-gpx') . '</th><td>';
 		echo '<label for="fgpx_weather_color_snow" style="display: inline-block; margin-right: 20px; margin-bottom: 8px;">' . \esc_html__('Snow:', 'flyover-gpx') . ' <input type="color" id="fgpx_weather_color_snow" name="fgpx_weather_color_snow" value="' . \esc_attr($weatherColorSnow) . '" /></label>';
 		echo '<label for="fgpx_weather_color_rain" style="display: inline-block; margin-right: 20px; margin-bottom: 8px;">' . \esc_html__('Rain:', 'flyover-gpx') . ' <input type="color" id="fgpx_weather_color_rain" name="fgpx_weather_color_rain" value="' . \esc_attr($weatherColorRain) . '" /></label><br>';
@@ -1023,6 +1056,13 @@ final class Admin
 			'fgpx_elevation_gain_m' => (float) ($parse['stats']['elevation_gain_m'] ?? 0),
 		];
 		DatabaseOptimizer::bulkUpdatePostMeta($postId, $initialMeta);
+
+		// Store waypoints if any were extracted
+		if (!empty($parse['waypoints'] ?? [])) {
+			\update_post_meta($postId, 'fgpx_waypoints', $parse['waypoints']);
+		} else {
+			\delete_post_meta($postId, 'fgpx_waypoints');
+		}
 
 		// Enrich with weather data if enabled
 		self::enrichWithWeather($postId, \wp_json_encode($geojsonArray));
@@ -2203,6 +2243,11 @@ final class Admin
 		if (isset($_POST['fgpx_weather_snow_threshold'])) { \update_option('fgpx_weather_snow_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_snow_threshold'])), true); }
 		if (isset($_POST['fgpx_weather_wind_threshold'])) { \update_option('fgpx_weather_wind_threshold', (string) max(0.0, min(150.0, (float) $_POST['fgpx_weather_wind_threshold'])), true); }
 		if (isset($_POST['fgpx_weather_cloud_threshold'])) { \update_option('fgpx_weather_cloud_threshold', (string) max(0.0, min(100.0, (float) $_POST['fgpx_weather_cloud_threshold'])), true); }
+		\update_option('fgpx_simulation_enabled', isset($_POST['fgpx_simulation_enabled']) ? '1' : '0', true);
+		\update_option('fgpx_simulation_waypoints_enabled', isset($_POST['fgpx_simulation_waypoints_enabled']) ? '1' : '0', true);
+		\update_option('fgpx_simulation_cities_enabled', isset($_POST['fgpx_simulation_cities_enabled']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_simulation_waypoint_window_km'])) { \update_option('fgpx_simulation_waypoint_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_waypoint_window_km'])), true); }
+		if (isset($_POST['fgpx_simulation_city_window_km'])) { \update_option('fgpx_simulation_city_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_city_window_km'])), true); }
 		\update_option('fgpx_weather_color_snow', $this->getValidColor('fgpx_weather_color_snow', '#ff1493'), true);
 		\update_option('fgpx_weather_color_rain', $this->getValidColor('fgpx_weather_color_rain', '#4169e1'), true);
 		\update_option('fgpx_weather_color_fog', $this->getValidColor('fgpx_weather_color_fog', '#808080'), true);
@@ -3202,11 +3247,71 @@ final class Admin
 
 		$bounds = [$minLon, $minLat, $maxLon, $maxLat];
 
+		// Extract waypoints (POIs) from GPX file
+		$waypoints = [];
+		// Only extract waypoints if we have a valid track
+		if (count($coordinates) > 0 && isset($file->waypoints) && is_iterable($file->waypoints)) {
+			foreach ($file->waypoints as $wp) {
+				$wpLat = (float) $wp->latitude;
+				$wpLon = (float) $wp->longitude;
+				// Validate waypoint is within track bounds (with 5km tolerance)
+				$tolerance = 0.05;
+				if ($wpLon < $minLon - $tolerance || $wpLon > $maxLon + $tolerance ||
+					$wpLat < $minLat - $tolerance || $wpLat > $maxLat + $tolerance) {
+					continue; // Skip waypoint far outside track
+				}
+				
+				$wpName = isset($wp->name) ? trim((string) $wp->name) : '';
+				if (empty($wpName)) $wpName = 'Waypoint';
+				$wpEle = $wp->elevation !== null ? (float) $wp->elevation : null;
+				$wpTime = $wp->time ? (int) $wp->time->getTimestamp() : null;
+
+				// Find closest track point to waypoint for time/distance interpolation
+				$closestIdx = 0;
+				$minDistSq = INF;
+				for ($i = 0; $i < count($coordinates); $i++) {
+					$dLat = $wpLat - $coordinates[$i][1];
+					$dLon = $wpLon - $coordinates[$i][0];
+					$distSq = $dLat * $dLat + $dLon * $dLon; // Approximate Euclidean distance
+					if ($distSq < $minDistSq) {
+						$minDistSq = $distSq;
+						$closestIdx = $i;
+					}
+				}
+
+				$waypointData = [
+					'name' => $wpName,
+					'lat' => $wpLat,
+					'lon' => $wpLon,
+					'elevation' => $wpEle,
+					'distanceMeters' => isset($cumulative[$closestIdx]) ? (float) $cumulative[$closestIdx] : 0.0,
+					'timeSeconds' => isset($timestamps[$closestIdx]) ? $timestamps[$closestIdx] : null,
+				];
+
+				// If waypoint has explicit timestamp and we have track timestamps, use it
+				if ($wpTime !== null && !empty($timestamps)) {
+					$wpTimeStr = gmdate('c', $wpTime);
+					// Find the closest track timestamp
+					foreach ($timestamps as $idx => $ts) {
+						if ($ts === null) continue;
+						$trackTime = strtotime($ts);
+						if ($trackTime !== false && abs($trackTime - $wpTime) < abs(strtotime($waypointData['timeSeconds']) - $wpTime)) {
+							$waypointData['timeSeconds'] = $ts;
+							$waypointData['distanceMeters'] = isset($cumulative[$idx]) ? (float) $cumulative[$idx] : 0.0;
+						}
+					}
+				}
+
+				$waypoints[] = $waypointData;
+			}
+		}
+
 		return [
 			'stats' => $stats,
 			'geojson' => $geojson, // Return array instead of JSON string for wind processing
 			'bounds' => $bounds,
 			'points_count' => $pointsCount,
+			'waypoints' => $waypoints,
 		];
 	}
 

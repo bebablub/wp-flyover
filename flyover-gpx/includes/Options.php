@@ -127,6 +127,13 @@ final class Options
 		'fgpx_daynight_map_opacity' => '0.4',
 		'fgpx_daynight_visible_by_default' => '0',
 
+		// Simulation Tab (POI / City markers)
+		'fgpx_simulation_enabled' => '1',
+		'fgpx_simulation_waypoints_enabled' => '1',
+		'fgpx_simulation_cities_enabled' => '1',
+		'fgpx_simulation_waypoint_window_km' => '10',
+		'fgpx_simulation_city_window_km' => '10',
+
 		// Elevation Coloring
 		'fgpx_elevation_coloring' => '0',
 		'fgpx_elevation_color_flat' => '#ff5500',
@@ -268,6 +275,11 @@ final class Options
 			'daynightMapEnabled' => $options['fgpx_daynight_map_enabled'] === '1',
 			'daynightMapColor' => $options['fgpx_daynight_map_color'],
 			'daynightMapOpacity' => (float) $options['fgpx_daynight_map_opacity'],
+			'simulationEnabled' => $options['fgpx_simulation_enabled'] === '1',
+			'simulationWaypointsEnabled' => $options['fgpx_simulation_waypoints_enabled'] === '1',
+			'simulationCitiesEnabled' => $options['fgpx_simulation_cities_enabled'] === '1',
+			'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
+			'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
 			'photosEnabled' => $options['fgpx_photos_enabled'] === '1',
 			'showLabels' => $options['fgpx_show_labels'] !== '0',
 			'debugWeatherData' => $options['fgpx_debug_weather_data'] === '1',

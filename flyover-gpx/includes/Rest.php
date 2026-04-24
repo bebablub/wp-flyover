@@ -748,6 +748,13 @@ final class Rest
             }
         }
 
+        // Get waypoints (POIs) from post meta
+        $waypointsRaw = \get_post_meta($id, 'fgpx_waypoints', true);
+        $waypoints = [];
+        if (\is_array($waypointsRaw)) {
+            $waypoints = $waypointsRaw;
+        }
+
         // Provide proper fallback structure when no GPX data is available (matches existing structure)
         $fallbackGeojson = [
             'type' => 'LineString',
@@ -773,6 +780,7 @@ final class Rest
             'bounds' => \is_array($bounds) ? $bounds : [],
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
+            'waypoints' => $waypoints,
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
             'source_post_id' => $responseSourcePostId,
@@ -1123,6 +1131,12 @@ final class Rest
             }
         }
 
+        $waypointsRaw = \get_post_meta($id, 'fgpx_waypoints', true);
+        $waypoints = [];
+        if (\is_array($waypointsRaw)) {
+            $waypoints = $waypointsRaw;
+        }
+
         // Provide proper fallback structure when no GPX data is available (matches existing structure)
         $fallbackGeojson = [
             'type' => 'LineString',
@@ -1148,6 +1162,7 @@ final class Rest
             'bounds' => is_array($bounds) ? $bounds : [],
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
+            'waypoints' => $waypoints,
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
             'source_post_id' => $responseSourcePostId,

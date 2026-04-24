@@ -387,6 +387,11 @@ final class Plugin
             'daynightMapEnabled' => $daynightMapEnabledFinal,
             'daynightMapColor' => $daynightMapColorFinal,
             'daynightMapOpacity' => (float) $options['fgpx_daynight_map_opacity'],
+            'simulationEnabled' => $options['fgpx_simulation_enabled'] === '1',
+            'simulationWaypointsEnabled' => $options['fgpx_simulation_waypoints_enabled'] === '1',
+            'simulationCitiesEnabled' => $options['fgpx_simulation_cities_enabled'] === '1',
+            'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
+            'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
             'styleJson' => $resolvedStyleJson,
             'defaultZoom' => (int) $options['fgpx_default_zoom'],
             'defaultSpeed' => $defaultSpeedFinal,
@@ -526,6 +531,11 @@ final class Plugin
                   'weatherSnowThreshold:' . \floatval($weatherSnowThreshold) . ',' .
                   'weatherWindThreshold:' . \floatval($weatherWindThreshold) . ',' .
                   'weatherCloudThreshold:' . \floatval($weatherCloudThreshold) . ',' .
+                  'simulationEnabled:' . ($options['fgpx_simulation_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationWaypointsEnabled:' . ($options['fgpx_simulation_waypoints_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationCitiesEnabled:' . ($options['fgpx_simulation_cities_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationWaypointWindowKm:' . \floatval($options['fgpx_simulation_waypoint_window_km']) . ',' .
+                  'simulationCityWindowKm:' . \floatval($options['fgpx_simulation_city_window_km']) . ',' .
                   'weatherColorSnow:"' . \esc_js($weatherColorSnow) . '",' .
                   'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
                   'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
@@ -572,6 +582,11 @@ final class Plugin
                   'weatherEnabled:' . ($options['fgpx_weather_enabled'] === '1' ? 'true' : 'false') . ',' .
                   'weatherOpacity:' . \floatval($options['fgpx_weather_opacity']) . ',' .
                   'weatherVisibleByDefault:' . ($weatherVisibleByDefaultFinal ? 'true' : 'false') . ',' .
+                  'simulationEnabled:' . ($options['fgpx_simulation_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationWaypointsEnabled:' . ($options['fgpx_simulation_waypoints_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationCitiesEnabled:' . ($options['fgpx_simulation_cities_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'simulationWaypointWindowKm:' . \floatval($options['fgpx_simulation_waypoint_window_km']) . ',' .
+                  'simulationCityWindowKm:' . \floatval($options['fgpx_simulation_city_window_km']) . ',' .
                                     'weatherFogThreshold:' . \floatval($options['fgpx_weather_fog_threshold']) . ',' .
                                     'weatherRainThreshold:' . \floatval($options['fgpx_weather_rain_threshold']) . ',' .
                                     'weatherSnowThreshold:' . \floatval($options['fgpx_weather_snow_threshold']) . ',' .

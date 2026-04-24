@@ -72,6 +72,17 @@
 
   DBG.log('Front.js initialization started');
 
+  // Throttled debug helper to keep verbose diagnostics readable.
+  var dbgState = {};
+  function dbgAllow(key, intervalMs) {
+    if (!DBG.isEnabled()) return false;
+    var now = Date.now();
+    var last = Number(dbgState[key] || 0);
+    if ((now - last) < intervalMs) return false;
+    dbgState[key] = now;
+    return true;
+  }
+
   /**
    * Photo Filename Matching Utility
    * 
@@ -857,13 +868,28 @@
     var bounds = Array.isArray(payload.bounds) ? payload.bounds : null; // [minLon,minLat,maxLon,maxLat]
     var stats = payload && payload.stats ? payload.stats : {};
     var photos = Array.isArray(payload.photos) ? payload.photos : [];
+    var waypoints = Array.isArray(payload.waypoints) ? payload.waypoints : [];
 
     DBG.log('Track data loaded', {
       coords: coords.length,
       photos: photos.length,
+      waypoints: waypoints.length,
       hasTimestamps: !!timestamps,
       serverSimplified: !!(payload && payload.simplified)
     });
+    if (DBG.isEnabled()) {
+      var wpPreview = [];
+      for (var wpp = 0; wpp < Math.min(3, waypoints.length); wpp++) {
+        var wp0 = waypoints[wpp] || {};
+        wpPreview.push({
+          name: (wp0.name || 'POI').toString(),
+          distanceMeters: wp0.distanceMeters,
+          lat: wp0.lat,
+          lon: wp0.lon
+        });
+      }
+      DBG.log('Waypoint payload preview', { count: waypoints.length, sample: wpPreview });
+    }
 
     if (!coords || coords.length < 2) {
       ui.error.textContent = 'No route data available.';
@@ -1203,6 +1229,22 @@
         // By the time the user clicks play the DEM cache will already be warm.
         if (prefetchEnabled) { try { prefetchDemForRoute(); } catch(_) {} }
       }
+
+      // Precompute cities from MapTiler POI layer for Simulation tab.
+      // Re-run on map idle so tiles loaded during playback are included.
+      if (simulationCitiesEnabled) {
+        var _citiesLastPrecompute = 0;
+        var _citiesIdleThrottleMs = 5000;
+        try { precomputeMapCities(); _citiesLastPrecompute = Date.now(); } catch (_) {}
+        map.on('idle', function() {
+          if (!simulationCitiesEnabled) return;
+          var now = Date.now();
+          if (now - _citiesLastPrecompute < _citiesIdleThrottleMs) return;
+          _citiesLastPrecompute = now;
+          try { precomputeMapCities(); } catch (_) {}
+        });
+      }
+
       // Elevation-based coloring helpers
       function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
       function hexToRgb(hex) {
@@ -1465,6 +1507,11 @@
       var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);
       var debugWeatherDataEnabled = toBoolOption(window.FGPX && FGPX.debugWeatherData, false);
       var debugWeatherSimEnabled = !!(window.FGPX && window.FGPX.debugWeatherSim);
+      var simulationEnabled = toBoolOption(window.FGPX && FGPX.simulationEnabled, true);
+      var simulationWaypointsEnabled = simulationEnabled && toBoolOption(window.FGPX && FGPX.simulationWaypointsEnabled, true);
+      var simulationCitiesEnabled = simulationEnabled && toBoolOption(window.FGPX && FGPX.simulationCitiesEnabled, true);
+      var simulationWaypointWindowMeters = Math.max(1000, Math.min(50000, (Number(window.FGPX && FGPX.simulationWaypointWindowKm) || 10) * 1000));
+      var simulationCityWindowMeters = Math.max(1000, Math.min(50000, (Number(window.FGPX && FGPX.simulationCityWindowKm) || 10) * 1000));
       var effectiveWeatherEnabled = weatherEnabled || debugWeatherDataEnabled;
       var weatherOpacity = (window.FGPX && isFinite(Number(FGPX.weatherOpacity))) ? Number(FGPX.weatherOpacity) : 0.7;
       var weatherData = (payload && payload.weather) ? payload.weather : null;
@@ -1846,7 +1893,7 @@
       }
       // ========== END DEBUG WEATHER DATA ==========
 
-      weatherGradeAvailable = !!((weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) || debugWeatherSimEnabled);
+      weatherGradeAvailable = simulationEnabled && !!((weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0) || debugWeatherSimEnabled);
       
       // Extract biometric data after simulation (so we get simulated data if it was generated)
       var heartRates = Array.isArray(props.heartRates) ? props.heartRates : null; // bpm
@@ -2446,6 +2493,10 @@
       var lastPlaybackDist = null; // meters; for distance-based triggering
       var photosByTime = null; // [{p: photoObject, pSec: number}...] sorted by pSec
       var photoPtr = 0; // moving pointer into photosByTime
+
+      // MapTiler cities/landmarks (POIs from map tiles)
+      var mapCities = []; // [{name, lat, lon, distanceMeters, type}] sorted by distanceMeters
+
 
       // Local shadow to access the in-scope queue/overlay state
       function isLocationAlreadyQueued(lat, lon) {
@@ -5173,6 +5224,11 @@
           } else {
             cinemaEl.style.display = 'flex';
           }
+          // If cities haven't been precomputed yet (e.g. map idle hasn't fired for route tiles),
+          // trigger a fresh precompute now that the user is looking at the tab.
+          if (simulationCitiesEnabled && Array.isArray(mapCities) && mapCities.length === 0) {
+            try { precomputeMapCities(); } catch (_) {}
+          }
           // Trigger immediate update for current playback position
           updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
           try { applyWeatherOverlayProfile(true); } catch (_) {}
@@ -5592,6 +5648,184 @@
         };
       }
 
+      function getCinemaWaypointsNear(currentDistanceMeters) {
+        if (!simulationWaypointsEnabled || !Array.isArray(waypoints) || waypoints.length === 0) return [];
+        
+        var waypointsInWindow = [];
+        var windowRadiusM = simulationWaypointWindowMeters;
+        var currentDistNum = Number(currentDistanceMeters);
+        if (!isFinite(currentDistNum)) currentDistNum = 0;
+        var invalidObjectCount = 0;
+        var fallbackDistanceCount = 0;
+        var missingDistanceCount = 0;
+        
+        for (var wi = 0; wi < waypoints.length; wi++) {
+          var wp = waypoints[wi];
+          if (!wp || typeof wp !== 'object') {
+            invalidObjectCount++;
+            continue;
+          }
+          var wpDist = Number(wp.distanceMeters);
+          if (!isFinite(wpDist) && typeof wp.lat === 'number' && typeof wp.lon === 'number' && Array.isArray(coords) && coords.length > 0 && Array.isArray(cumDist) && cumDist.length === coords.length) {
+            var wpIdx = nearestCoordIndex([wp.lon, wp.lat], coords);
+            if (isFinite(wpIdx) && wpIdx >= 0 && wpIdx < cumDist.length) {
+              wpDist = Number(cumDist[wpIdx]);
+              fallbackDistanceCount++;
+            }
+          }
+          if (!isFinite(wpDist)) {
+            missingDistanceCount++;
+            continue;
+          }
+          var diff = Math.abs(wpDist - currentDistNum);
+          if (diff <= windowRadiusM) {
+            waypointsInWindow.push({
+              distanceMeters: wpDist,
+              label: (wp.name || 'POI').toString(),
+              type: wp.type || 'waypoint'
+            });
+          }
+        }
+
+        if (dbgAllow('poi-window-selection', 2000)) {
+          DBG.log('POI window selection', {
+            totalWaypoints: waypoints.length,
+            visibleWaypoints: waypointsInWindow.length,
+            currentDistanceMeters: currentDistNum,
+            windowRadiusMeters: windowRadiusM,
+            invalidObjects: invalidObjectCount,
+            missingDistance: missingDistanceCount,
+            fallbackDistanceResolved: fallbackDistanceCount
+          });
+        }
+        
+        return waypointsInWindow;
+      }
+
+      // City precomputation: accumulates from rendered features as the map viewport moves
+      // during playback. queryRenderedFeatures only sees tiles currently in the viewport,
+      // so this must be called repeatedly as playback progresses.
+      var _placeLayers = null; // cached place-label layer ids from the current style
+      function _getPlaceLayers() {
+        if (_placeLayers) return _placeLayers;
+        try {
+          var style = map.getStyle();
+          var layers = (style && Array.isArray(style.layers)) ? style.layers : [];
+          var found = [];
+          for (var i = 0; i < layers.length; i++) {
+            var l = layers[i];
+            if (!l || !l.id) continue;
+            var sl = (l['source-layer'] || '').toLowerCase();
+            var id = l.id.toLowerCase();
+            // Match common place/label layer naming across MapTiler, OpenMapTiles, Protomaps styles
+            if (/place|settlement|locality|city|town|village|hamlet|label/.test(sl) ||
+                /place.*label|label.*place|place.*name|city.*name|town.*name/.test(id)) {
+              found.push(l.id);
+            }
+          }
+          _placeLayers = found.length > 0 ? found : null;
+          DBG.log('City place layers detected', { layers: found });
+        } catch (_) { _placeLayers = null; }
+        return _placeLayers;
+      }
+
+      function precomputeMapCities() {
+        if (!simulationCitiesEnabled || !map || !coords || coords.length === 0) return;
+        try {
+          // Query rendered features in the current viewport (tiles already loaded by the map)
+          var layerFilter = _getPlaceLayers();
+          var queryOpts = layerFilter ? { layers: layerFilter } : undefined;
+          var features = queryOpts ? map.queryRenderedFeatures(undefined, queryOpts)
+                                   : map.queryRenderedFeatures();
+          if (!Array.isArray(features)) return;
+
+          var added = 0;
+          var skippedNoName = 0;
+          var skippedType = 0;
+          var skippedDuplicate = 0;
+
+          for (var fi = 0; fi < features.length; fi++) {
+            var feat = features[fi];
+            if (!feat || !feat.geometry || feat.geometry.type !== 'Point') continue;
+            var props = feat.properties || {};
+            var rawClass = (props['class'] || props['type'] || props['place'] || props['kind'] || '').toString().toLowerCase();
+            // Accept any place/settlement class, or if the source-layer is place-like
+            var sl = (feat.layer && feat.layer['source-layer'] || '').toLowerCase();
+            var isPlaceFeature = /place|settle|locality|city|town|village|hamlet|landmark/.test(rawClass) ||
+                                 /place|settle|locality/.test(sl);
+            if (!isPlaceFeature) { skippedType++; continue; }
+
+            var cityName = (props.name || props.name_en || props['name:en'] || '').toString().trim();
+            if (!cityName) { skippedNoName++; continue; }
+
+            var coords2 = feat.geometry.coordinates;
+            var featLon = Array.isArray(coords2) ? Number(coords2[0]) : NaN;
+            var featLat = Array.isArray(coords2) ? Number(coords2[1]) : NaN;
+            if (!isFinite(featLon) || !isFinite(featLat)) continue;
+
+            // Find nearest track coordinate by Euclidean distance
+            var minDistSq = Infinity;
+            var nearestIdx = 0;
+            for (var ci = 0; ci < coords.length; ci++) {
+              var dLat = featLat - coords[ci][1];
+              var dLon = featLon - coords[ci][0];
+              var dsq = dLat * dLat + dLon * dLon;
+              if (dsq < minDistSq) { minDistSq = dsq; nearestIdx = ci; }
+            }
+            var cityDistM = Array.isArray(cumDist) && nearestIdx < cumDist.length
+              ? Number(cumDist[nearestIdx]) : NaN;
+            if (!isFinite(cityDistM)) continue;
+
+            // Skip if far from track (>2km Euclidean, ~0.02 deg)
+            if (minDistSq > 0.04) { skippedType++; continue; }
+
+            // Deduplicate: same name within 1.5km along track
+            var isDup = false;
+            for (var ei = 0; ei < mapCities.length; ei++) {
+              if (mapCities[ei].name === cityName && Math.abs(Number(mapCities[ei].distanceMeters) - cityDistM) < 1500) {
+                isDup = true; break;
+              }
+            }
+            if (isDup) { skippedDuplicate++; continue; }
+
+            mapCities.push({ name: cityName, lat: featLat, lon: featLon, distanceMeters: cityDistM, type: rawClass || 'place' });
+            added++;
+          }
+
+          if (added > 0) {
+            mapCities.sort(function(a, b) { return a.distanceMeters - b.distanceMeters; });
+          }
+          DBG.log('City viewport scan', {
+            featuresQueried: features.length,
+            added: added,
+            totalCached: mapCities.length,
+            skippedType: skippedType,
+            skippedNoName: skippedNoName,
+            skippedDuplicate: skippedDuplicate,
+            layersUsed: layerFilter ? layerFilter.length : 'all'
+          });
+        } catch (err) {
+          DBG.warn('precomputeMapCities error:', err && err.message);
+        }
+      }
+
+      function getCinemaCitiesNear(currentDistanceMeters) {
+        if (!simulationCitiesEnabled || !Array.isArray(mapCities) || mapCities.length === 0) return [];
+        
+        var citiesInWindow = [];
+        var windowRadiusM = simulationCityWindowMeters;
+        
+        for (var cIdx = 0; cIdx < mapCities.length; cIdx++) {
+          var city = mapCities[cIdx];
+          var diff = Math.abs(city.distanceMeters - currentDistanceMeters);
+          if (diff <= windowRadiusM) {
+            citiesInWindow.push(city);
+          }
+        }
+        
+        return citiesInWindow;
+      }
+
       function tempToHsl(tempC) {
         var t = Math.max(-20, Math.min(40, Number(tempC) || 15));
         var norm = (t + 20) / 60;
@@ -5685,6 +5919,14 @@
         photoMarker.appendChild(photoMarkerLabel);
         cinema.appendChild(photoMarker);
 
+          var poisContainer = document.createElement('div');
+          poisContainer.className = 'fgpx-weather-pois-container';
+          cinema.appendChild(poisContainer);
+
+          var cityMarkersContainer = document.createElement('div');
+          cityMarkersContainer.className = 'fgpx-weather-cities-container';
+          cinema.appendChild(cityMarkersContainer);
+
         var bicycle = document.createElement('div');
         bicycle.className = 'fgpx-weather-bicycle';
         var bikeIcon = document.createElement('div');
@@ -5745,6 +5987,8 @@
           mileageMarks: cinema.querySelector('.fgpx-weather-mileage-marks'),
           photoMarker: cinema.querySelector('.fgpx-weather-photo-marker'),
           photoMarkerLabel: cinema.querySelector('.fgpx-weather-photo-marker-label'),
+          poiContainer: cinema.querySelector('.fgpx-weather-pois-container'),
+          citiesContainer: cinema.querySelector('.fgpx-weather-cities-container'),
           gradePath: cinema.querySelector('.fgpx-weather-grade-svg path'),
           bike: cinema.querySelector('.fgpx-weather-bicycle')
         };
@@ -5768,6 +6012,17 @@
         var lastUpdate = Number(cinemaEl._lastUpdate || 0);
         if (!forceUpdate && now - lastUpdate < 100) return;
         cinemaEl._lastUpdate = now;
+
+        // Accumulate city data from the current map viewport as playback moves.
+        // Throttled to once per 3 seconds to avoid per-frame overhead.
+        if (simulationCitiesEnabled && map) {
+          var lastCityScan = Number(cinemaEl._lastCityScan || 0);
+          if (now - lastCityScan > 3000) {
+            cinemaEl._lastCityScan = now;
+            try { precomputeMapCities(); } catch (_) {}
+          }
+        }
+
         var els = cinemaEl._els || {};
 
         if (isCurrentlyPlaying) cinemaEl.classList.remove('is-paused');
@@ -6164,6 +6419,151 @@
           }
         }
 
+        // Render waypoint markers (show all in ±3km window, similar to cities)
+        var poiContainerEl = els.poiContainer;
+        if (!poiContainerEl) {
+          poiContainerEl = cinemaEl.querySelector('.fgpx-weather-pois-container');
+          if (!poiContainerEl) {
+            poiContainerEl = document.createElement('div');
+            poiContainerEl.className = 'fgpx-weather-pois-container';
+            var gradeWrap = cinemaEl.querySelector('.fgpx-weather-grade-indicator');
+            cinemaEl.insertBefore(poiContainerEl, gradeWrap);
+          }
+          els.poiContainer = poiContainerEl;
+        }
+        if (poiContainerEl && mileageRulerEl && mileageTrackEl) {
+          if (!simulationWaypointsEnabled) {
+            while (poiContainerEl.firstChild) {
+              poiContainerEl.removeChild(poiContainerEl.firstChild);
+            }
+          } else {
+            var poisInWindow = getCinemaWaypointsNear(distanceNowMeters);
+            var poiTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+            var renderedPoiCount = 0;
+
+            // Remove all existing POI markers
+            while (poiContainerEl.firstChild) {
+              poiContainerEl.removeChild(poiContainerEl.firstChild);
+            }
+
+            if (poiTrackWidth > 0 && Array.isArray(poisInWindow) && poisInWindow.length > 0) {
+              var poiVisibleKm = Math.max(2, (simulationWaypointWindowMeters / 1000) * 2);
+              var poiPxPerKm = poiTrackWidth / poiVisibleKm;
+              var rulerOffset = mileageRulerEl.offsetLeft || 0;
+
+              for (var poiIdx = 0; poiIdx < poisInWindow.length; poiIdx++) {
+                var poi = poisInWindow[poiIdx];
+                if (!poi || typeof poi !== 'object') continue;
+                var poiLeft = (poiTrackWidth / 2) + (((poi.distanceMeters - distanceNowMeters) / 1000) * poiPxPerKm);
+
+                if (poiLeft >= -18 && poiLeft <= poiTrackWidth + 18) {
+                  var poiMarkerEl = document.createElement('div');
+                  poiMarkerEl.className = 'fgpx-weather-poi-marker';
+                  poiMarkerEl.style.left = String(Math.round(rulerOffset + poiLeft)) + 'px';
+                  poiMarkerEl.style.display = 'block';
+
+                  var poiDistanceFromNow = Math.abs((Number(poi.distanceMeters) || 0) - (Number(distanceNowMeters) || 0));
+                  var poiDistanceNorm = simulationWaypointWindowMeters > 0 ? Math.min(1, poiDistanceFromNow / simulationWaypointWindowMeters) : 1;
+                  // Keep a strong minimum visibility while still emphasizing nearby POIs.
+                  var poiOccupancy = Math.max(0.5, 1 - (poiDistanceNorm * 0.5));
+
+                  var poiMarkerLine = document.createElement('div');
+                  poiMarkerLine.className = 'fgpx-weather-poi-marker-line';
+                  poiMarkerLine.style.opacity = String(Math.max(0.6, Math.min(1, poiOccupancy + 0.1)));
+
+                  var poiMarkerLabel = document.createElement('div');
+                  poiMarkerLabel.className = 'fgpx-weather-poi-marker-label';
+                  var poiName = (poi.label || 'POI').toString();
+                  poiName = poiName.length > 15 ? poiName.substring(0, 15) + '...' : poiName;
+                  poiMarkerLabel.textContent = '\ud83d\udccd ' + poiName;
+                  poiMarkerLabel.style.opacity = String(Math.max(0.45, Math.min(1, poiOccupancy)));
+
+                  poiMarkerEl.style.opacity = String(poiOccupancy);
+
+                  poiMarkerEl.appendChild(poiMarkerLine);
+                  poiMarkerEl.appendChild(poiMarkerLabel);
+                  poiContainerEl.appendChild(poiMarkerEl);
+                  renderedPoiCount++;
+                }
+              }
+            }
+            if (dbgAllow('poi-render-loop', 2000)) {
+              DBG.log('POI render state', {
+                totalWaypoints: Array.isArray(waypoints) ? waypoints.length : 0,
+                inWindow: Array.isArray(poisInWindow) ? poisInWindow.length : 0,
+                rendered: renderedPoiCount,
+                windowKm: simulationWaypointWindowMeters / 1000,
+                currentDistanceMeters: Number(distanceNowMeters) || 0,
+                trackWidthPx: poiTrackWidth
+              });
+            }
+          }
+        }
+
+        // Render city markers from MapTiler POI layer
+        var citiesContainerEl = els.citiesContainer;
+        if (!citiesContainerEl) {
+          citiesContainerEl = cinemaEl.querySelector('.fgpx-weather-cities-container');
+          els.citiesContainer = citiesContainerEl;
+        }
+        if (citiesContainerEl && mileageRulerEl && mileageTrackEl) {
+          if (!simulationCitiesEnabled) {
+            while (citiesContainerEl.firstChild) {
+              citiesContainerEl.removeChild(citiesContainerEl.firstChild);
+            }
+          } else {
+            var citiesInWindow = getCinemaCitiesNear(distanceNowMeters);
+            var cityTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+            var renderedCityCount = 0;
+
+            // Remove all existing city markers
+            while (citiesContainerEl.firstChild) {
+              citiesContainerEl.removeChild(citiesContainerEl.firstChild);
+            }
+
+            if (cityTrackWidth > 0 && Array.isArray(citiesInWindow) && citiesInWindow.length > 0) {
+              var cityVisibleKm = Math.max(2, (simulationCityWindowMeters / 1000) * 2);
+              var cityPxPerKm = cityTrackWidth / cityVisibleKm;
+              var rulerOffset = mileageRulerEl.offsetLeft || 0;
+
+              for (var cityIdx = 0; cityIdx < citiesInWindow.length; cityIdx++) {
+                var city = citiesInWindow[cityIdx];
+                var cityLeft = (cityTrackWidth / 2) + (((city.distanceMeters - distanceNowMeters) / 1000) * cityPxPerKm);
+
+                if (cityLeft >= -18 && cityLeft <= cityTrackWidth + 18) {
+                  var cityMarkerEl = document.createElement('div');
+                  cityMarkerEl.className = 'fgpx-weather-city-marker';
+                  cityMarkerEl.style.left = String(Math.round(rulerOffset + cityLeft)) + 'px';
+                  cityMarkerEl.style.display = 'block';
+
+                  var cityMarkerLine = document.createElement('div');
+                  cityMarkerLine.className = 'fgpx-weather-city-marker-line';
+
+                  var cityMarkerLabel = document.createElement('div');
+                  cityMarkerLabel.className = 'fgpx-weather-city-marker-label';
+                  var cityName = city.name.length > 12 ? city.name.substring(0, 12) + '...' : city.name;
+                  cityMarkerLabel.textContent = '🏙 ' + cityName;
+
+                  cityMarkerEl.appendChild(cityMarkerLine);
+                  cityMarkerEl.appendChild(cityMarkerLabel);
+                  citiesContainerEl.appendChild(cityMarkerEl);
+                  renderedCityCount++;
+                }
+              }
+            }
+            if (dbgAllow('city-render-loop', 2000)) {
+              DBG.log('City render state', {
+                totalCities: Array.isArray(mapCities) ? mapCities.length : 0,
+                inWindow: Array.isArray(citiesInWindow) ? citiesInWindow.length : 0,
+                rendered: renderedCityCount,
+                windowKm: simulationCityWindowMeters / 1000,
+                currentDistanceMeters: Number(distanceNowMeters) || 0,
+                trackWidthPx: cityTrackWidth
+              });
+            }
+          }
+        }
+
         var legend = cinemaEl._legend;
         if (legend) {
           var legendEls = cinemaEl._legendEls || {};
@@ -6190,6 +6590,7 @@
           if ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) condParts.push('\u2601 Cloudy');
           if ((Number(cond.rain_mm) || 0) >= rainThresh) condParts.push('\uD83C\uDF27 Rain');
           if ((Number(cond.wind_speed_kmh) || 0) >= windThresh) condParts.push('\uD83D\uDCA8 Wind');
+          if ((Number(cond.snow_cm) || 0) >= snowThresh) condParts.push('\u2744 Snow');
           setTextIfChanged(legendEls.conditions, condParts.length ? condParts.join('  ') : '\u2600 Clear');
         }
       }
@@ -6199,7 +6600,7 @@
         // ========== LAZY LOADING: LOAD DATA ON DEMAND ==========
         var startTime = performance.now();
         var chartData = getDataPointsForChart(tabType);
-        
+
         // Update cached variables for backward compatibility
         if (chartData.elevation) points = chartData.elevation;
         if (chartData.speed) speedPoints = chartData.speed;
@@ -6209,9 +6610,9 @@
         if (chartData.power) powerPoints = chartData.power;
         if (chartData.windSpeed) windSpeedPoints = chartData.windSpeed;
         if (chartData.windImpact) windImpactPoints = chartData.windImpact;
-        
+
         var loadTime = performance.now() - startTime;
-        
+
         // Debug logging for biometric data availability
         DBG.log('Chart creation with lazy loading', {
           tabType: tabType,
@@ -6227,7 +6628,7 @@
           windSpeedsAvailable: Array.isArray(windSpeeds) ? windSpeeds.length : 0,
           dayNightPeriods: dayNightPeriods ? dayNightPeriods.length : 0
         });
-        
+
         // Clear any existing no-data message first
         var chartWrap = document.querySelector('.fgpx-chart-wrap');
         if (chartWrap && chartWrap.innerHTML.indexOf('<canvas') === -1) {
@@ -6235,7 +6636,7 @@
           chartWrap.innerHTML = '<canvas class="fgpx-chart" width="400" height="200"></canvas>';
           ui.canvas = chartWrap.querySelector('canvas');
         }
-        
+
         if (chart) {
           chart.destroy();
           chart = null;
