@@ -372,7 +372,8 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("var container = root.querySelector('.fgpx-container');");
     expect(FRONT_SRC).toContain('var cinemaRoot = container || root;');
     expect(FRONT_SRC).toContain("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
-    expect(FRONT_SRC).toContain("var _cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
+    expect(FRONT_SRC).toContain('var _cinemaEl = cinemaRoot._cachedCinema;');
+    expect(FRONT_SRC).toContain("_cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
   });
 
   test('weathergrade ground profile is current-anchored and not a static triangle', () => {
