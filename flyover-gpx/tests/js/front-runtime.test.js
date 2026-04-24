@@ -356,9 +356,9 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("function showWeatherFloatingTooltip(targetEl, text, clientX, clientY)");
     expect(FRONT_SRC).toContain("activeConditionLabels.push(simI18N.simCondFog || 'Fog');");
     expect(FRONT_SRC).toContain("var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'title', conditionTooltip);");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'title', ''); // Keep title empty to prevent native tooltip");
     expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', celestialTooltip);");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', ''); // Keep title empty to prevent native tooltip");
     expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);");
   });
 
