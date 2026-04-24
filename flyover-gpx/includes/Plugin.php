@@ -351,13 +351,15 @@ final class Plugin
         $debugLogging = $options['fgpx_debug_logging'] === '1';
         $debugWeatherData = $options['fgpx_debug_weather_data'] === '1';
 
-        // Generate GPX download URL if enabled and file exists
+        // Generate GPX download config if enabled and file exists.
+        // Keep nonce out of URL to avoid leaking in logs/referrers/history.
         $gpxDownloadUrl = '';
+        $gpxDownloadNonce = '';
         if ($gpxDownloadFinal && $trackId !== '') {
             $filePath = (string) \get_post_meta((int) $trackId, 'fgpx_file_path', true);
             if ($filePath !== '' && \is_readable($filePath)) {
-                $dlNonce        = \wp_create_nonce('fgpx_download_gpx_' . $trackId);
-                $gpxDownloadUrl = \esc_url_raw(\admin_url('admin-ajax.php') . '?action=fgpx_download_gpx&id=' . $trackId . '&nonce=' . $dlNonce);
+                $gpxDownloadNonce = \wp_create_nonce('fgpx_download_gpx_' . $trackId);
+                $gpxDownloadUrl = \esc_url_raw(\admin_url('admin-ajax.php'));
             }
         }
 
@@ -439,6 +441,7 @@ final class Plugin
             ],
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
+            'gpxDownloadNonce' => $gpxDownloadNonce,
             'resolvedApiKey' => $resolvedApiKey,
         ];
 
@@ -596,8 +599,9 @@ final class Plugin
                                     'weatherColorRain:"' . \esc_js($options['fgpx_weather_color_rain']) . '",' .
                                     'weatherColorFog:"' . \esc_js($options['fgpx_weather_color_fog']) . '",' .
                                     'weatherColorClouds:"' . \esc_js($options['fgpx_weather_color_clouds']) . '",' .
-                  'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
-                  'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '"' .
+                                    'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
+                                    'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '",' .
+                                    'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '"' .
                 '};',
                 'after'
             );

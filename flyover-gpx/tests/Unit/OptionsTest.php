@@ -187,6 +187,26 @@ final class OptionsTest extends TestCase
         $this->assertNotEmpty($all);
     }
 
+    public function test_options_class_registers_invalidation_hooks_for_direct_option_mutations(): void
+    {
+        $optionsFile = dirname(__DIR__, 2) . '/includes/Options.php';
+        $source = (string) file_get_contents($optionsFile);
+
+        $this->assertStringContainsString("public static function register(): void", $source);
+        $this->assertStringContainsString("\\add_action('added_option', [self::class, 'maybeInvalidateForOption']", $source);
+        $this->assertStringContainsString("\\add_action('updated_option', [self::class, 'maybeInvalidateForOption']", $source);
+        $this->assertStringContainsString("\\add_action('deleted_option', [self::class, 'maybeInvalidateForOption']", $source);
+        $this->assertStringContainsString("if (strpos(\$option, 'fgpx_') !== 0)", $source);
+    }
+
+    public function test_plugin_bootstrap_registers_options_hooks_before_runtime_use(): void
+    {
+        $bootstrapFile = dirname(__DIR__, 2) . '/flyover-gpx.php';
+        $source = (string) file_get_contents($bootstrapFile);
+
+        $this->assertStringContainsString('Options::register();', $source);
+    }
+
     // ------------------------------------------------------------------
     // getForFrontend() — guards the JS config contract
     // ------------------------------------------------------------------

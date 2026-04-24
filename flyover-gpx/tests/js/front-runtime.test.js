@@ -60,7 +60,6 @@ describe('front.js runtime minimal regressions', () => {
     delete window.FGPX;
     delete window.maplibregl;
     delete window.Chart;
-    if (window.showNoDataMessage) delete window.showNoDataMessage;
     if (window.switchChartTab) delete window.switchChartTab;
     jest.restoreAllMocks();
   });
@@ -236,6 +235,30 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;");
   });
 
+  test('fetch pipeline uses timeout/abort helper with configurable timeout', () => {
+    expect(FRONT_SRC).toContain('var fetchTimeoutMs = Math.max(3000');
+    expect(FRONT_SRC).toContain('function fetchJsonWithTimeout(url, options, label) {');
+    expect(FRONT_SRC).toContain("if (err && err.name === 'AbortError') {");
+    expect(FRONT_SRC).toContain("' timeout after '");
+    expect(FRONT_SRC).toContain('return r.text().then(function(raw) {');
+    expect(FRONT_SRC).toContain("payload && typeof payload.message === 'string'");
+  });
+
+  test('initContainer guards UI updates when container is disconnected', () => {
+    expect(FRONT_SRC).toContain('function isContainerActive() {');
+    expect(FRONT_SRC).toContain('if (!isContainerActive()) return;');
+  });
+
+  test('animation scheduling guards detached roots and cancels RAF when paused', () => {
+    expect(FRONT_SRC).toContain('if (!playing && rafId) {');
+    expect(FRONT_SRC).toContain('window.cancelAnimationFrame(rafId);');
+    expect(FRONT_SRC).toContain('if (!document.contains(root)) return;');
+    expect(FRONT_SRC).toContain('registerTeardown(function() { window.removeEventListener(\'keydown\', onPlayerKeydown); });');
+    expect(FRONT_SRC).toContain('registerTeardown(function() { window.removeEventListener(\'keydown\', onOverlayKeydown); });');
+    expect(FRONT_SRC).toContain('destroyRuntime();');
+    expect(FRONT_SRC).toContain('if (!document.contains(root)) {');
+  });
+
   test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
@@ -399,8 +422,22 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('progressive route geometry updates are throttled to ~12fps', () => {
-    expect(FRONT_SRC).toContain('window.__fgpxLineCooldown >= 0.083');
+    expect(FRONT_SRC).toContain('var progressLineCooldown = 0;');
+    expect(FRONT_SRC).toContain('progressLineCooldown >= 0.083');
     expect(FRONT_SRC).not.toContain('window.__fgpxLineCooldown >= 0.025');
+  });
+
+  test('day-night and progressive route state are scoped per player instance', () => {
+    expect(FRONT_SRC).toContain('var dayNightOverlayState = null;');
+    expect(FRONT_SRC).toContain('var progressSegments = [];');
+    expect(FRONT_SRC).not.toContain('window.__fgpxLastDayNightState');
+    expect(FRONT_SRC).not.toContain('window.__fgpxProgressSegments');
+  });
+
+  test('chart no-data rendering and reset cleanup stay within the current player root', () => {
+    expect(FRONT_SRC).toContain("var chartWrap = root.querySelector('.fgpx-chart-wrap');");
+    expect(FRONT_SRC).toContain('function cleanupProgressiveSegments() {');
+    expect(FRONT_SRC).toContain('cleanupProgressiveSegments();');
   });
 
   test('weather cinema element is cached on container to avoid per-RAF querySelector', () => {

@@ -18,6 +18,8 @@ final class SmartApiKeys
     public const MODE_OFF = 'off';
     public const MODE_SINGLE = 'single';
     public const MODE_PER_OCCURRENCE = 'per_occurrence';
+    private const TEST_REQUEST_SPACING_MS = 150;
+    private const TEST_RETRY_AFTER_MAX_MS = 1500;
 
     /**
      * Normalize mode values to supported constants.
@@ -132,13 +134,15 @@ final class SmartApiKeys
     public static function testKeysAgainstTemplate(string $templateUrl, array $keys, int $timeout = 6): array
     {
         $results = [];
-        foreach ($keys as $key) {
+        $keyCount = \count($keys);
+        foreach ($keys as $index => $key) {
             $url = \str_replace(self::PLACEHOLDER, $key, $templateUrl);
             $url = self::normalizeProbeUrl($url);
 
             $ok = false;
             $status = 0;
             $message = 'Request failed';
+            $response = null;
             if (\function_exists('wp_remote_get')) {
                 $response = \wp_remote_get($url, [
                     'timeout' => max(1, $timeout),
@@ -155,7 +159,14 @@ final class SmartApiKeys
                         $status = (int) $response['response']['code'];
                     }
                     $ok = $status >= 200 && $status < 400;
-                    $message = $ok ? 'OK' : 'HTTP ' . (string) $status;
+                    if ($status === 429) {
+                        $retryAfterMs = self::extractRetryAfterMs($response);
+                        $message = $retryAfterMs > 0
+                            ? 'HTTP 429 (rate limited, backing off for ' . (string) round($retryAfterMs / 1000, 2) . 's)'
+                            : 'HTTP 429 (rate limited)';
+                    } else {
+                        $message = $ok ? 'OK' : 'HTTP ' . (string) $status;
+                    }
                 }
             } else {
                 $message = 'HTTP client unavailable';
@@ -167,9 +178,56 @@ final class SmartApiKeys
                 'status' => $status,
                 'message' => $message,
             ];
+
+            if ($index < ($keyCount - 1)) {
+                self::pauseBetweenKeyTests($status === 429 ? self::extractRetryAfterMs($response) : 0);
+            }
         }
 
         return $results;
+    }
+
+    private static function pauseBetweenKeyTests(int $retryAfterMs = 0): void
+    {
+        $pauseMs = max(self::TEST_REQUEST_SPACING_MS, min(self::TEST_RETRY_AFTER_MAX_MS, $retryAfterMs));
+        if ($pauseMs <= 0) {
+            return;
+        }
+
+        if (isset($GLOBALS['fgpx_test_pause_ms']) && \is_callable($GLOBALS['fgpx_test_pause_ms'])) {
+            $GLOBALS['fgpx_test_pause_ms']($pauseMs);
+            return;
+        }
+
+        if (\function_exists('usleep')) {
+            \usleep($pauseMs * 1000);
+        }
+    }
+
+    private static function extractRetryAfterMs($response): int
+    {
+        $retryAfter = '';
+
+        if (\is_array($response) && isset($response['headers']) && \is_array($response['headers'])) {
+            $headers = array_change_key_case($response['headers'], CASE_LOWER);
+            $retryAfter = (string) ($headers['retry-after'] ?? '');
+        }
+
+        if ($retryAfter === '') {
+            return 0;
+        }
+
+        if (\ctype_digit($retryAfter)) {
+            return max(0, min(self::TEST_RETRY_AFTER_MAX_MS, ((int) $retryAfter) * 1000));
+        }
+
+        $retryAt = \strtotime($retryAfter);
+        if ($retryAt === false) {
+            return 0;
+        }
+
+        $seconds = max(0, $retryAt - \time());
+        return min(self::TEST_RETRY_AFTER_MAX_MS, $seconds * 1000);
     }
 
     /**

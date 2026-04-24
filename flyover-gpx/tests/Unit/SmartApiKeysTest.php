@@ -115,6 +115,40 @@ final class SmartApiKeysTest extends TestCase
         unset($GLOBALS['fgpx_test_wp_remote_get']);
     }
 
+    public function test_test_keys_against_template_applies_bounded_backoff_for_rate_limits(): void
+    {
+        $pauseCalls = [];
+        $requestCount = 0;
+
+        $GLOBALS['fgpx_test_pause_ms'] = static function (int $pauseMs) use (&$pauseCalls): void {
+            $pauseCalls[] = $pauseMs;
+        };
+        $GLOBALS['fgpx_test_wp_remote_get'] = static function (string $url, array $args = []) use (&$requestCount) {
+            $requestCount++;
+            if ($requestCount === 1) {
+                return [
+                    'response' => ['code' => 429],
+                    'headers' => ['Retry-After' => '2'],
+                    'body' => 'rate limited',
+                ];
+            }
+
+            return ['response' => ['code' => 200], 'body' => 'ok'];
+        };
+
+        $results = SmartApiKeys::testKeysAgainstTemplate(
+            'https://maps.test/{z}/{x}/{y}.png?key={{API_KEY}}',
+            ['first-key', 'second-key'],
+            3
+        );
+
+        $this->assertSame(429, $results[0]['status']);
+        $this->assertStringContainsString('rate limited', $results[0]['message']);
+        $this->assertSame([1500], $pauseCalls);
+
+        unset($GLOBALS['fgpx_test_pause_ms'], $GLOBALS['fgpx_test_wp_remote_get']);
+    }
+
     public function test_normalize_test_template_url_keeps_existing_placeholder(): void
     {
         $url = 'https://api.maptiler.com/maps/streets-v4/?key={{API_KEY}}';

@@ -475,15 +475,43 @@
       }
     }
     right.appendChild(createEl('span', 'fgpx-speed-label', I18N.speed || 'Speed')); right.appendChild(speedSel);
-    if (window.FGPX && FGPX.gpxDownloadUrl) {
-      var btnDownload = document.createElement('a');
+    if (window.FGPX && FGPX.gpxDownloadUrl && FGPX.gpxDownloadNonce) {
+      var btnDownload = document.createElement('button');
+      btnDownload.type = 'button';
       btnDownload.className = 'fgpx-btn';
-      btnDownload.href = FGPX.gpxDownloadUrl;
-      btnDownload.download = '';
       btnDownload.textContent = '\u2B07\uFE0E'; // ⬇ without emoji variation
       btnDownload.setAttribute('title', 'Download GPX');
       btnDownload.setAttribute('aria-label', 'Download GPX');
-      btnDownload.style.textDecoration = 'none';
+      btnDownload.addEventListener('click', function(e) {
+        e.preventDefault();
+        var endpoint = String(FGPX.gpxDownloadUrl || '');
+        var nonce = String(FGPX.gpxDownloadNonce || '');
+        var downloadTrackId = String(container.getAttribute('data-track-id') || '');
+        if (!endpoint || !nonce || !downloadTrackId) {
+          return;
+        }
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = endpoint;
+        form.style.display = 'none';
+
+        function appendField(name, value) {
+          var input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        }
+
+        appendField('action', 'fgpx_download_gpx');
+        appendField('id', downloadTrackId);
+        appendField('nonce', nonce);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+      });
       right.appendChild(btnDownload);
     }
     controls.appendChild(left); controls.appendChild(progressWrap); controls.appendChild(right);
@@ -500,7 +528,7 @@
     var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade;
     
     // Show no data message in chart area (will be defined in startPlayer with proper chart reference)
-    // var showNoDataMessage = null; // Removed - will be defined globally in startPlayer
+    // No global no-data handler; keep it instance-scoped inside startPlayer.
     
     // Tab switching functionality (will be defined globally in startPlayer with proper variable references)
     // var switchChartTab = null; // Removed - will be defined globally in startPlayer
@@ -631,9 +659,20 @@
         nextBoundaryMins = (startMins - nowMins + 1440) % 1440;
       }
       var msUntilNext = nextBoundaryMins * 60 * 1000 - nowD.getSeconds() * 1000;
-      setTimeout(function() { applyTheme(el, cfg); }, msUntilNext + 1000);
+      try {
+        if (el.__fgpxThemeTimer) {
+          clearTimeout(el.__fgpxThemeTimer);
+        }
+      } catch (_) {}
+      el.__fgpxThemeTimer = setTimeout(function() { applyTheme(el, cfg); }, msUntilNext + 1000);
     } else {
       // system: remove attribute, let CSS @media handle it
+      try {
+        if (el.__fgpxThemeTimer) {
+          clearTimeout(el.__fgpxThemeTimer);
+          el.__fgpxThemeTimer = null;
+        }
+      } catch (_) {}
       el.removeAttribute('data-fgpx-theme');
     }
   }
@@ -676,6 +715,11 @@
     }
     var restUrl = String(window.FGPX.restUrl).replace(/\/$/, '') + '/track/' + encodeURIComponent(trackId) + (restUrlParams.length > 0 ? ('?' + restUrlParams.join('&')) : '');
     var ajaxUrl = (window.FGPX && FGPX.ajaxUrl) ? String(window.FGPX.ajaxUrl) : null;
+    var fetchTimeoutMs = Math.max(3000, (window.FGPX && isFinite(Number(FGPX.fetchTimeoutMs)) ? Number(FGPX.fetchTimeoutMs) : 15000));
+
+    function isContainerActive() {
+      return !!(el && el.isConnected && document.contains(el));
+    }
 
     // Frontend caching for better performance on large tracks
     function getCacheKey() {
@@ -817,8 +861,7 @@
      * @throws {Error} HTTP error if request fails
      */
     function fetchRest() {
-      return fetch(restUrl, { headers: { 'X-WP-Nonce': window.FGPX.nonce } })
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+      return fetchJsonWithTimeout(restUrl, { headers: { 'X-WP-Nonce': window.FGPX.nonce } }, 'REST');
     }
 
     /**
@@ -834,25 +877,67 @@
       if (!ajaxUrl) return Promise.reject(new Error('No AJAX URL'));
       var u = ajaxUrl + (ajaxUrl.indexOf('?') === -1 ? '?' : '&') + 'action=fgpx_track&id=' + encodeURIComponent(trackId);
       if (hasGalleryStrategy) { u += '&strategy=latest_embed'; } else if (window.FGPX && FGPX.hostPostId) { u += '&host_post=' + encodeURIComponent(String(FGPX.hostPostId)); }
-      return fetch(u, { credentials: 'same-origin' })
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+      return fetchJsonWithTimeout(u, { credentials: 'same-origin' }, 'AJAX');
+    }
+
+    function fetchJsonWithTimeout(url, options, label) {
+      var controller = (typeof window.AbortController !== 'undefined') ? new window.AbortController() : null;
+      var timeoutId = null;
+      var reqOptions = Object.assign({}, options || {});
+      if (controller) {
+        reqOptions.signal = controller.signal;
+      }
+      if (controller) {
+        timeoutId = setTimeout(function() {
+          try { controller.abort(); } catch (_) {}
+        }, fetchTimeoutMs);
+      }
+
+      return fetch(url, reqOptions)
+        .then(function(r) {
+          if (!r.ok) {
+            return r.text().then(function(raw) {
+              var payload = null;
+              if (raw) {
+                try { payload = JSON.parse(raw); } catch (_) {}
+              }
+              var msg = payload && typeof payload.message === 'string' && payload.message.trim() ? payload.message.trim() : ('HTTP ' + r.status);
+              throw new Error(msg);
+            });
+          }
+          return r.json();
+        })
+        .catch(function(err) {
+          if (err && err.name === 'AbortError') {
+            throw new Error((label || 'Request') + ' timeout after ' + Math.round(fetchTimeoutMs / 1000) + 's');
+          }
+          throw err;
+        })
+        .finally(function() {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        });
     }
 
     // Try cache first, then fetch from server
     var cachedData = getCachedData();
     if (cachedData) {
+      if (!isContainerActive()) return;
       ui.spinner.style.display = 'none';
       startPlayer(el, ui, cachedData, style, styleUrl);
     } else {
       fetchRest()
         .catch(function () { return fetchAjax(); })
         .then(function (json) {
+          if (!isContainerActive()) return;
           ui.spinner.style.display = 'none';
           // Cache the data for future use
           setCachedData(json);
           startPlayer(el, ui, json, style, styleUrl);
         })
         .catch(function (err) {
+          if (!isContainerActive()) return;
           ui.spinner.style.display = 'none';
           ui.error.textContent = (window.FGPX && FGPX.i18n && FGPX.i18n.failedLoad ? FGPX.i18n.failedLoad : 'Failed to load track:') + ' ' + (err && err.message ? err.message : 'Unknown error');
           ui.error.style.display = 'block';
@@ -872,6 +957,30 @@
     var currentChartTab = 'elevation';
     var chart = null;
     var createChart = null;
+    var teardownCallbacks = [];
+    var runtimeDestroyed = false;
+
+    function registerTeardown(fn) {
+      if (typeof fn === 'function') {
+        teardownCallbacks.push(fn);
+      }
+    }
+
+    function destroyRuntime() {
+      if (runtimeDestroyed) return;
+      runtimeDestroyed = true;
+      try { setPlaying(false); } catch (_) {}
+      while (teardownCallbacks.length > 0) {
+        var teardown = teardownCallbacks.pop();
+        try { teardown(); } catch (_) {}
+      }
+      try {
+        if (root && root.__fgpxThemeTimer) {
+          clearTimeout(root.__fgpxThemeTimer);
+          root.__fgpxThemeTimer = null;
+        }
+      } catch (_) {}
+    }
     
     
     var coords = (payload && payload.geojson && payload.geojson.coordinates) ? payload.geojson.coordinates : [];
@@ -1099,6 +1208,11 @@
     }
     var privacyStartP = privacyStartD / totalDistance;
     var privacyEndP = privacyEndD / totalDistance;
+    var dayNightOverlayState = null;
+    var progressLineCooldown = 0;
+    var progressLastDistance = privacyEnabled ? privacyStartD : 0;
+    var progressNeedLineInit = true;
+    var progressSegments = [];
 
     // Compute initial bounds (privacy-trimmed if enabled) BEFORE map creation so we avoid a visible re-fit flash
     var fullBounds = (Array.isArray(bounds) && bounds.length === 4)
@@ -1390,14 +1504,14 @@
 
       // Helper function to clean up progressive segments
       function cleanupProgressiveSegments() {
-        if (typeof window.__fgpxProgressSegments !== 'undefined') {
-          for (var segIdx = 0; segIdx < window.__fgpxProgressSegments.length; segIdx++) {
+        if (progressSegments.length > 0) {
+          for (var segIdx = 0; segIdx < progressSegments.length; segIdx++) {
             try {
               map.removeLayer('fgpx-progress-segment-' + segIdx);
               map.removeSource('fgpx-progress-segment-' + segIdx);
             } catch(_) {}
           }
-          window.__fgpxProgressSegments = [];
+          progressSegments = [];
         }
       }
 
@@ -4872,7 +4986,7 @@
         }); 
       });
       // ESC to close
-      window.addEventListener('keydown', function(e){
+      var onOverlayKeydown = function(e){
         if (!document.contains(root)) return;
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
@@ -4885,7 +4999,9 @@
             }
           }); 
         } 
-      });
+      };
+      window.addEventListener('keydown', onOverlayKeydown);
+      registerTeardown(function() { window.removeEventListener('keydown', onOverlayKeydown); });
 
       function processNextPhoto() {
         DBG.log('processNextPhoto()', { overlayActive: overlayActive, queue: photoQueue.length });
@@ -5209,14 +5325,11 @@
         }
         
         // Find chart canvas and replace with message
-        var chartWrap = document.querySelector('.fgpx-chart-wrap');
+        var chartWrap = root.querySelector('.fgpx-chart-wrap');
         if (chartWrap) {
           chartWrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#666;font-size:14px;text-align:center;padding:20px;">' + message + '</div>';
         }
       };
-      
-      // Assign to global scope for backward compatibility
-      window.showNoDataMessage = showNoDataMessageLocal;
       
       // Define switchChartTab function here where event listeners can access it
       var switchChartTab = function(tabType) {
@@ -6482,7 +6595,7 @@
 
                   var poiMarkerLine = document.createElement('div');
                   poiMarkerLine.className = 'fgpx-weather-poi-marker-line';
-                  poiMarkerLine.style.opacity = String(Math.max(0.6, Math.min(1, poiOccupancy + 0.1)));
+                  poiMarkerLine.style.opacity = String(Math.max(0.42, Math.min(0.82, poiOccupancy * 0.78)));
 
                   var poiMarkerLabel = document.createElement('div');
                   poiMarkerLabel.className = 'fgpx-weather-poi-marker-label';
@@ -6643,7 +6756,7 @@
         });
 
         // Clear any existing no-data message first
-        var chartWrap = document.querySelector('.fgpx-chart-wrap');
+        var chartWrap = root.querySelector('.fgpx-chart-wrap');
         if (chartWrap && chartWrap.innerHTML.indexOf('<canvas') === -1) {
           // Recreate canvas if it was replaced by no-data message
           chartWrap.innerHTML = '<canvas class="fgpx-chart" width="400" height="200"></canvas>';
@@ -8373,6 +8486,10 @@
       function setPlaying(p) {
         if (playing !== p) { DBG.log('playback state change', { playing: p }); }
         playing = p;
+        if (!playing && rafId) {
+          try { window.cancelAnimationFrame(rafId); } catch (_) {}
+          rafId = null;
+        }
         try {
           var cinemaRoot = container || root;
           var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
@@ -8426,6 +8543,11 @@
         chartCooldown = 0;
         forceCameraUpdate = true;
         appliedBearing = null;
+        dayNightOverlayState = null;
+        progressLineCooldown = 0;
+        progressLastDistance = privacyEnabled ? privacyStartD : 0;
+        progressNeedLineInit = true;
+        cleanupProgressiveSegments();
         updateVisuals(progress);
         setProgressBar(progress);
         if (chart) {
@@ -8597,10 +8719,6 @@
               while (dnLo < dnHi) { var dnMid = (dnLo + dnHi) >>> 1; if (cumDist[dnMid] < d) dnLo = dnMid + 1; else dnHi = dnMid; }
               var currentTimeOffset = timeOffsets[Math.max(0, dnLo)] || 0;
               
-              if (typeof window.__fgpxLastDayNightState === 'undefined') {
-                window.__fgpxLastDayNightState = null;
-              }
-              
               // Determine if we are in a night period
               var sortedPeriods = (dayNightPeriodsSorted && dayNightPeriodsSorted.length > 0) ? dayNightPeriodsSorted : dayNightPeriods;
               var isInNightPeriod = false;
@@ -8629,11 +8747,11 @@
               var nightOpacity = isInNightPeriod ? 1 : 0;
               
               // Update paint property when state changes — transition handles smooth fade
-              if (window.__fgpxLastDayNightState !== nightOpacity) {
-                DBG.log('Day/night state changed:', window.__fgpxLastDayNightState, '->', nightOpacity, 'at offset:', currentTimeOffset);
+              if (dayNightOverlayState !== nightOpacity) {
+                DBG.log('Day/night state changed:', dayNightOverlayState, '->', nightOpacity, 'at offset:', currentTimeOffset);
                 var targetOpacity = parseFloat(window.FGPX.daynightMapOpacity) || 0.4;
                 // On seek (null state), apply instantly without transition
-                if (window.__fgpxLastDayNightState === null) {
+                if (dayNightOverlayState === null) {
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity-transition', { duration: 0, delay: 0 });
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
                   // Restore transition for future smooth fades
@@ -8643,7 +8761,7 @@
                 } else {
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
                 }
-                window.__fgpxLastDayNightState = nightOpacity;
+                dayNightOverlayState = nightOpacity;
               }
             }
           } catch (e) {
@@ -8655,11 +8773,7 @@
         var routeProgSrc = map.getSource('fgpx-route-progress');
         if (routeProgSrc) {
           // Throttle progress line updates to ~40 FPS or 10 m movement
-          if (typeof window.__fgpxLineCooldown === 'undefined') { window.__fgpxLineCooldown = 0; }
-          if (typeof window.__fgpxLastLineD === 'undefined') { window.__fgpxLastLineD = privacyEnabled ? privacyStartD : 0; }
-          if (window.__fgpxNeedLineInit === undefined) { window.__fgpxNeedLineInit = true; }
-          if (typeof window.__fgpxProgressSegments === 'undefined') { window.__fgpxProgressSegments = []; }
-          var needUpdate = window.__fgpxNeedLineInit || (window.__fgpxLineCooldown >= 0.083) || (Math.abs(d - window.__fgpxLastLineD) >= 10);
+          var needUpdate = progressNeedLineInit || (progressLineCooldown >= 0.083) || (Math.abs(d - progressLastDistance) >= 10);
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
             while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < d) lo = mid + 1; else hi = mid; }
@@ -8722,7 +8836,7 @@
               }
               
               // Remove excess segments only if we have fewer segments now
-              var currentSegmentCount = window.__fgpxProgressSegments.length || 0;
+              var currentSegmentCount = progressSegments.length || 0;
               if (segments.length < currentSegmentCount) {
                 for (var removeIdx = segments.length; removeIdx < currentSegmentCount; removeIdx++) {
                   try {
@@ -8733,9 +8847,9 @@
               }
               
               // Update segment tracking
-              window.__fgpxProgressSegments = [];
+              progressSegments = [];
               for (var trackIdx = 0; trackIdx < segments.length; trackIdx++) {
-                window.__fgpxProgressSegments.push(trackIdx);
+                progressSegments.push(trackIdx);
               }
               
               // Hide the single-color progressive route
@@ -8744,14 +8858,14 @@
               } catch(_) {}
             } else {
               // Use single-color progressive route - clean up segments first
-              var currentSegmentCount = window.__fgpxProgressSegments.length || 0;
+              var currentSegmentCount = progressSegments.length || 0;
               for (var cleanIdx = 0; cleanIdx < currentSegmentCount; cleanIdx++) {
                 try {
                   map.removeLayer('fgpx-progress-segment-' + cleanIdx);
                   map.removeSource('fgpx-progress-segment-' + cleanIdx);
                 } catch(_) {}
               }
-              window.__fgpxProgressSegments = [];
+              progressSegments = [];
               
               progressData.geometry.coordinates = smoothedUpTo;
               routeProgSrc.setData(progressData);
@@ -8760,9 +8874,9 @@
               } catch(_) {}
             }
             
-            window.__fgpxLineCooldown = 0;
-            window.__fgpxLastLineD = d;
-            window.__fgpxNeedLineInit = false;
+            progressLineCooldown = 0;
+            progressLastDistance = d;
+            progressNeedLineInit = false;
           }
         }
         // update camera bearing aimed forward with smoothing and turn-rate clamp
@@ -8933,6 +9047,10 @@
       }
 
       function scheduleRaf() {
+        if (!document.contains(root)) {
+          destroyRuntime();
+          return;
+        }
         if (!rafId) {
           rafId = window.requestAnimationFrame(raf);
         }
@@ -8940,6 +9058,10 @@
 
       function raf(ts) {
         rafId = null;
+        if (!document.contains(root)) {
+          destroyRuntime();
+          return;
+        }
         if (!playing) return;
         if (lastFrame == null) lastFrame = ts;
         var dt = (ts - lastFrame) / 1000; // seconds
@@ -8947,7 +9069,7 @@
         lastFrameDt = dt;
         chartCooldown += dt;
         bearingCooldown += dt;
-        try { if (typeof window.__fgpxLineCooldown === 'number') { window.__fgpxLineCooldown += dt; } } catch(_) {}
+        progressLineCooldown += dt;
         
         // Handle video recording frame capture
         if (videoRecorder && videoRecorder.shouldCaptureFrame(ts)) {
@@ -10152,7 +10274,7 @@
         });
       }
 
-      window.addEventListener('keydown', function (e) {
+      var onPlayerKeydown = function (e) {
         if (!document.contains(root)) return;
         if (e.code === 'Space') {
           e.preventDefault();
@@ -10184,7 +10306,9 @@
             }
           }
         }
-      });
+      };
+      window.addEventListener('keydown', onPlayerKeydown);
+      registerTeardown(function() { window.removeEventListener('keydown', onPlayerKeydown); });
 
       // Click-to-seek on progress bar: move to point in playback and reveal route up to there
       function seekToFraction(frac) {
@@ -10199,7 +10323,7 @@
         }
         
         // Force a deterministic day/night recompute on seek
-        window.__fgpxLastDayNightState = null;
+        dayNightOverlayState = null;
         
         // Clear photo state when seeking to allow photos to be shown again
         // This fixes the issue where photos weren't shown when seeking backward

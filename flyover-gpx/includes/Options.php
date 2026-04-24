@@ -153,6 +153,16 @@ final class Options
 	];
 
 	/**
+	 * Register cache invalidation hooks for direct WordPress option mutations.
+	 */
+	public static function register(): void
+	{
+		\add_action('added_option', [self::class, 'maybeInvalidateForOption'], 10, 2);
+		\add_action('updated_option', [self::class, 'maybeInvalidateForOption'], 10, 3);
+		\add_action('deleted_option', [self::class, 'maybeInvalidateForOption'], 10, 1);
+	}
+
+	/**
 	 * Get all plugin options with caching.
 	 * Loads all options in a single database query and caches the result.
 	 * 
@@ -220,6 +230,20 @@ final class Options
 	public static function clearCache(): void
 	{
 		self::$cache = null;
+	}
+
+	/**
+	 * Clear cache when any plugin-owned option mutates, including direct update_option calls.
+	 *
+	 * @param string $option Option name from the WordPress hook.
+	 */
+	public static function maybeInvalidateForOption(string $option, ...$unused): void
+	{
+		if (strpos($option, 'fgpx_') !== 0) {
+			return;
+		}
+
+		self::clearCache();
 	}
 
 	/**

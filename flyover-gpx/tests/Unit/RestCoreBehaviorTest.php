@@ -10,6 +10,34 @@ use ReflectionMethod;
 
 final class RestCoreBehaviorTest extends TestCase
 {
+    public function test_rest_route_uses_explicit_track_permission_callback(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString("'permission_callback' => [\$this, 'can_read_track']", $source);
+        $this->assertStringNotContainsString("'permission_callback' => '__return_true'", $source);
+        $this->assertStringContainsString('public function can_read_track(WP_REST_Request $request): bool', $source);
+    }
+
+    public function test_download_handler_reads_nonce_from_request_payload(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString("\$id    = (int) (\$_REQUEST['id'] ?? 0);", $source);
+        $this->assertStringContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source);
+    }
+
+    public function test_plugin_localizes_download_nonce_without_nonce_query_parameter(): void
+    {
+        $pluginFile = dirname(__DIR__, 2) . '/includes/Plugin.php';
+        $source = (string) file_get_contents($pluginFile);
+
+        $this->assertStringContainsString("'gpxDownloadNonce' => \$gpxDownloadNonce", $source);
+        $this->assertStringNotContainsString('&nonce=', $source);
+    }
+
     public function test_waypoints_are_exposed_in_both_rest_and_ajax_response_payloads(): void
     {
         $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
@@ -36,6 +64,17 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertStringContainsString('JSON decode error for weather summary in REST endpoint', $source);
         $this->assertStringContainsString('JSON decode error for weather points in AJAX endpoint', $source);
         $this->assertStringContainsString('JSON decode error for weather summary in AJAX endpoint', $source);
+    }
+
+    public function test_corrupted_geojson_returns_explicit_server_errors_in_rest_and_ajax(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString('Corrupted track geometry in REST endpoint', $source);
+        $this->assertStringContainsString('Corrupted track geometry in AJAX endpoint', $source);
+        $this->assertStringContainsString("'code' => 'fgpx_corrupt_geojson'", $source);
+        $this->assertStringContainsString('Please re-import this GPX track in the plugin admin.', $source);
     }
 
     public function test_calculate_optimal_target_respects_safety_bounds_for_small_tracks(): void

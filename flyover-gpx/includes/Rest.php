@@ -7,6 +7,7 @@ namespace FGpx;
 if (!\defined('ABSPATH')) {
     exit;
 }
+use WP_REST_Request;
 use WP_REST_Response;
 
 /**
@@ -365,7 +366,7 @@ final class Rest
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'get_track'],
-                'permission_callback' => '__return_true',
+                'permission_callback' => [$this, 'can_read_track'],
                 'args' => [
                     'id' => [
                         'validate_callback' => static function ($param): bool {
@@ -375,6 +376,30 @@ final class Rest
                 ],
             ]
         );
+    }
+
+    /**
+     * Permission callback for track visibility.
+     *
+     * Published tracks are public; non-published tracks require read capability.
+     */
+    public function can_read_track(WP_REST_Request $request): bool
+    {
+        $id = (int) $request->get_param('id');
+        if ($id <= 0) {
+            return false;
+        }
+
+        $post = \get_post($id);
+        if (!$post || $post->post_type !== 'fgpx_track') {
+            return false;
+        }
+
+        if ($post->post_status === 'publish') {
+            return true;
+        }
+
+        return \current_user_can('read_post', $id);
     }
 
     /**
@@ -389,7 +414,7 @@ final class Rest
             return new WP_REST_Response(['message' => 'Not found'], 404);
         }
 
-        // Gate visibility: allow public read for published, otherwise require capability
+        // Defense-in-depth: keep visibility gate even though permission callback already enforces it.
         if ($post->post_status !== 'publish' && !\current_user_can('read_post', $id)) {
             return new WP_REST_Response(['message' => 'Forbidden'], 403);
         }
@@ -436,6 +461,8 @@ final class Rest
 
         // Optimize JSON parsing - single decode with error handling
         $decodedGeo = null;
+        $geojsonDecodeError = false;
+        $geojsonDecodeErrorMessage = '';
         if (\is_string($geojson) && $geojson !== '') {
             $decodedGeo = \json_decode($geojson, true);
             if (\json_last_error() !== JSON_ERROR_NONE) {
@@ -444,8 +471,32 @@ final class Rest
                     'track_id' => $id,
                     'geojson_length' => \strlen($geojson)
                 ]);
+                $geojsonDecodeError = true;
+                $geojsonDecodeErrorMessage = 'Invalid JSON payload';
+                $decodedGeo = null;
+            } elseif (!\is_array($decodedGeo)) {
+                ErrorHandler::warning('Invalid geojson structure in REST endpoint', [
+                    'track_id' => $id,
+                    'decoded_type' => \gettype($decodedGeo),
+                ]);
+                $geojsonDecodeError = true;
+                $geojsonDecodeErrorMessage = 'Decoded payload is not an object';
                 $decodedGeo = null;
             }
+        }
+
+        if ($geojsonDecodeError) {
+            ErrorHandler::error('Corrupted track geometry in REST endpoint', [
+                'track_id' => $id,
+                'reason' => $geojsonDecodeErrorMessage,
+                'geojson_length' => \is_string($geojson) ? \strlen($geojson) : 0,
+            ]);
+
+            return new WP_REST_Response([
+                'code' => 'fgpx_corrupt_geojson',
+                'message' => 'Track data is corrupted. Please re-import this GPX track in the plugin admin.',
+                'track_id' => $id,
+            ], 500);
         }
 
         // Optional backend simplification (Ramer–Douglas–Peucker) with dynamic target point count
@@ -871,6 +922,8 @@ final class Rest
         
         // Optimize JSON parsing - single decode with error handling
         $decodedGeo = null;
+        $geojsonDecodeError = false;
+        $geojsonDecodeErrorMessage = '';
         if (is_string($geojson) && $geojson !== '') {
             $decodedGeo = json_decode($geojson, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -879,8 +932,32 @@ final class Rest
                     'track_id' => $id,
                     'geojson_length' => strlen($geojson)
                 ]);
+                $geojsonDecodeError = true;
+                $geojsonDecodeErrorMessage = 'Invalid JSON payload';
+                $decodedGeo = null;
+            } elseif (!is_array($decodedGeo)) {
+                ErrorHandler::warning('Invalid geojson structure in AJAX endpoint', [
+                    'track_id' => $id,
+                    'decoded_type' => gettype($decodedGeo),
+                ]);
+                $geojsonDecodeError = true;
+                $geojsonDecodeErrorMessage = 'Decoded payload is not an object';
                 $decodedGeo = null;
             }
+        }
+
+        if ($geojsonDecodeError) {
+            ErrorHandler::error('Corrupted track geometry in AJAX endpoint', [
+                'track_id' => $id,
+                'reason' => $geojsonDecodeErrorMessage,
+                'geojson_length' => is_string($geojson) ? strlen($geojson) : 0,
+            ]);
+
+            \wp_send_json([
+                'code' => 'fgpx_corrupt_geojson',
+                'message' => 'Track data is corrupted. Please re-import this GPX track in the plugin admin.',
+                'track_id' => $id,
+            ], 500);
         }
         if ($simplifyEnabled && is_array($decodedGeo) && isset($decodedGeo['type']) && $decodedGeo['type'] === 'LineString' && isset($decodedGeo['coordinates']) && is_array($decodedGeo['coordinates'])) {
             $coords = $decodedGeo['coordinates'];
@@ -1192,8 +1269,8 @@ final class Rest
      */
     public function ajax_download_gpx(): void
     {
-        $id    = (int) ($_GET['id'] ?? 0);
-        $nonce = (string) ($_GET['nonce'] ?? '');
+        $id    = (int) ($_REQUEST['id'] ?? 0);
+        $nonce = (string) ($_REQUEST['nonce'] ?? '');
 
         if ($id <= 0 || !\wp_verify_nonce($nonce, 'fgpx_download_gpx_' . $id)) {
             \wp_die('Invalid request', '', ['response' => 403]);

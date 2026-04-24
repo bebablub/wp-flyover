@@ -1006,6 +1006,13 @@ final class Admin
 		}
 
 		$filePath = (string) $uploaded['file']; // Absolute path
+		$gpxValidation = self::validate_gpx_upload_file($filePath);
+		if (\is_wp_error($gpxValidation)) {
+			if (\is_readable($filePath)) {
+				@\unlink($filePath);
+			}
+			$this->redirect_with_error($gpxValidation->get_error_message());
+		}
 		$fileName = \sanitize_file_name((string) \wp_basename($filePath));
 		
 		// Create a cleaner title by removing the unique prefix and extension
@@ -1951,6 +1958,13 @@ final class Admin
 					echo '<p><strong>Wet Points:</strong> ' . (int)($decodedSummary['wet_points'] ?? 0) . '</p>';
 					echo '<p><strong>Max Rain:</strong> ' . number_format((float)($decodedSummary['max_mm'] ?? 0), 1) . 'mm</p>';
 					echo '<p><strong>Avg Rain:</strong> ' . number_format((float)($decodedSummary['avg_mm'] ?? 0), 2) . 'mm</p>';
+					echo '<p><strong>Requested Samples:</strong> ' . (int)($decodedSummary['requested_samples'] ?? $pointCount) . '</p>';
+					echo '<p><strong>Used Samples:</strong> ' . (int)($decodedSummary['used_samples'] ?? $pointCount) . '</p>';
+					echo '<p><strong>Requested Coords:</strong> ' . (int)($decodedSummary['requested_unique_coords'] ?? 0) . '</p>';
+					echo '<p><strong>Used Coords:</strong> ' . (int)($decodedSummary['used_unique_coords'] ?? 0) . '</p>';
+					if (!empty($decodedSummary['samples_truncated']) || !empty($decodedSummary['unique_coords_truncated'])) {
+						echo '<p style="color: #b32d2e;"><strong>Coverage Limited:</strong> sample or coordinate caps were applied to keep enrichment bounded.</p>';
+					}
 				}
 				
 				// Show sample weather points
@@ -2326,13 +2340,27 @@ final class Admin
 
 			// Generate sample points
 			$samples = self::generateWeatherSamples($coordinates, $timestamps, $cumulativeDistance, $sampling, $stepKm, $stepMin, $multiPoint, $multiPointDistance);
+			$requestedSampleCount = \count($samples);
+			$maxWeatherSamples = 250;
+			$samplesTruncated = false;
+			if ($requestedSampleCount > $maxWeatherSamples) {
+				$samples = \array_slice($samples, 0, $maxWeatherSamples);
+				$samplesTruncated = true;
+				ErrorHandler::info('Weather sample list truncated', [
+					'post_id' => $postId,
+					'requested_samples' => $requestedSampleCount,
+					'used_samples' => \count($samples),
+				]);
+			}
 			
 			if (empty($samples)) {
 				return true; // No samples, but not an error
 			}
 
 			// Fetch weather data for samples
-			$weatherPoints = self::fetchWeatherForSamples($samples);
+			$weatherResult = self::fetchWeatherForSamples($samples);
+			$weatherPoints = $weatherResult['points'];
+			$weatherMeta = $weatherResult['meta'];
 
 			// Save weather data
 			$weatherFeatureCollection = [
@@ -2343,6 +2371,12 @@ final class Admin
 					'sampling' => $sampling,
 					'step_km' => $stepKm,
 					'step_min' => $stepMin,
+					'requested_samples' => $requestedSampleCount,
+					'used_samples' => \count($samples),
+					'samples_truncated' => $samplesTruncated,
+					'requested_unique_coords' => (int) ($weatherMeta['requested_unique_coords'] ?? 0),
+					'used_unique_coords' => (int) ($weatherMeta['used_unique_coords'] ?? 0),
+					'unique_coords_truncated' => !empty($weatherMeta['unique_coords_truncated']),
 					'generated_at' => time()
 				]
 			];
@@ -2355,7 +2389,13 @@ final class Admin
 				'max_mm' => !empty($rainValues) ? max($rainValues) : 0,
 				'avg_mm' => !empty($rainValues) ? array_sum($rainValues) / count($rainValues) : 0,
 				'wet_points' => count(array_filter($rainValues, function($r) { return $r > 0; })),
-				'total_points' => count($rainValues)
+				'total_points' => count($rainValues),
+				'requested_samples' => $requestedSampleCount,
+				'used_samples' => \count($samples),
+				'samples_truncated' => $samplesTruncated,
+				'requested_unique_coords' => (int) ($weatherMeta['requested_unique_coords'] ?? 0),
+				'used_unique_coords' => (int) ($weatherMeta['used_unique_coords'] ?? 0),
+				'unique_coords_truncated' => !empty($weatherMeta['unique_coords_truncated'])
 			];
 			\update_post_meta($postId, 'fgpx_weather_summary', wp_json_encode($summary));
 
@@ -2554,9 +2594,13 @@ final class Admin
 			$coordToSamples[$coordKey][] = $sample;
 		}
 
+		$requestedUniqueCoords = count($uniqueCoords);
+		$uniqueCoordsTruncated = false;
+
 		// Limit unique coordinates to keep API usage bounded while covering long routes better.
 		if (count($uniqueCoords) > $maxUniqueCoords) {
 			$uniqueCoords = array_slice($uniqueCoords, 0, $maxUniqueCoords, true);
+			$uniqueCoordsTruncated = true;
 		}
 
 		// Determine date range
@@ -2623,7 +2667,14 @@ final class Admin
 			}
 		}
 
-		return $weatherPoints;
+		return [
+			'points' => $weatherPoints,
+			'meta' => [
+				'requested_unique_coords' => $requestedUniqueCoords,
+				'used_unique_coords' => count($uniqueCoords),
+				'unique_coords_truncated' => $uniqueCoordsTruncated,
+			],
+		];
 	}
 
 	/**
@@ -3093,11 +3144,20 @@ final class Admin
 			return new \WP_Error('fgpx_unreadable', \esc_html__('Uploaded file is not readable.', 'flyover-gpx'));
 		}
 
+		$gpxValidation = self::validate_gpx_upload_file($filePath);
+		if (\is_wp_error($gpxValidation)) {
+			return $gpxValidation;
+		}
+
 		try {
 			$gpx = new \phpGPX\phpGPX();
 			$file = $gpx->load($filePath);
 		} catch (\Throwable $e) {
-			return new \WP_Error('fgpx_parse_error', \esc_html__('Failed to parse GPX file.', 'flyover-gpx'));
+			ErrorHandler::warning('GPX parse failed after XML validation', [
+				'file_path' => $filePath,
+				'error_message' => $e->getMessage(),
+			]);
+			return new \WP_Error('fgpx_parse_error', \esc_html__('Failed to parse GPX file. The XML is readable, but the GPX structure is malformed or unsupported.', 'flyover-gpx'));
 		}
 
 		$coordinates = [];
@@ -3320,6 +3380,77 @@ final class Admin
 			'points_count' => $pointsCount,
 			'waypoints' => $waypoints,
 		];
+	}
+
+	/**
+	 * Validate that an uploaded file is well-formed XML and has a GPX root element.
+	 *
+	 * @return true|\WP_Error
+	 */
+	private static function validate_gpx_upload_file(string $filePath)
+	{
+		if (!\is_readable($filePath)) {
+			return new \WP_Error('fgpx_unreadable', \esc_html__('Uploaded file is not readable.', 'flyover-gpx'));
+		}
+
+		$flags = LIBXML_NONET;
+		if (\defined('LIBXML_NOERROR')) {
+			$flags |= LIBXML_NOERROR;
+		}
+		if (\defined('LIBXML_NOWARNING')) {
+			$flags |= LIBXML_NOWARNING;
+		}
+
+		$previousInternalErrors = \libxml_use_internal_errors(true);
+		\libxml_clear_errors();
+
+		try {
+			if (\class_exists('\\XMLReader')) {
+				$reader = new \XMLReader();
+				if (!$reader->open($filePath, null, $flags)) {
+					return new \WP_Error('fgpx_invalid_xml', \esc_html__('The uploaded file is not valid XML.', 'flyover-gpx'));
+				}
+
+				$rootName = '';
+				while ($reader->read()) {
+					if ($reader->nodeType === \XMLReader::ELEMENT) {
+						$rootName = \strtolower((string) $reader->localName);
+						break;
+					}
+				}
+				$reader->close();
+
+				$xmlErrors = \libxml_get_errors();
+				if (!empty($xmlErrors)) {
+					$errorMessage = isset($xmlErrors[0]) ? \trim((string) $xmlErrors[0]->message) : 'Unknown XML error';
+					ErrorHandler::warning('Malformed GPX XML upload rejected', [
+						'file_path' => $filePath,
+						'xml_error' => $errorMessage,
+					]);
+					return new \WP_Error('fgpx_invalid_xml', \esc_html__('The uploaded GPX file is malformed XML. Please export the track again and retry.', 'flyover-gpx'));
+				}
+
+				if ($rootName !== 'gpx') {
+					ErrorHandler::warning('Non-GPX XML upload rejected', [
+						'file_path' => $filePath,
+						'root_name' => $rootName,
+					]);
+					return new \WP_Error('fgpx_invalid_root', \esc_html__('The uploaded file is XML, but it is not a GPX document.', 'flyover-gpx'));
+				}
+
+				return true;
+			}
+
+			$snippet = (string) @\file_get_contents($filePath, false, null, 0, 2048);
+			if ($snippet === '' || \stripos($snippet, '<gpx') === false) {
+				return new \WP_Error('fgpx_invalid_root', \esc_html__('The uploaded file does not look like a GPX document.', 'flyover-gpx'));
+			}
+
+			return true;
+		} finally {
+			\libxml_clear_errors();
+			\libxml_use_internal_errors($previousInternalErrors);
+		}
 	}
 
 	/**
@@ -4153,9 +4284,16 @@ final class Admin
 		$okCount = \count(\array_filter($results, static function (array $row): bool {
 			return !empty($row['ok']);
 		}));
+		$rateLimitedCount = \count(\array_filter($results, static function (array $row): bool {
+			return isset($row['status']) && (int) $row['status'] === 429;
+		}));
+		$message = \sprintf('Tested %d keys, %d accepted by provider.', \count($results), $okCount);
+		if ($rateLimitedCount > 0) {
+			$message .= ' ' . \sprintf('%d request(s) were rate limited; pacing/backoff was applied.', $rateLimitedCount);
+		}
 
 		\wp_send_json_success([
-			'message' => \sprintf('Tested %d keys, %d accepted by provider.', \count($results), $okCount),
+			'message' => $message,
 			'mode' => $mode,
 			'template' => $templateUrl,
 			'results' => $results,

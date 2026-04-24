@@ -103,6 +103,8 @@ require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line int
  * Bootstrap the plugin after all plugins are loaded.
  */
 \add_action('plugins_loaded', static function (): void {
+	Options::register();
+
     // Initialize error handling and logging first
     ErrorHandler::init();
     
