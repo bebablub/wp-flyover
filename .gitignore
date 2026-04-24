@@ -24,6 +24,9 @@ wp-config-*.php
 # Log files
 *.log
 
+# Zip files
+*.zip
+
 # Environment files
 .env
 .env.*
