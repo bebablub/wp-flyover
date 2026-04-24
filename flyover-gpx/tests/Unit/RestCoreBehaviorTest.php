@@ -43,8 +43,8 @@ final class RestCoreBehaviorTest extends TestCase
         $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
         $source = (string) file_get_contents($restFile);
 
-        $this->assertSame(2, substr_count($source, "'waypoints' => $waypoints"));
-        $this->assertStringContainsString("$waypointsRaw = \\get_post_meta($id, 'fgpx_waypoints', true);", $source);
+        $this->assertSame(2, substr_count($source, "'waypoints' => \$waypoints"));
+        $this->assertStringContainsString("\$waypointsRaw = \\get_post_meta(\$id, 'fgpx_waypoints', true);", $source);
     }
 
     public function test_admin_upload_path_clears_stale_waypoints_when_no_waypoints_exist(): void
@@ -52,7 +52,7 @@ final class RestCoreBehaviorTest extends TestCase
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
         $source = (string) file_get_contents($adminFile);
 
-        $this->assertStringContainsString("\\delete_post_meta($postId, 'fgpx_waypoints');", $source);
+        $this->assertStringContainsString("\\delete_post_meta(\$postId, 'fgpx_waypoints');", $source);
     }
 
     public function test_weather_json_decode_errors_are_guarded_in_rest_and_ajax_paths(): void

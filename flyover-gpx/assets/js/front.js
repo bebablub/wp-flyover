@@ -6538,8 +6538,9 @@
                 var span = Math.max(1, p1.x - p0.x);
                 var f = (bikeX - p0.x) / span;
                 bikeSurfaceY = p0.y + ((p1.y - p0.y) * f);
-                // Use actual grade for bike angle, not rendered terrain (which includes elevation bumps)
-                bikeSlopeDeg = gradeAtNow * 0.3;
+                // Use actual grade for bike angle, not rendered terrain (which includes elevation bumps).
+                // Keep the multiplier high enough to make normal route grades visibly tilt the bike.
+                bikeSlopeDeg = gradeAtNow * 0.85;
                 break;
               }
             }
@@ -6559,9 +6560,9 @@
               cinemaEl._floorOffsetPx = cinemaFloorOffset;
             }
             bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';
-            var targetBikeAngle = Math.max(-10, Math.min(10, bikeSlopeDeg));
+            var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));
             var prevBikeAngle = isFinite(Number(cinemaEl._bikeAngle)) ? Number(cinemaEl._bikeAngle) : targetBikeAngle;
-            var smoothedBikeAngle = (prevBikeAngle * 0.70) + (targetBikeAngle * 0.30);
+            var smoothedBikeAngle = (prevBikeAngle * 0.55) + (targetBikeAngle * 0.45);
             cinemaEl._bikeAngle = smoothedBikeAngle;
             bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';
           }

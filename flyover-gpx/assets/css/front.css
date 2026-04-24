@@ -813,7 +813,7 @@
   left: var(--fgpx-cinema-now-x);
   bottom: calc(var(--fgpx-cinema-floor-offset) + 4px);
   transform: translateX(-50%);
-  transition: bottom 120ms linear;
+  transition: bottom 120ms linear, transform 140ms ease-out;
   z-index: 24;
   display: flex;
   flex-direction: column;

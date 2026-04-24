@@ -2368,9 +2368,8 @@ final class Admin
 			}
 
 			// Fetch weather data for samples
-			$weatherResult = self::fetchWeatherForSamples($samples);
-			$weatherPoints = $weatherResult['points'];
-			$weatherMeta = $weatherResult['meta'];
+			$weatherMeta = [];
+			$weatherPoints = self::fetchWeatherForSamples($samples, $weatherMeta);
 
 			// Save weather data
 			$weatherFeatureCollection = [
@@ -2584,7 +2583,7 @@ final class Admin
 	/**
 	 * Fetch weather data from Open-Meteo for sample points
 	 */
-	private static function fetchWeatherForSamples(array $samples): array
+	private static function fetchWeatherForSamples(array $samples, ?array &$meta = null): array
 	{
 		$weatherPoints = [];
 		$uniqueCoords = [];
@@ -2677,14 +2676,13 @@ final class Admin
 			}
 		}
 
-		return [
-			'points' => $weatherPoints,
-			'meta' => [
-				'requested_unique_coords' => $requestedUniqueCoords,
-				'used_unique_coords' => count($uniqueCoords),
-				'unique_coords_truncated' => $uniqueCoordsTruncated,
-			],
+		$meta = [
+			'requested_unique_coords' => $requestedUniqueCoords,
+			'used_unique_coords' => count($uniqueCoords),
+			'unique_coords_truncated' => $uniqueCoordsTruncated,
 		];
+
+		return $weatherPoints;
 	}
 
 	/**
