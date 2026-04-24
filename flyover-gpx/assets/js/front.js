@@ -212,6 +212,12 @@
     }
   }
 
+  function nonEmptyText(value) {
+    if (value == null) return '';
+    var text = String(value).trim();
+    return text;
+  }
+
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
@@ -1083,6 +1089,7 @@
     // --- Privacy window (trim playback start/end by distance) ---
     var privacyEnabled = !!(window.FGPX && FGPX.privacyEnabled);
     var privacyMeters = Math.max(0, (window.FGPX && isFinite(Number(FGPX.privacyKm)) ? Number(FGPX.privacyKm) : 3) * 1000);
+    var photoMaxDistanceMeters = Math.max(1, (window.FGPX && isFinite(Number(FGPX.photoMaxDistance)) ? Number(FGPX.photoMaxDistance) : 100));
     var privacyStartD = 0;
     var privacyEndD = totalDistance;
     if (privacyEnabled && privacyMeters > 0) {
@@ -2620,7 +2627,7 @@
             el.appendChild(inner);
             el.addEventListener('mouseenter', function(){ inner.style.transform = 'scale(1.8)'; });
             el.addEventListener('mouseleave', function(){ inner.style.transform = 'scale(1)'; });
-            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', ph.caption || ph.description || ph.title || '', ph.source_post_id, ph.source_post_title || '', ph.timestamp || '', extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '')); });
+            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '') || 'Photo', ph.source_post_id, ph.source_post_title || '', ph.timestamp || '', extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '')); });
             var marker = new window.maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
             photoMarkers.push({ marker: marker, photo: ph, lngLat: lngLat, pDist: pDistApprox });
             if (pDistApprox != null) { tmpByDist.push({ p: ph, pDist: pDistApprox, lngLat: lngLat }); }
@@ -4901,9 +4908,9 @@
           var currentPos = currentPosLngLat || positionAtDistance(progress * totalDistance);
           if (typeof next.lon === 'number' && typeof next.lat === 'number') {
             var distToPhoto = haversineMeters(currentPos, [next.lon, next.lat]);
-            // If photo is more than 100m away from current marker, skip it
-            if (distToPhoto > 100) {
-              DBG.log('skip photo (distance>100m)', distToPhoto);
+            // If photo is more than configured threshold away from current marker, skip it
+            if (distToPhoto > photoMaxDistanceMeters) {
+              DBG.log('skip photo (distance>' + photoMaxDistanceMeters + 'm)', distToPhoto);
               // Process next photo immediately
               if (photoQueue.length > 0) {
                 processNextPhoto();
@@ -4921,7 +4928,7 @@
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
-        showOverlay(next.fullUrl || next.thumbUrl || '', next.caption || next.description || next.title || '', next.source_post_id, next.source_post_title || '', next.timestamp || '', extractFilenameFromUrl(next.fullUrl || next.thumbUrl || ''));
+        showOverlay(next.fullUrl || next.thumbUrl || '', nonEmptyText(next.caption) || nonEmptyText(next.description) || nonEmptyText(next.title) || extractFilenameFromUrl(next.fullUrl || next.thumbUrl || '') || 'Photo', next.source_post_id, next.source_post_title || '', next.timestamp || '', extractFilenameFromUrl(next.fullUrl || next.thumbUrl || ''));
         
         // If recording, also draw the photo overlay on the canvas
         if (videoRecorder && videoRecorder.isRecording) {
@@ -5674,7 +5681,7 @@
           }
         }
         if (!isFinite(markerDistance)) return null;
-        var markerLabel = extractFilenameFromUrl(markerPhoto.fullUrl || markerPhoto.thumbUrl || '') || markerPhoto.title || markerPhoto.caption || 'Photo';
+        var markerLabel = nonEmptyText(markerPhoto.caption) || nonEmptyText(markerPhoto.title) || extractFilenameFromUrl(markerPhoto.fullUrl || markerPhoto.thumbUrl || '') || 'Photo';
         return {
           distanceMeters: markerDistance,
           label: markerLabel,

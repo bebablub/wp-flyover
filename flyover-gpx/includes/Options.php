@@ -42,6 +42,7 @@ final class Options
 
 		// Privacy & Features
 		'fgpx_photos_enabled' => '0',
+		'fgpx_photo_max_distance' => '100',
 		'fgpx_gpx_download_enabled' => '0',
 		'fgpx_privacy_enabled' => '0',
 		'fgpx_privacy_km' => '3',
@@ -281,6 +282,7 @@ final class Options
 			'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
 			'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
 			'photosEnabled' => $options['fgpx_photos_enabled'] === '1',
+			'photoMaxDistance' => (int) $options['fgpx_photo_max_distance'],
 			'showLabels' => $options['fgpx_show_labels'] !== '0',
 			'debugWeatherData' => $options['fgpx_debug_weather_data'] === '1',
 			

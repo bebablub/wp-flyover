@@ -79,6 +79,7 @@ final class OptionsTest extends TestCase
             // Features
             'hud_enabled'              => ['fgpx_hud_enabled'],
             'photos_enabled'           => ['fgpx_photos_enabled'],
+            'photo_max_distance'       => ['fgpx_photo_max_distance'],
             'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
             'lazy_viewport'            => ['fgpx_lazy_viewport'],
             'gallery_per_page'         => ['fgpx_gallery_per_page'],
@@ -116,6 +117,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
+        $this->assertSame('100',    Options::get('fgpx_photo_max_distance'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
         $this->assertSame('0.1',    Options::get('fgpx_weather_rain_threshold'));
@@ -202,7 +204,7 @@ final class OptionsTest extends TestCase
             'windRoseColorEast', 'windRoseColorWest',
             'daynightEnabled', 'daynightMapEnabled',
             'daynightMapColor', 'daynightMapOpacity',
-            'photosEnabled', 'showLabels',
+            'photosEnabled', 'photoMaxDistance', 'showLabels',
             'defaultZoom', 'defaultPitch', 'styleJson',
             'backendSimplify', 'backendSimplifyTarget',
             'debugWeatherData',
@@ -232,6 +234,7 @@ final class OptionsTest extends TestCase
         $this->assertIsInt($f['defaultZoom'],              'defaultZoom must be int');
         $this->assertIsInt($f['defaultPitch'],             'defaultPitch must be int');
         $this->assertIsInt($f['backendSimplifyTarget'],    'backendSimplifyTarget must be int');
+        $this->assertIsInt($f['photoMaxDistance'],         'photoMaxDistance must be int');
         $this->assertIsInt($f['ftp'],                      'ftp must be int');
 
         // Floats / numbers

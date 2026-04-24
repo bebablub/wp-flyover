@@ -364,6 +364,7 @@ final class Admin
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
+		$photoMaxDistance = $options['fgpx_photo_max_distance'];
 		$gpxDownloadEnabled = $options['fgpx_gpx_download_enabled'];
 		$privacyEnabled = $options['fgpx_privacy_enabled'];
 		$privacyKm = $options['fgpx_privacy_km'];
@@ -593,6 +594,10 @@ final class Admin
 		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
+		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
@@ -2167,9 +2172,11 @@ final class Admin
 		
 		// Use type-safe validation helpers for float and int values
 		$privacyKm = $this->getValidFloat('fgpx_privacy_km', 3.0, 0.0, 100.0);
+		$photoMaxDistance = $this->getValidInt('fgpx_photo_max_distance', 100, 1, 50000);
 		$simplifyTarget = $this->getValidInt('fgpx_backend_simplify_target', 1200, 300, 2500);
 		
 		\update_option('fgpx_privacy_km', (string) $privacyKm, true);
+		\update_option('fgpx_photo_max_distance', (string) $photoMaxDistance, true);
 		\update_option('fgpx_backend_simplify_target', (string) $simplifyTarget, true);
 		// Use type-safe validation helpers for color values
 		\update_option('fgpx_chart_color', $this->getValidColor('fgpx_chart_color', '#ff5500'), true);
