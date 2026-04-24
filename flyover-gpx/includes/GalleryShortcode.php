@@ -82,7 +82,7 @@ final class GalleryShortcode
 
         $defaults = [
             'per_page' => (string) $galleryDefaultPerPage,
-            'height' => $options['fgpx_default_height'],
+            'height' => (string) ($options['fgpx_gallery_player_height'] ?? '636px'),
             'style' => $options['fgpx_default_style'],
             'style_url' => $options['fgpx_default_style_url'],
             'show_view_toggle' => $galleryShowViewToggleDefault,
@@ -101,9 +101,9 @@ final class GalleryShortcode
         }
 
         $height = \sanitize_text_field((string) $atts['height']);
-        // Allow only safe CSS length values (e.g. 625px, 80vh, 100%, 50em, 20rem).
+        // Allow only safe CSS length values (e.g. 636px, 80vh, 100%, 50em, 20rem).
         if ($height === '' || !preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $height)) {
-            $height = '625px';
+            $height = '636px';
         }
 
         $style = \sanitize_key((string) $atts['style']);

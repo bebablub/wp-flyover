@@ -485,7 +485,7 @@
 
     function renderPlayer() {
       var playerId = 'fgpx-gallery-player-' + String(track.id) + '-' + String(Date.now());
-      mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '625px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
+      mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '636px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
 
       // Set per-player instance override for gallery photo enrichment strategy
       if (!window.FGPX.instances) {

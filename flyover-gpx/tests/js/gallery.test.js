@@ -133,7 +133,7 @@ describe('gallery.js', () => {
     window.FGPXGallery = {
       tracks: makeTracks(15),
       perPage: 12,
-      playerHeight: '625px',
+      playerHeight: '636px',
       playerStyle: 'raster',
       playerStyleUrl: '',
       defaultSort: 'newest',

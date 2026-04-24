@@ -83,6 +83,7 @@ final class OptionsTest extends TestCase
             'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
             'lazy_viewport'            => ['fgpx_lazy_viewport'],
             'gallery_per_page'         => ['fgpx_gallery_per_page'],
+            'gallery_player_height'    => ['fgpx_gallery_player_height'],
             'gallery_default_sort'     => ['fgpx_gallery_default_sort'],
             'gallery_show_view_toggle' => ['fgpx_gallery_show_view_toggle'],
             'gallery_show_search'      => ['fgpx_gallery_show_search'],
@@ -113,7 +114,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('off',   Options::get('fgpx_smart_api_keys_mode'));
         $this->assertSame('',      Options::get('fgpx_smart_api_keys_pool'));
         $this->assertSame('',      Options::get('fgpx_smart_api_keys_test_url_override'));
-        $this->assertSame('625px',  Options::get('fgpx_default_height'));
+        $this->assertSame('820px',  Options::get('fgpx_default_height'));
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
@@ -126,6 +127,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('50',     Options::get('fgpx_weather_cloud_threshold'));
         $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
         $this->assertSame('12',     Options::get('fgpx_gallery_per_page'));
+        $this->assertSame('636px',  Options::get('fgpx_gallery_player_height'));
         $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_view_toggle'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_search'));

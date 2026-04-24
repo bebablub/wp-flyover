@@ -359,6 +359,7 @@ final class Admin
 		$defSpeed = $options['fgpx_default_speed'];
 		$defPitch = $options['fgpx_default_pitch'];
 		$galleryPerPage = $options['fgpx_gallery_per_page'];
+		$galleryPlayerHeight = (string) ($options['fgpx_gallery_player_height'] ?? '636px');
 		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
 		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
@@ -473,6 +474,10 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_gallery_per_page">' . \esc_html__('Gallery items per page (default)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_gallery_per_page" name="fgpx_gallery_per_page" class="small-text" min="4" max="48" step="1" value="' . \esc_attr($galleryPerPage) . '" />';
 		echo '<p class="description">' . \esc_html__('Used by [flyover_gpx_gallery] when per_page is not set in shortcode.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_player_height">' . \esc_html__('Gallery player height (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_gallery_player_height" name="fgpx_gallery_player_height" class="regular-text" value="' . \esc_attr($galleryPlayerHeight) . '" placeholder="636px or 70vh" />';
+		echo '<p class="description">' . \esc_html__('Used by [flyover_gpx_gallery] when height is not set in shortcode.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gallery_default_sort">' . \esc_html__('Gallery default sort', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_gallery_default_sort" name="fgpx_gallery_default_sort">';
@@ -2166,6 +2171,10 @@ final class Admin
 		\update_option('fgpx_default_speed', (string) $speed, true);
 		\update_option('fgpx_default_pitch', (string) $pitch, true);
 		$galleryPerPage = $this->getValidInt('fgpx_gallery_per_page', 12, 4, 48);
+		$galleryPlayerHeight = isset($_POST['fgpx_gallery_player_height']) ? \sanitize_text_field((string) $_POST['fgpx_gallery_player_height']) : '636px';
+		if ($galleryPlayerHeight === '' || !\preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $galleryPlayerHeight)) {
+			$galleryPlayerHeight = '636px';
+		}
 		$allowedGallerySorts = ['newest', 'distance', 'duration', 'gain', 'title'];
 		$galleryDefaultSort = isset($_POST['fgpx_gallery_default_sort']) ? \sanitize_text_field((string) $_POST['fgpx_gallery_default_sort']) : 'newest';
 		if (!\in_array($galleryDefaultSort, $allowedGallerySorts, true)) {
@@ -2173,6 +2182,7 @@ final class Admin
 		}
 
 		\update_option('fgpx_gallery_per_page', (string) $galleryPerPage, true);
+		\update_option('fgpx_gallery_player_height', $galleryPlayerHeight, true);
 		\update_option('fgpx_gallery_default_sort', $galleryDefaultSort, true);
 		\update_option('fgpx_gallery_show_view_toggle', $this->getValidBool('fgpx_gallery_show_view_toggle') ? '1' : '0', true);
 		\update_option('fgpx_gallery_show_search', $this->getValidBool('fgpx_gallery_show_search') ? '1' : '0', true);
