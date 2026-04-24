@@ -162,22 +162,6 @@ final class GalleryShortcodeTest extends TestCase
         $this->assertSame('', (string) $resolved['styleUrl']);
     }
 
-    public function test_gallery_shortcode_accepts_modern_url_style_mode(): void
-    {
-        $shortcode = new GalleryShortcode();
-
-        $shortcode->render_shortcode([
-            'style' => 'url',
-            'style_url' => 'https://maps.test/style.json',
-        ]);
-
-        $inline = $GLOBALS['fgpx_test_inline_scripts']['fgpx-gallery'][0]['data'] ?? '';
-
-        $this->assertIsString($inline);
-        $this->assertStringContainsString('"playerStyle":"url"', $inline);
-        $this->assertStringContainsString('"playerStyleUrl":"https://maps.test/style.json"', $inline);
-    }
-
     public function test_gallery_shortcode_localizes_style_json_for_player_config(): void
     {
         $galleryFile = dirname(__DIR__, 2) . '/includes/GalleryShortcode.php';

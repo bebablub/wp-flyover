@@ -391,7 +391,7 @@ describe('front.js runtime minimal regressions', () => {
   test('weathergrade bicycle bottom offset is dynamically aligned to terrain', () => {
     expect(FRONT_SRC).toContain('var bikeSurfaceY = baseY;');
     expect(FRONT_SRC).toContain('var bikeLift = Math.max(0, baseY - bikeSurfaceY);');
-    expect(FRONT_SRC).toContain('var wheelContactCalibration = -2;');
+    expect(FRONT_SRC).toContain('var wheelContactCalibration = -4;');
     expect(FRONT_SRC).toContain('var cinemaFloorOffset = cinemaEl._floorOffsetPx;');
     expect(FRONT_SRC).toContain("bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';");
   });

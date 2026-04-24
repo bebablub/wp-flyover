@@ -184,6 +184,24 @@ if (!function_exists('register_rest_route')) {
     }
 }
 
+if (!function_exists('is_admin')) {
+    function is_admin(): bool
+    {
+        return false;
+    }
+}
+
+if (!function_exists('wp_remote_head')) {
+    function wp_remote_head(string $url, array $args = [])
+    {
+        // Mock successful HTTP HEAD response
+        return [
+            'headers' => ['content-type' => 'text/html'],
+            'response' => ['code' => 200, 'message' => 'OK'],
+        ];
+    }
+}
+
 if (!function_exists('add_submenu_page')) {
     function add_submenu_page(
         string $parent_slug,
@@ -633,6 +651,22 @@ if (!function_exists('wp_remote_retrieve_body')) {
     }
 }
 
+if (!function_exists('wp_remote_retrieve_response_code')) {
+    /**
+     * Retrieve the HTTP response code from a remote response.
+     *
+     * @param array $response The remote response array
+     * @return int HTTP response code (default 200 if not found)
+     */
+    function wp_remote_retrieve_response_code($response): int
+    {
+        if (is_array($response) && isset($response['response']) && is_array($response['response']) && isset($response['response']['code'])) {
+            return (int) $response['response']['code'];
+        }
+        return 200; // Default to success if not specified
+    }
+}
+
 if (!defined('HOUR_IN_SECONDS')) {
     define('HOUR_IN_SECONDS', 3600);
 }
@@ -925,6 +959,43 @@ if (!function_exists('wp_generate_uuid4')) {
         $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
 
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+}
+
+if (!function_exists('get_object_taxonomies')) {
+    /**
+     * Stub for get_object_taxonomies.
+     * Returns empty array by default; tests can override via $GLOBALS.
+     *
+     * @param string $object_type
+     * @param string $output
+     * @return array<string>
+     */
+    function get_object_taxonomies(string $object_type, string $output = 'names'): array
+    {
+        if (isset($GLOBALS['fgpx_test_object_taxonomies'][$object_type])) {
+            return (array) $GLOBALS['fgpx_test_object_taxonomies'][$object_type];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('wp_get_post_terms')) {
+    /**
+     * Stub for wp_get_post_terms.
+     * Returns empty array by default; tests can override via $GLOBALS.
+     *
+     * @param int $postId
+     * @param array<string>|string $taxonomies
+     * @param array<string,mixed> $args
+     * @return array<mixed>
+     */
+    function wp_get_post_terms(int $postId, $taxonomies, array $args = []): array
+    {
+        if (isset($GLOBALS['fgpx_test_post_terms'][$postId])) {
+            return (array) $GLOBALS['fgpx_test_post_terms'][$postId];
+        }
+        return [];
     }
 }
 

@@ -26,6 +26,7 @@ These instructions apply to the whole repository. The WordPress plugin code live
 - Do not break anything, take care of cache, take care that already uploaded tracks are correctly shown with changes, take care of backward compatibility
 
 ## Testing Expectations
+- Don't test to detailed, test only main flows and most important edge cases, not every single line of code.
 - For PHP changes: run `composer lint` and `composer test`.
 - For JS changes: run `npm test`.
 - Prefer focused tests near touched areas:
