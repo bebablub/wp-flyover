@@ -552,7 +552,9 @@ final class Plugin
                   'weatherColorSnow:"' . \esc_js($weatherColorSnow) . '",' .
                   'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
                   'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
-                  'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '"' .
+                  'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '",' .
+                  'arrowsEnabled:' . ($options['fgpx_arrows_enabled'] === '1' ? 'true' : 'false') . ',' .
+                  'arrowsKm:' . \floatval($options['fgpx_arrows_km']) .
                 '} );',
                 'after'
             );
@@ -611,7 +613,9 @@ final class Plugin
                                     'weatherColorClouds:"' . \esc_js($options['fgpx_weather_color_clouds']) . '",' .
                                     'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
                                     'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '",' .
-                                    'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '"' .
+                                    'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '",' .
+                                    'arrowsEnabled:' . ($options['fgpx_arrows_enabled'] === '1' ? 'true' : 'false') . ',' .
+                                    'arrowsKm:' . \floatval($options['fgpx_arrows_km']) .
                 '};',
                 'after'
             );

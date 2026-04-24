@@ -391,6 +391,8 @@ final class Admin
 		$elevationColorSteep = $options['fgpx_elevation_color_steep'];
 		$elevationThresholdMin = $options['fgpx_elevation_threshold_min'];
 		$elevationThresholdMax = $options['fgpx_elevation_threshold_max'];
+		$arrowsEnabled = $options['fgpx_arrows_enabled'];
+		$arrowsKm = $options['fgpx_arrows_km'];
 
 		echo '<div class="wrap">';
 		echo '<h1>' . \esc_html__('Flyover GPX Upload', 'flyover-gpx') . '</h1>';
@@ -535,6 +537,13 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_elevation_threshold_max">' . \esc_html__('Gradient threshold (max %)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_elevation_threshold_max" name="fgpx_elevation_threshold_max" class="small-text" min="1" max="50" step="0.1" value="' . \esc_attr($elevationThresholdMax) . '" />';
 		echo '<p class="description">' . \esc_html__('Maximum gradient percentage for full steep color. Default 8%.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_arrows_enabled">' . \esc_html__('Direction arrows on route', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_arrows_enabled" name="fgpx_arrows_enabled" value="1"' . ($arrowsEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show direction arrows (▶) along the route at regular intervals', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_arrows_km">' . \esc_html__('Arrow spacing (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_arrows_km" name="fgpx_arrows_km" class="small-text" min="0.5" max="100" step="0.5" value="' . \esc_attr($arrowsKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Distance in km between each direction arrow. Default 5 km.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_chart_color">' . \esc_html__('Elevation chart color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color" name="fgpx_chart_color" value="' . \esc_attr($chartColor) . '" />';
@@ -2226,6 +2235,8 @@ final class Admin
 		if (isset($_POST['fgpx_elevation_color_steep'])) { \update_option('fgpx_elevation_color_steep', sanitize_hex_color((string) $_POST['fgpx_elevation_color_steep']), true); }
 		if (isset($_POST['fgpx_elevation_threshold_min'])) { \update_option('fgpx_elevation_threshold_min', (string) max(0, min(20, (float) $_POST['fgpx_elevation_threshold_min'])), true); }
 		if (isset($_POST['fgpx_elevation_threshold_max'])) { \update_option('fgpx_elevation_threshold_max', (string) max(1, min(50, (float) $_POST['fgpx_elevation_threshold_max'])), true); }
+		\update_option('fgpx_arrows_enabled', isset($_POST['fgpx_arrows_enabled']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_arrows_km'])) { \update_option('fgpx_arrows_km', (string) max(0.5, min(100, (float) $_POST['fgpx_arrows_km'])), true); }
 		
 		// Weather settings
 		\update_option('fgpx_weather_enabled', isset($_POST['fgpx_weather_enabled']) ? '1' : '0', true);

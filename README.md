@@ -8,6 +8,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 
 - Animated flyover map (MapLibre GL) with smooth camera
 - Elevation-based route coloring – progressive route changes color based on gradient (flat vs steep sections)
+- Direction arrows on route – optional ▶ arrows drawn along the path at configurable intervals (admin setting, default 5 km)
 - Photos on the map (thumbnails + fullscreen on cue) with image overlay support during video recording
 - Labels for maximum speed and elevation
 - HUD overlays (speed, distance, elevation, heading) – toggleable

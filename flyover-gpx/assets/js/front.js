@@ -1489,6 +1489,55 @@
       // Background route (faint)
       map.addLayer({ id: 'fgpx-route-line', type: 'line', source: 'fgpx-route', paint: { 'line-color': '#cccccc', 'line-width': 2 } });
 
+      // Direction arrows along the background route
+      // Uses canvas-based icon images so it works on raster (no glyphs) and vector styles alike.
+      var arrowsEnabled = !!(window.FGPX && FGPX.arrowsEnabled);
+      if (arrowsEnabled && totalDistance > 0) {
+        try {
+          var arrowsKm = parseFloat((FGPX.arrowsKm) || '5');
+          if (!isFinite(arrowsKm) || arrowsKm <= 0) { arrowsKm = 5; }
+          var arrowRepeatPct = (arrowsKm * 1000) / totalDistance * 100;
+          var arrowSpacingPx = Math.round(550 / arrowRepeatPct);
+          if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }
+          if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }
+          var arrowColor = FGPX.chartColor || '#ff5500';
+          // Build a small canvas triangle pointing up (north = 0°).
+          // MapLibre auto-rotates it to follow the line bearing (icon-rotation-alignment:'auto').
+          var routeArrowIconId = 'fgpx-route-dir-arrow';
+          if (!map.hasImage(routeArrowIconId)) {
+            var ac = document.createElement('canvas'); ac.width = 20; ac.height = 20;
+            var actx = ac.getContext('2d');
+            actx.clearRect(0, 0, 20, 20);
+            actx.fillStyle = arrowColor;
+            actx.strokeStyle = 'rgba(255,255,255,0.85)';
+            actx.lineWidth = 1.5;
+            actx.beginPath();
+            actx.moveTo(10, 1);   // tip
+            actx.lineTo(18, 18);  // bottom-right
+            actx.lineTo(10, 14);  // inner notch
+            actx.lineTo(2, 18);   // bottom-left
+            actx.closePath();
+            actx.fill();
+            actx.stroke();
+            map.addImage(routeArrowIconId, ac);
+          }
+          map.addLayer({
+            id: 'fgpx-route-arrows',
+            type: 'symbol',
+            source: 'fgpx-route',
+            layout: {
+              'symbol-placement': 'line',
+              'symbol-spacing': arrowSpacingPx,
+              'icon-image': routeArrowIconId,
+              'icon-size': 0.85,
+              'icon-rotation-alignment': 'auto',
+              'icon-allow-overlap': false,
+              'icon-keep-upright': false
+            }
+          });
+        } catch(_) {}
+      }
+
       // Prepare elevation coloring data for progressive route
       var elevationColoringEnabled = !!(window.FGPX && FGPX.elevationColoring);
       var progressiveGradients = null;

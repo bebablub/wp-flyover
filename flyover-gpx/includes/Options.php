@@ -143,6 +143,10 @@ final class Options
 		'fgpx_elevation_threshold_min' => '3',
 		'fgpx_elevation_threshold_max' => '8',
 
+		// Direction Arrows
+		'fgpx_arrows_enabled' => '0',
+		'fgpx_arrows_km' => '5',
+
 		// Theme / Dark Mode
 		'fgpx_theme_mode' => 'system',          // system | dark | bright | auto
 		'fgpx_theme_auto_dark_start' => '22:00', // HH:MM – when dark mode begins (auto mode)
