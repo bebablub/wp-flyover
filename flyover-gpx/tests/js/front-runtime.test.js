@@ -398,9 +398,9 @@ describe('front.js runtime minimal regressions', () => {
 
   test('weathergrade bicycle rotation follows terrain tangent with clamp and smoothing', () => {
     expect(FRONT_SRC).toContain('var bikeSlopeDeg = 0;');
-    expect(FRONT_SRC).toContain('bikeSlopeDeg = gradeAtNow * 0.85;');
+    expect(FRONT_SRC).toContain('bikeSlopeDeg = Math.atan2(pRight.yRaw - pLeft.yRaw, tangentDx) * 180 / Math.PI;');
     expect(FRONT_SRC).toContain('var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));');
-    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.55) + (targetBikeAngle * 0.45);');
+    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.82) + (targetBikeAngle * 0.18);');
     expect(FRONT_SRC).toContain("bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';");
   });
 

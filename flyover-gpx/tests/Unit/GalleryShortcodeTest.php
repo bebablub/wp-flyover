@@ -5,11 +5,22 @@ declare(strict_types=1);
 namespace FGpx\Tests\Unit;
 
 use FGpx\GalleryShortcode;
+use FGpx\Options;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
 final class GalleryShortcodeTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        Options::clearCache();
+        $GLOBALS['fgpx_test_inline_scripts'] = [];
+        $GLOBALS['fgpx_test_enqueued_styles'] = [];
+        $GLOBALS['fgpx_test_enqueued_scripts'] = [];
+        $GLOBALS['fgpx_test_registered_styles'] = [];
+        $GLOBALS['fgpx_test_registered_scripts'] = [];
+    }
+
     public function test_format_duration_with_hours_returns_hh_mm_ss(): void
     {
         $method = new ReflectionMethod(GalleryShortcode::class, 'formatDuration');
@@ -149,5 +160,29 @@ final class GalleryShortcodeTest extends TestCase
         $resolved = $method->invoke(new GalleryShortcode(), $options, 'https://maps.test/style.json?key={{API_KEY}}');
 
         $this->assertSame('', (string) $resolved['styleUrl']);
+    }
+
+    public function test_gallery_shortcode_accepts_modern_url_style_mode(): void
+    {
+        $shortcode = new GalleryShortcode();
+
+        $shortcode->render_shortcode([
+            'style' => 'url',
+            'style_url' => 'https://maps.test/style.json',
+        ]);
+
+        $inline = $GLOBALS['fgpx_test_inline_scripts']['fgpx-gallery'][0]['data'] ?? '';
+
+        $this->assertIsString($inline);
+        $this->assertStringContainsString('"playerStyle":"url"', $inline);
+        $this->assertStringContainsString('"playerStyleUrl":"https://maps.test/style.json"', $inline);
+    }
+
+    public function test_gallery_shortcode_localizes_style_json_for_player_config(): void
+    {
+        $galleryFile = dirname(__DIR__, 2) . '/includes/GalleryShortcode.php';
+        $source = (string) file_get_contents($galleryFile);
+
+        $this->assertStringContainsString("'styleJson' => (string) (\$galleryCfg['styleJson'] ?? \$options['fgpx_default_style_json'])", $source);
     }
 }

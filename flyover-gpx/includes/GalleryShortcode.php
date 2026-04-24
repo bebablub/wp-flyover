@@ -107,8 +107,15 @@ final class GalleryShortcode
         }
 
         $style = \sanitize_key((string) $atts['style']);
-        if (!\in_array($style, ['raster', 'vector'], true)) {
-            $style = 'raster';
+        // Keep gallery style modes aligned with the single-track shortcode.
+        if ($style === 'raster') {
+            $style = 'default';
+        }
+        if ($style === 'vector') {
+            $style = 'url';
+        }
+        if (!\in_array($style, ['default', 'url', 'inline'], true)) {
+            $style = 'default';
         }
 
         $styleUrlRaw = \trim((string) ($atts['style_url'] ?? ''));
@@ -594,6 +601,7 @@ final class GalleryShortcode
             'daynightMapEnabled' => $options['fgpx_daynight_map_enabled'] === '1',
             'daynightMapColor' => $options['fgpx_daynight_map_color'],
             'daynightMapOpacity' => (float) $options['fgpx_daynight_map_opacity'],
+            'styleJson' => (string) ($galleryCfg['styleJson'] ?? $options['fgpx_default_style_json']),
             'simulationEnabled' => $options['fgpx_simulation_enabled'] === '1',
             'simulationWaypointsEnabled' => $options['fgpx_simulation_waypoints_enabled'] === '1',
             'simulationCitiesEnabled' => $options['fgpx_simulation_cities_enabled'] === '1',

@@ -6518,7 +6518,7 @@
             var shapeHeight = (envelope * maxPeak) + elevAdj + (rel * 1.6 * tilt);
             shapeHeight = Math.max(0, Math.min(baseY, shapeHeight));
             var y = baseY - shapeHeight;
-            points.push({ x: gx, y: Math.round(y) });
+            points.push({ x: gx, y: Math.round(y), yRaw: y });
           }
           var d = 'M0,' + baseY + ' L0,' + points[0].y;
           for (var pi = 1; pi < points.length; pi++) {
@@ -6537,16 +6537,21 @@
                 var p1 = points[bi];
                 var span = Math.max(1, p1.x - p0.x);
                 var f = (bikeX - p0.x) / span;
-                bikeSurfaceY = p0.y + ((p1.y - p0.y) * f);
-                // Use actual grade for bike angle, not rendered terrain (which includes elevation bumps).
-                // Keep the multiplier high enough to make normal route grades visibly tilt the bike.
-                bikeSlopeDeg = gradeAtNow * 0.85;
+                bikeSurfaceY = p0.yRaw + ((p1.yRaw - p0.yRaw) * f);
+                // Use a symmetric tangent around bikeX to avoid one-sided bias on tiny grades.
+                var leftIdx = Math.max(0, bi - 1);
+                var rightIdx = Math.min(points.length - 1, bi + 1);
+                var pLeft = points[leftIdx];
+                var pRight = points[rightIdx];
+                var tangentDx = Math.max(1, pRight.x - pLeft.x);
+                bikeSlopeDeg = Math.atan2(pRight.yRaw - pLeft.yRaw, tangentDx) * 180 / Math.PI;
+                if (Math.abs(bikeSlopeDeg) < 0.6) bikeSlopeDeg = 0;
                 break;
               }
             }
           }
           var bikeLift = Math.max(0, baseY - bikeSurfaceY);
-          var wheelContactCalibration = -2;
+          var wheelContactCalibration = -4;
           var bikeEl = els.bike;
           if (!bikeEl) {
             bikeEl = cinemaEl.querySelector('.fgpx-weather-bicycle');
@@ -6562,7 +6567,7 @@
             bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';
             var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));
             var prevBikeAngle = isFinite(Number(cinemaEl._bikeAngle)) ? Number(cinemaEl._bikeAngle) : targetBikeAngle;
-            var smoothedBikeAngle = (prevBikeAngle * 0.55) + (targetBikeAngle * 0.45);
+            var smoothedBikeAngle = (prevBikeAngle * 0.82) + (targetBikeAngle * 0.18);
             cinemaEl._bikeAngle = smoothedBikeAngle;
             bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';
           }
