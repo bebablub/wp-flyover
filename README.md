@@ -60,6 +60,11 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
     <img src="demo/screenshot3.jpg" alt="Weather & Wind analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather & Wind analysis</p>
   </div>
+  </div>
+    <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+    <img src="demo/screenshot9.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+    <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Simulation Tab</p>
+  </div>
   <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
     <img src="demo/screenshot4.jpg" alt="Elevation highlighted on map" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Elevation highlighted on map</p>
