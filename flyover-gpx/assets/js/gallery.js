@@ -41,10 +41,17 @@
 
   function applyPlayerConfig(cfg) {
     var playerConfig = cfg.playerConfig || {};
+    var forceOverrideKeys = {
+      simulationEnabled: true,
+      simulationWaypointsEnabled: true,
+      simulationCitiesEnabled: true,
+      simulationWaypointWindowKm: true,
+      simulationCityWindowKm: true
+    };
     window.FGPX = window.FGPX || {};
     for (var key in playerConfig) {
       if (!Object.prototype.hasOwnProperty.call(playerConfig, key)) continue;
-      if (typeof window.FGPX[key] === 'undefined') {
+      if (typeof window.FGPX[key] === 'undefined' || forceOverrideKeys[key]) {
         window.FGPX[key] = playerConfig[key];
       }
     }

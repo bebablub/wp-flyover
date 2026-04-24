@@ -439,6 +439,50 @@ describe('gallery.js', () => {
     expect(window.FGPX.gpxDownloadUrl).toBeUndefined();
   });
 
+  test('gallery player applies simulation waypoint/city window settings from player config', () => {
+    window.FGPXGallery.playerConfig = Object.assign({}, window.FGPXGallery.playerConfig || {}, {
+      simulationEnabled: true,
+      simulationWaypointsEnabled: true,
+      simulationCitiesEnabled: true,
+      simulationWaypointWindowKm: 7,
+      simulationCityWindowKm: 12,
+    });
+
+    loadGallery();
+    document.querySelector('.fgpx-gallery-card').click();
+
+    expect(window.FGPX.simulationEnabled).toBe(true);
+    expect(window.FGPX.simulationWaypointsEnabled).toBe(true);
+    expect(window.FGPX.simulationCitiesEnabled).toBe(true);
+    expect(window.FGPX.simulationWaypointWindowKm).toBe(7);
+    expect(window.FGPX.simulationCityWindowKm).toBe(12);
+  });
+
+  test('gallery player simulation window settings override existing global FGPX values', () => {
+    window.FGPX.simulationEnabled = false;
+    window.FGPX.simulationWaypointsEnabled = false;
+    window.FGPX.simulationCitiesEnabled = false;
+    window.FGPX.simulationWaypointWindowKm = 3;
+    window.FGPX.simulationCityWindowKm = 4;
+
+    window.FGPXGallery.playerConfig = Object.assign({}, window.FGPXGallery.playerConfig || {}, {
+      simulationEnabled: true,
+      simulationWaypointsEnabled: true,
+      simulationCitiesEnabled: true,
+      simulationWaypointWindowKm: 9,
+      simulationCityWindowKm: 14,
+    });
+
+    loadGallery();
+    document.querySelector('.fgpx-gallery-card').click();
+
+    expect(window.FGPX.simulationEnabled).toBe(true);
+    expect(window.FGPX.simulationWaypointsEnabled).toBe(true);
+    expect(window.FGPX.simulationCitiesEnabled).toBe(true);
+    expect(window.FGPX.simulationWaypointWindowKm).toBe(9);
+    expect(window.FGPX.simulationCityWindowKm).toBe(14);
+  });
+
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
     delete navigator.clipboard;
     document.execCommand = jest.fn(() => true);

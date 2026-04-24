@@ -345,6 +345,19 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("span.setAttribute('aria-live', 'polite');");
   });
 
+  test('weather cinema icon groups expose tooltips describing icon meaning', () => {
+    expect(FRONT_SRC).toContain("var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';");
+    expect(FRONT_SRC).toContain("var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';");
+    expect(FRONT_SRC).toContain("celestial.setAttribute('data-fgpx-tooltip', dayTooltip);");
+    expect(FRONT_SRC).toContain("conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);");
+    expect(FRONT_SRC).toContain("activeConditionLabels.push(simI18N.simCondFog || 'Fog');");
+    expect(FRONT_SRC).toContain("var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'title', conditionTooltip);");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', night ? (simI18N.simCelestialNightAria || 'Night indicator (moon)') : (simI18N.simCelestialDayAria || 'Daytime indicator (sun)'));");
+    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);");
+  });
+
   test('chart tabs use instance-scoped switch handler (no global dependency)', () => {
     expect(FRONT_SRC).toContain('var switchChartTab = function(tabType) {');
     expect(FRONT_SRC).toContain("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });");

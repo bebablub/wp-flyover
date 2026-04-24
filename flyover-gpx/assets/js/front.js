@@ -6040,11 +6040,21 @@
         var celestial = document.createElement('div');
         celestial.className = 'fgpx-weather-celestial';
         celestial.textContent = '\u2600\uFE0F';
+        var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';
+        celestial.setAttribute('role', 'img');
+        celestial.setAttribute('title', dayTooltip);
+        celestial.setAttribute('aria-label', dayTooltip);
+        celestial.setAttribute('data-fgpx-tooltip', dayTooltip);
         cinema.appendChild(celestial);
 
         var conditionIcons = document.createElement('div');
         conditionIcons.className = 'fgpx-weather-conditions-icons';
         conditionIcons.textContent = '';
+        var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';
+        conditionIcons.setAttribute('role', 'img');
+        conditionIcons.setAttribute('title', conditionIconsTooltip);
+        conditionIcons.setAttribute('aria-label', conditionIconsTooltip);
+        conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);
         cinema.appendChild(conditionIcons);
 
         var mileageRuler = document.createElement('div');
@@ -6191,11 +6201,19 @@
           }
         }
 
+        function setAttrIfChanged(el, attr, value) {
+          if (!el) return;
+          if (el.getAttribute(attr) !== value) {
+            el.setAttribute(attr, value);
+          }
+        }
+
         var fogThresh = (window.FGPX && FGPX.weatherFogThreshold != null) ? FGPX.weatherFogThreshold : 0.3;
         var rainThresh = (window.FGPX && FGPX.weatherRainThreshold != null) ? FGPX.weatherRainThreshold : 0.1;
         var snowThresh = (window.FGPX && FGPX.weatherSnowThreshold != null) ? FGPX.weatherSnowThreshold : 0.1;
         var windThresh = (window.FGPX && FGPX.weatherWindThreshold != null) ? FGPX.weatherWindThreshold : 3;
         var cloudThresh = (window.FGPX && FGPX.weatherCloudThreshold != null) ? FGPX.weatherCloudThreshold : 50;
+        var simI18N = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
 
         var cond = weatherInterpolateAt(cinemaEl._weatherLookup, currentTimeSec) || { rain_mm: 0, snowfall_cm: 0, temperature_c: 15, wind_speed_kmh: 0, wind_direction_deg: 0, fog_intensity: 0, cloud_cover_pct: 0 };
 
@@ -6262,17 +6280,37 @@
           els.celestial = celestial;
         }
         setTextIfChanged(celestial, night ? '\uD83C\uDF19' : '\u2600\uFE0F');
+        var celestialTooltip = night ? (simI18N.simCelestialNightAria || 'Night indicator (moon)') : (simI18N.simCelestialDayAria || 'Daytime indicator (sun)');
+        setAttrIfChanged(celestial, 'title', celestialTooltip);
+        setAttrIfChanged(celestial, 'aria-label', celestialTooltip);
+        setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);
 
         var snowForIcons = Number(cond.snowfall_cm);
         if (!isFinite(snowForIcons)) {
           snowForIcons = ((Number(cond.rain_mm) || 0) >= rainThresh && (Number(cond.temperature_c) || 15) < 2) ? (Number(cond.rain_mm) || 0) : 0;
         }
         var activeIcons = [];
-        if ((Number(cond.fog_intensity) || 0) >= fogThresh) activeIcons.push('\uD83C\uDF2B\uFE0F');
-        if ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) activeIcons.push('\u2601\uFE0F');
-        if ((Number(cond.rain_mm) || 0) >= rainThresh) activeIcons.push('\uD83C\uDF27\uFE0F');
-        if (snowForIcons >= snowThresh) activeIcons.push('\u2744\uFE0F');
-        if ((Number(cond.wind_speed_kmh) || 0) >= windThresh) activeIcons.push('\uD83D\uDCA8');
+        var activeConditionLabels = [];
+        if ((Number(cond.fog_intensity) || 0) >= fogThresh) {
+          activeIcons.push('\uD83C\uDF2B\uFE0F');
+          activeConditionLabels.push(simI18N.simCondFog || 'Fog');
+        }
+        if ((Number(cond.cloud_cover_pct) || 0) >= cloudThresh) {
+          activeIcons.push('\u2601\uFE0F');
+          activeConditionLabels.push(simI18N.simCondClouds || 'Clouds');
+        }
+        if ((Number(cond.rain_mm) || 0) >= rainThresh) {
+          activeIcons.push('\uD83C\uDF27\uFE0F');
+          activeConditionLabels.push(simI18N.simCondRain || 'Rain');
+        }
+        if (snowForIcons >= snowThresh) {
+          activeIcons.push('\u2744\uFE0F');
+          activeConditionLabels.push(simI18N.simCondSnow || 'Snow');
+        }
+        if ((Number(cond.wind_speed_kmh) || 0) >= windThresh) {
+          activeIcons.push('\uD83D\uDCA8');
+          activeConditionLabels.push(simI18N.simCondWind || 'Wind');
+        }
 
         var conditionIcons = els.conditionIcons;
         if (!conditionIcons) {
@@ -6280,6 +6318,13 @@
           els.conditionIcons = conditionIcons;
         }
         setTextIfChanged(conditionIcons, activeIcons.join(' '));
+        var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';
+        var conditionTooltip = activeConditionLabels.length > 0
+          ? (activeIconsPrefix + ': ' + activeConditionLabels.join(', '))
+          : (activeIconsPrefix + ': ' + (simI18N.simConditionIconsClear || 'Clear conditions'));
+        setAttrIfChanged(conditionIcons, 'title', conditionTooltip);
+        setAttrIfChanged(conditionIcons, 'aria-label', conditionTooltip);
+        setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);
 
         var rainLayer = els.rain;
         if (!rainLayer) {
@@ -6702,7 +6747,6 @@
           if (!legendEls.conditions) legendEls.conditions = legend.querySelector('.fgpx-legend-conditions');
           cinemaEl._legendEls = legendEls;
 
-          var simI18N = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
           setTextIfChanged(legendEls.mileage, (simI18N.simMileage || 'Mileage') + ': ' + formatNumber(distanceNowMeters / 1000, 2) + ' km');
           setTextIfChanged(legendEls.duration, (simI18N.simDuration || 'Duration') + ': ' + formatTime(elapsedNowSec));
           setTextIfChanged(legendEls.grade, (simI18N.simGrade || 'Grade') + ': ' + (gradeAtNow >= 0 ? '+' : '') + gradeAtNow.toFixed(1) + '%');

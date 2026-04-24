@@ -492,9 +492,11 @@
   right: 20px;
   font-size: 22px;
   line-height: 1;
+  padding: 2px 3px;
   opacity: 0.9;
   transition: opacity 0.8s ease;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: help;
   z-index: 26;
 }
 
@@ -502,14 +504,55 @@
   position: absolute;
   top: 14px;
   right: 52px;
+  display: inline-block;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 1px 2px;
   font-size: 14px;
   line-height: 1;
   opacity: 0.95;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: help;
   z-index: 26;
   white-space: nowrap;
   max-width: 55%;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.fgpx-weather-celestial[data-fgpx-tooltip],
+.fgpx-weather-conditions-icons[data-fgpx-tooltip] {
+  position: absolute;
+}
+
+.fgpx-weather-celestial[data-fgpx-tooltip]:hover::after,
+.fgpx-weather-conditions-icons[data-fgpx-tooltip]:hover::after {
+  content: attr(data-fgpx-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  max-width: 240px;
+  white-space: normal;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+  pointer-events: none;
+}
+
+.fgpx-weather-celestial[data-fgpx-tooltip]:hover::before,
+.fgpx-weather-conditions-icons[data-fgpx-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 10px;
+  border: 4px solid transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.85);
+  z-index: 40;
+  pointer-events: none;
 }
 
 /* Grade indicator hill (terrain behind bicycle) */
