@@ -54,6 +54,9 @@ final class Options
 		'fgpx_gallery_default_sort' => 'newest',
 		'fgpx_gallery_show_view_toggle' => '1',
 		'fgpx_gallery_show_search' => '1',
+		'fgpx_gallery_auto_speed_enabled' => '1',
+		'fgpx_gallery_auto_speed_threshold_km' => '200',
+		'fgpx_gallery_auto_speed_value' => '100',
 
 		// Performance & Backend
 		'fgpx_backend_simplify_enabled' => '1',

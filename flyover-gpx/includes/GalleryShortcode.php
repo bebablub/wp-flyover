@@ -685,6 +685,9 @@ final class GalleryShortcode
             'playerStyleUrl' => (string) $galleryCfg['styleUrl'],
             'defaultSort' => (string) $galleryCfg['defaultSort'],
             'showSearch' => !empty($galleryCfg['showSearch']),
+            'autoSpeedEnabled' => $options['fgpx_gallery_auto_speed_enabled'] === '1',
+            'autoSpeedThresholdKm' => (float) $options['fgpx_gallery_auto_speed_threshold_km'],
+            'autoSpeedValue' => (int) $options['fgpx_gallery_auto_speed_value'],
             'playerConfig' => $playerCfg,
             'playerStyles' => array_values(array_filter([
                 AssetManager::getAssetUrl('maplibre-gl-css', 'style'),

@@ -363,6 +363,9 @@ final class Admin
 		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
 		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
+		$galleryAutoSpeedEnabled = $options['fgpx_gallery_auto_speed_enabled'];
+		$galleryAutoSpeedThresholdKm = $options['fgpx_gallery_auto_speed_threshold_km'];
+		$galleryAutoSpeedValue = $options['fgpx_gallery_auto_speed_value'];
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
 		$photoMaxDistance = $options['fgpx_photo_max_distance'];
@@ -496,6 +499,19 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gallery_show_search">' . \esc_html__('Show gallery search by default', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gallery_show_search" name="fgpx_gallery_show_search" value="1"' . ($galleryShowSearch === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show search input when shortcode does not define show_search.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_enabled">' . \esc_html__('Auto-speed by distance', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gallery_auto_speed_enabled" name="fgpx_gallery_auto_speed_enabled" value="1"' . ($galleryAutoSpeedEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Override playback speed in gallery based on track distance.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_threshold_km">' . \esc_html__('Auto-speed distance threshold (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_gallery_auto_speed_threshold_km" name="fgpx_gallery_auto_speed_threshold_km" class="small-text" min="1" max="99999" step="1" value="' . \esc_attr($galleryAutoSpeedThresholdKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Tracks longer than this distance will use the auto-speed value below.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_value">' . \esc_html__('Auto-speed value (×)', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_gallery_auto_speed_value" name="fgpx_gallery_auto_speed_value">';
+		foreach (['1','10','25','50','100','250'] as $opt) { echo '<option value="' . \esc_attr($opt) . '"' . selected($galleryAutoSpeedValue, $opt, false) . '>' . \esc_html($opt . '×') . '</option>'; }
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Playback speed to apply for long tracks in gallery.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
 
@@ -2195,6 +2211,13 @@ final class Admin
 		\update_option('fgpx_gallery_default_sort', $galleryDefaultSort, true);
 		\update_option('fgpx_gallery_show_view_toggle', $this->getValidBool('fgpx_gallery_show_view_toggle') ? '1' : '0', true);
 		\update_option('fgpx_gallery_show_search', $this->getValidBool('fgpx_gallery_show_search') ? '1' : '0', true);
+		\update_option('fgpx_gallery_auto_speed_enabled', $this->getValidBool('fgpx_gallery_auto_speed_enabled') ? '1' : '0', true);
+		$galleryAutoSpeedThresholdKm = $this->getValidInt('fgpx_gallery_auto_speed_threshold_km', 200, 1, 99999);
+		\update_option('fgpx_gallery_auto_speed_threshold_km', (string) $galleryAutoSpeedThresholdKm, true);
+		$galleryAutoSpeedValues = ['1', '10', '25', '50', '100', '250'];
+		$rawAutoSpeedVal = isset($_POST['fgpx_gallery_auto_speed_value']) ? (string)(int)\sanitize_text_field(\wp_unslash($_POST['fgpx_gallery_auto_speed_value'])) : '100';
+		$galleryAutoSpeedVal = \in_array($rawAutoSpeedVal, $galleryAutoSpeedValues, true) ? $rawAutoSpeedVal : '100';
+		\update_option('fgpx_gallery_auto_speed_value', $galleryAutoSpeedVal, true);
 		// Use type-safe validation helpers for boolean values
 		\update_option('fgpx_show_labels', $this->getValidBool('fgpx_show_labels') ? '1' : '0', true);
 		\update_option('fgpx_photos_enabled', $this->getValidBool('fgpx_photos_enabled') ? '1' : '0', true);

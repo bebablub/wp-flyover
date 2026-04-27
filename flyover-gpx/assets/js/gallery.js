@@ -498,7 +498,11 @@
       if (!window.FGPX.instances) {
         window.FGPX.instances = {};
       }
-      window.FGPX.instances[playerId] = Object.assign({}, cfg.playerConfig || {}, {
+      var autoSpeedOverride = {};
+      if (cfg.autoSpeedEnabled && track.distanceKm && Number(track.distanceKm) > Number(cfg.autoSpeedThresholdKm || 200)) {
+        autoSpeedOverride = { defaultSpeed: Number(cfg.autoSpeedValue) || 100 };
+      }
+      window.FGPX.instances[playerId] = Object.assign({}, cfg.playerConfig || {}, autoSpeedOverride, {
         galleryPhotoStrategy: 'latest_embed',
         gpxDownloadUrl: track.gpxDownloadUrl || ''
       });
