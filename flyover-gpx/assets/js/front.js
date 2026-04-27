@@ -525,7 +525,7 @@
     stats.appendChild(statDist); stats.appendChild(statTime); stats.appendChild(statAvg); stats.appendChild(statGain);
     
     // Tab variables
-    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade;
+    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade, tabMedia;
     
     // Show no data message in chart area (will be defined in startPlayer with proper chart reference)
     // No global no-data handler; keep it instance-scoped inside startPlayer.
@@ -546,31 +546,24 @@
     chartLegend.appendChild(legendTitle);
     tabElevation = createEl('button', 'fgpx-chart-tab fgpx-chart-tab-active');
     tabElevation.textContent = 'Elevation + Speed';
-    tabElevation.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid #007cba;color:#007cba;font-weight:600';
     tabBiometrics = createEl('button', 'fgpx-chart-tab');
     tabBiometrics.textContent = 'Heart Rate + Cadence';
-    tabBiometrics.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabTemperature = createEl('button', 'fgpx-chart-tab');
     tabTemperature.textContent = 'Temperature';
-    tabTemperature.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabPower = createEl('button', 'fgpx-chart-tab');
     tabPower.textContent = 'Power';
-    tabPower.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabPowerZones = createEl('button', 'fgpx-chart-tab');
     tabPowerZones.textContent = 'Power Zones';
-    tabPowerZones.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabWindImpact = createEl('button', 'fgpx-chart-tab');
     tabWindImpact.textContent = 'Wind Impact';
-    tabWindImpact.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabWindRose = createEl('button', 'fgpx-chart-tab');
     tabWindRose.textContent = 'Wind Directions';
-    tabWindRose.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabAll = createEl('button', 'fgpx-chart-tab');
     tabAll.textContent = 'All Data';
-    tabAll.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
     tabWeatherGrade = createEl('button', 'fgpx-chart-tab');
     tabWeatherGrade.textContent = (I18N.simulationTab || 'Simulation');
-    tabWeatherGrade.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
+    tabMedia = createEl('button', 'fgpx-chart-tab');
+    tabMedia.textContent = 'Media';
     chartTabs.appendChild(tabElevation);
     chartTabs.appendChild(tabBiometrics);
     chartTabs.appendChild(tabTemperature);
@@ -580,16 +573,22 @@
     chartTabs.appendChild(tabWindRose);
     chartTabs.appendChild(tabAll);
     chartTabs.appendChild(tabWeatherGrade);
+    // Only add media tab if photos are enabled
+    if (FGPX.photosEnabled) {
+      chartTabs.appendChild(tabMedia);
+    }
     
     // Event listeners will be added in startPlayer after functions are defined
     
     var chartWrap = createEl('div', 'fgpx-chart-wrap');
     var canvas = createEl('canvas');
     chartWrap.appendChild(canvas);
+    var mediaPanel = createEl('div', 'fgpx-media-panel');
     statsChart.appendChild(stats);
     statsChart.appendChild(chartTabs);
     statsChart.appendChild(chartLegend);
     statsChart.appendChild(chartWrap);
+    statsChart.appendChild(mediaPanel);
 
     container.appendChild(spinner);
     container.appendChild(error);
@@ -604,8 +603,9 @@
       controls: { btnPlay: btnPlay, btnPause: btnPause, btnRestart: btnRestart, btnRecord: btnRecord, btnWeather: btnWeather, btnTemperature: btnTemperature, btnWind: btnWind, btnDayNight: btnDayNight, speedSel: speedSel, progressBar: progressBar }, 
       stats: { dist: statDist, time: statTime, avg: statAvg, gain: statGain }, 
       canvas: canvas,
-      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade },
-      chartLegend: chartLegend
+      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade, tabMedia: tabMedia },
+      chartLegend: chartLegend,
+      mediaPanel: mediaPanel
     };
   }
 
@@ -2693,6 +2693,14 @@
       var currentDisplayedPhoto = null; // Track the currently displayed photo for location filtering
       var shownPhotoKeys = new Set();
       var photoQueue = [];
+      var mediaItems = [];
+      var mediaViewerActive = false;
+      var mediaViewerIndex = -1;
+      var mediaViewerWasPlaying = false;
+      var mediaGridRendered = false; // Memoization flag: grid DOM cached after first render
+      var cachedMediaGridDOM = null; // Cached grid DOM and empty state for re-use on tab switch
+      var mediaGridPage = 0; // Current page for pagination (0-indexed)
+      var mediaGridPageSize = 12; // Items per page (3x4 grid on desktop)
       var lastPlaybackSec = null; // for robust crossing detection at high speeds
       var lastPlaybackDist = null; // meters; for distance-based triggering
       var photosByTime = null; // [{p: photoObject, pSec: number}...] sorted by pSec
@@ -2722,6 +2730,203 @@
           return true;
         }
         return false;
+      }
+
+      function buildMediaItems() {
+        // Only build media items if photos are enabled and available
+        if (!FGPX.photosEnabled) {
+          mediaItems = [];
+          return;
+        }
+        if (!Array.isArray(photos) || photos.length === 0) {
+          mediaItems = [];
+          return;
+        }
+        var trackLinked = [];
+        var offTrack = [];
+        for (var mi = 0; mi < photos.length; mi++) {
+          var ph = photos[mi];
+          if (!ph) continue;
+          var thumb = String(ph.thumbUrl || ph.fullUrl || '');
+          var full = String(ph.fullUrl || ph.thumbUrl || '');
+          if (!thumb && !full) continue;
+          var title = nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || extractFilenameFromUrl(full || thumb) || 'Photo';
+          var caption = nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || '';
+          var sourceLabel = '';
+          if (ph.source_post_id && ph.source_post_id > 0 && ph.source_post_title) sourceLabel = String(ph.source_post_title);
+          else if (ph.source_post_id && ph.source_post_id > 0) sourceLabel = 'Linked post';
+          else sourceLabel = 'Track photo';
+          var timeLabel = '';
+          if (ph.timestamp) {
+            var ts = new Date(ph.timestamp);
+            if (!isNaN(ts.getTime())) timeLabel = ts.toLocaleString();
+          }
+          var routeKm = '';
+          if (typeof ph._distAlong === 'number' && isFinite(ph._distAlong)) {
+            routeKm = (ph._distAlong / 1000).toFixed(2) + ' km';
+          }
+          var item = {
+            photo: ph,
+            thumbUrl: thumb,
+            fullUrl: full,
+            title: title,
+            caption: caption,
+            sourceLabel: sourceLabel,
+            timeLabel: timeLabel,
+            routeKm: routeKm,
+            isGpsLinked: (typeof ph.lat === 'number' && typeof ph.lon === 'number')
+          };
+          if (item.isGpsLinked) trackLinked.push(item);
+          else offTrack.push(item);
+        }
+        mediaItems = trackLinked.concat(offTrack);
+        invalidateMediaGridCache(); // Clear cached grid when media items change
+      }
+
+      function openMediaViewerAt(index) {
+        if (!Array.isArray(mediaItems) || mediaItems.length === 0) return;
+        if (!isFinite(index)) return;
+        var safeIndex = Math.max(0, Math.min(mediaItems.length - 1, Number(index) | 0));
+        var item = mediaItems[safeIndex];
+        if (!item) return;
+        mediaViewerWasPlaying = !!playing;
+        if (mediaViewerWasPlaying) {
+          setPlaying(false);
+        }
+        mediaViewerActive = true;
+        mediaViewerIndex = safeIndex;
+        overlayActive = true;
+        currentDisplayedPhoto = item.photo || null;
+        showOverlay(item.fullUrl || item.thumbUrl || '', item.caption || item.title || 'Photo', item.photo && item.photo.source_post_id, item.photo && item.photo.source_post_title ? item.photo.source_post_title : '', item.photo && item.photo.timestamp ? item.photo.timestamp : '', extractFilenameFromUrl(item.fullUrl || item.thumbUrl || ''));
+      }
+
+      // Invalidate media grid cache when track data changes
+      function invalidateMediaGridCache() {
+        mediaGridRendered = false;
+        cachedMediaGridDOM = null;
+        mediaGridPage = 0; // Reset to first page when cache invalidated
+      }
+
+      function renderMediaGrid() {
+        if (!ui.mediaPanel) return;
+        // If grid already rendered, reuse cached DOM instead of rebuilding
+        if (mediaGridRendered && cachedMediaGridDOM !== null) {
+          ui.mediaPanel.innerHTML = '';
+          ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));
+          // Re-attach event listeners to cloned cards
+          var clonedCards = ui.mediaPanel.querySelectorAll('.fgpx-media-card');
+          for (var ci = 0; ci < clonedCards.length; ci++) {
+            (function(idx) {
+              clonedCards[idx].addEventListener('click', function() {
+                openMediaViewerAt(idx);
+              });
+            })(ci);
+          }
+          // Re-attach pagination button listeners
+          var prevBtn = ui.mediaPanel.querySelector('.fgpx-media-page-prev');
+          var nextBtn = ui.mediaPanel.querySelector('.fgpx-media-page-next');
+          if (prevBtn) prevBtn.addEventListener('click', function() { mediaGridPage = Math.max(0, mediaGridPage - 1); renderMediaGrid(); });
+          if (nextBtn) nextBtn.addEventListener('click', function() { var maxPage = Math.ceil(mediaItems.length / mediaGridPageSize) - 1; mediaGridPage = Math.min(maxPage, mediaGridPage + 1); renderMediaGrid(); });
+          return;
+        }
+        // First render: build DOM and cache it
+        ui.mediaPanel.innerHTML = '';
+        if (!Array.isArray(mediaItems) || mediaItems.length === 0) {
+          var empty = document.createElement('div');
+          empty.className = 'fgpx-media-empty';
+          empty.setAttribute('role', 'status');
+          empty.setAttribute('aria-label', 'Media gallery empty');
+          empty.textContent = 'No photos available for this track.';
+          ui.mediaPanel.appendChild(empty);
+          cachedMediaGridDOM = empty.cloneNode(true);
+          mediaGridRendered = true;
+          return;
+        }
+        // Calculate pagination
+        var totalItems = mediaItems.length;
+        var totalPages = Math.ceil(totalItems / mediaGridPageSize);
+        var startIdx = mediaGridPage * mediaGridPageSize;
+        var endIdx = Math.min(startIdx + mediaGridPageSize, totalItems);
+        
+        var grid = document.createElement('div');
+        grid.className = 'fgpx-media-grid';
+        for (var gi = startIdx; gi < endIdx; gi++) {
+          (function(index) {
+            var item = mediaItems[index];
+            var card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'fgpx-media-card';
+            card.setAttribute('aria-label', 'Open photo ' + String(index + 1));
+            var img = document.createElement('img');
+            img.className = 'fgpx-media-card-image';
+            img.src = item.thumbUrl || item.fullUrl;
+            img.alt = item.title || 'Photo';
+            var meta = document.createElement('div');
+            meta.className = 'fgpx-media-card-meta';
+            var title = document.createElement('div');
+            title.className = 'fgpx-media-card-title';
+            title.textContent = item.title || 'Photo';
+            meta.appendChild(title);
+            if (item.routeKm) {
+              var km = document.createElement('div');
+              km.className = 'fgpx-media-card-sub';
+              km.textContent = item.routeKm;
+              meta.appendChild(km);
+            }
+            if (item.timeLabel) {
+              var time = document.createElement('div');
+              time.className = 'fgpx-media-card-sub';
+              time.textContent = item.timeLabel;
+              meta.appendChild(time);
+            }
+            card.appendChild(img);
+            card.appendChild(meta);
+            card.addEventListener('click', function() {
+              openMediaViewerAt(index);
+            });
+            grid.appendChild(card);
+          })(gi);
+        }
+        ui.mediaPanel.appendChild(grid);
+        
+        // Add pagination controls if more than one page
+        if (totalPages > 1) {
+          var pagination = document.createElement('div');
+          pagination.className = 'fgpx-media-pagination';
+          
+          var prevBtn = document.createElement('button');
+          prevBtn.type = 'button';
+          prevBtn.className = 'fgpx-media-page-prev';
+          prevBtn.textContent = '← Previous';
+          prevBtn.disabled = (mediaGridPage === 0);
+          prevBtn.addEventListener('click', function() {
+            mediaGridPage = Math.max(0, mediaGridPage - 1);
+            renderMediaGrid();
+          });
+          pagination.appendChild(prevBtn);
+          
+          var pageInfo = document.createElement('span');
+          pageInfo.className = 'fgpx-media-page-info';
+          pageInfo.textContent = 'Page ' + (mediaGridPage + 1) + ' of ' + totalPages;
+          pagination.appendChild(pageInfo);
+          
+          var nextBtn = document.createElement('button');
+          nextBtn.type = 'button';
+          nextBtn.className = 'fgpx-media-page-next';
+          nextBtn.textContent = 'Next →';
+          nextBtn.disabled = (mediaGridPage >= totalPages - 1);
+          nextBtn.addEventListener('click', function() {
+            mediaGridPage = Math.min(totalPages - 1, mediaGridPage + 1);
+            renderMediaGrid();
+          });
+          pagination.appendChild(nextBtn);
+          
+          ui.mediaPanel.appendChild(pagination);
+        }
+        
+        // Cache the grid without pagination controls for reuse
+        cachedMediaGridDOM = grid.cloneNode(true);
+        mediaGridRendered = true;
       }
 
       function addPhotoMarkers() {
@@ -2810,6 +3015,7 @@
       }
 
       // >>> RESTORED CALL (was missing) <<<
+      buildMediaItems();
       addPhotoMarkers();
 
       // --- Tile prefetch functions (deferred until play button press) ---
@@ -4808,7 +5014,35 @@
       var overlayTime = document.createElement('div');
       overlayTime.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
       overlay.appendChild(overlayTime);
+      var overlayPrev = document.createElement('button');
+      overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';
+      overlayPrev.type = 'button';
+      overlayPrev.textContent = '‹';
+      overlayPrev.style.cssText = 'display:none;position:absolute;left:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,0.35);background:rgba(0,0,0,0.45);color:#fff;font-size:28px;line-height:1;cursor:pointer;z-index:2';
+      overlay.appendChild(overlayPrev);
+      var overlayNext = document.createElement('button');
+      overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';
+      overlayNext.type = 'button';
+      overlayNext.textContent = '›';
+      overlayNext.style.cssText = 'display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,0.35);background:rgba(0,0,0,0.45);color:#fff;font-size:28px;line-height:1;cursor:pointer;z-index:2';
+      overlay.appendChild(overlayNext);
+      var overlayCounter = document.createElement('div');
+      overlayCounter.className = 'fgpx-photo-overlay-counter';
+      overlayCounter.style.cssText = 'position:absolute;left:12px;bottom:12px;color:#fff;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;display:none';
+      overlay.appendChild(overlayCounter);
       ui.mapEl.appendChild(overlay);
+      function updateOverlayViewerControls() {
+        var viewerVisible = mediaViewerActive && Array.isArray(mediaItems) && mediaItems.length > 0;
+        overlayPrev.style.display = viewerVisible ? 'block' : 'none';
+        overlayNext.style.display = viewerVisible ? 'block' : 'none';
+        overlayCounter.style.display = viewerVisible ? 'block' : 'none';
+        if (!viewerVisible) return;
+        overlayPrev.disabled = mediaViewerIndex <= 0;
+        overlayNext.disabled = mediaViewerIndex >= (mediaItems.length - 1);
+        overlayPrev.style.opacity = overlayPrev.disabled ? '0.4' : '1';
+        overlayNext.style.opacity = overlayNext.disabled ? '0.4' : '1';
+        overlayCounter.textContent = String(mediaViewerIndex + 1) + ' / ' + String(mediaItems.length);
+      }
       function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
@@ -4861,6 +5095,7 @@
         
         try { overlay.offsetHeight; } catch(_) {} 
         overlay.style.opacity = '1'; 
+        updateOverlayViewerControls();
       }
       function hideOverlay() {
         DBG.log('overlay hide start');
@@ -4889,6 +5124,7 @@
               overlayTime.style.display = 'none';
               // Reset background to default
               overlay.style.background = 'rgba(0,0,0,0.6)';
+              updateOverlayViewerControls();
               overlay.removeEventListener('transitionend', done); 
               // Clear overlay from map canvas if recording
               DBG.log('hideOverlay: videoRecorder exists?', !!videoRecorder);
@@ -4919,6 +5155,7 @@
             overlayTime.style.display = 'none';
             // Reset background to default
             overlay.style.background = 'rgba(0,0,0,0.6)';
+            updateOverlayViewerControls();
             // Clear overlay from map canvas if recording
             DBG.log('hideOverlay (catch): videoRecorder exists?', !!videoRecorder);
             DBG.log('hideOverlay (catch): isRecording?', videoRecorder ? videoRecorder.isRecording : 'N/A');
@@ -5062,25 +5299,67 @@
         hideOverlay().then(function() { 
           overlayActive = false; 
           currentDisplayedPhoto = null; 
+          mediaViewerActive = false;
+          mediaViewerIndex = -1;
           // Resume playback if still recording
           if (isRecording && !playing) {
             setPlaying(true);
             scheduleRaf();
           }
+          if (mediaViewerWasPlaying && !playing) {
+            setPlaying(true);
+            scheduleRaf();
+          }
+          mediaViewerWasPlaying = false;
         }); 
+      });
+      overlayPrev.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!mediaViewerActive) return;
+        if (mediaViewerIndex <= 0) return;
+        openMediaViewerAt(mediaViewerIndex - 1);
+      });
+      overlayNext.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!mediaViewerActive) return;
+        if (mediaViewerIndex >= mediaItems.length - 1) return;
+        openMediaViewerAt(mediaViewerIndex + 1);
       });
       // ESC to close
       var onOverlayKeydown = function(e){
         if (!document.contains(root)) return;
+        if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowRight' || e.code === 'ArrowRight')) {
+          if (mediaViewerIndex < mediaItems.length - 1) {
+            e.preventDefault();
+            openMediaViewerAt(mediaViewerIndex + 1);
+          }
+          return;
+        }
+        if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowLeft' || e.code === 'ArrowLeft')) {
+          if (mediaViewerIndex > 0) {
+            e.preventDefault();
+            openMediaViewerAt(mediaViewerIndex - 1);
+          }
+          return;
+        }
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
             overlayActive = false; 
             currentDisplayedPhoto = null; 
+            mediaViewerActive = false;
+            mediaViewerIndex = -1;
             // Resume playback if still recording
             if (isRecording && !playing) {
               setPlaying(true);
               scheduleRaf();
             }
+            if (mediaViewerWasPlaying && !playing) {
+              setPlaying(true);
+              scheduleRaf();
+            }
+            mediaViewerWasPlaying = false;
           }); 
         } 
       };
@@ -5125,6 +5404,9 @@
         
         setPlaying(false);
         // Keep recording during photo overlay - don't stop recording
+        mediaViewerActive = false;
+        mediaViewerIndex = -1;
+        mediaViewerWasPlaying = false;
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
@@ -5437,16 +5719,15 @@
         currentChartTab = tabType;
         try { applyWeatherOverlayProfile(true); } catch (_) {}
         
-        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll, ui.tabs.tabWeatherGrade];
-        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all', 'weathergrade'];
+        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll, ui.tabs.tabWeatherGrade, ui.tabs.tabMedia];
+        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all', 'weathergrade', 'media'];
         
         tabElements.forEach(function(tab, index) {
+          if (!tab) return; // Skip if tab doesn't exist (e.g., media tab when disabled)
           if (tabTypes[index] === tabType) {
             tab.className = 'fgpx-chart-tab fgpx-chart-tab-active';
-            tab.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid #007cba;color:#007cba;font-weight:600';
           } else {
             tab.className = 'fgpx-chart-tab';
-            tab.style.cssText = 'flex:1;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;color:#666;font-weight:400';
           }
         });
         
@@ -5464,8 +5745,22 @@
 
         // Show weather cinema or chart canvas based on tab
         var weather = tabType === 'weathergrade';
+        var media = tabType === 'media';
         var cinemaRoot = container || root;
         var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
+        if (media) {
+          ui.chartLegend.style.display = 'none';
+          if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
+          if (cinemaEl) cinemaEl.style.display = 'none';
+          if (ui.mediaPanel) {
+            renderMediaGrid();
+            ui.mediaPanel.style.display = 'block';
+          }
+          try { applyWeatherOverlayProfile(true); } catch (_) {}
+          return;
+        } else {
+          if (ui.mediaPanel) ui.mediaPanel.style.display = 'none';
+        }
         if (weather) {
           // Hide chart canvas
           ui.canvas.parentElement.style.display = 'none';
@@ -5578,6 +5873,7 @@
       ui.tabs.tabWindRose.addEventListener('click', function() { switchChartTab('windrose'); });
       ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
       ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
+      ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
       
       // Immediate debug test to verify logging works
       DBG.log('=== DEBUG TEST: Chart creation started ===');

@@ -365,7 +365,27 @@ describe('front.js runtime minimal regressions', () => {
   test('chart tabs use instance-scoped switch handler (no global dependency)', () => {
     expect(FRONT_SRC).toContain('var switchChartTab = function(tabType) {');
     expect(FRONT_SRC).toContain("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });");
+    expect(FRONT_SRC).toContain("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
     expect(FRONT_SRC).not.toContain("ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });");
+  });
+
+  test('media tab and gallery rendering hooks are present', () => {
+    expect(FRONT_SRC).toContain("tabMedia = createEl('button', 'fgpx-chart-tab');");
+    expect(FRONT_SRC).toContain("tabMedia.textContent = 'Media';");
+    expect(FRONT_SRC).toContain('var mediaPanel = createEl(\'div\', \'fgpx-media-panel\');');
+    expect(FRONT_SRC).toContain('function buildMediaItems() {');
+    expect(FRONT_SRC).toContain('function renderMediaGrid() {');
+    expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
+  });
+
+  test('overlay supports media viewer previous and next navigation', () => {
+    expect(FRONT_SRC).toContain("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';");
+    expect(FRONT_SRC).toContain("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';");
+    expect(FRONT_SRC).toContain('function updateOverlayViewerControls() {');
+    expect(FRONT_SRC).toContain("if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowRight' || e.code === 'ArrowRight')) {");
+    expect(FRONT_SRC).toContain("if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowLeft' || e.code === 'ArrowLeft')) {");
+    expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex + 1);');
+    expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex - 1);');
   });
 
   test('weathergrade container is initialized at startPlayer scope and reused safely', () => {
@@ -564,5 +584,92 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).not.toContain('debugWeatherSimEnabled');
     expect(FRONT_SRC).not.toContain('DEBUG SIMULATION');
     expect(FRONT_SRC).not.toContain('cinemaEl._debugWeatherSim');
+  });
+
+  // Media tab memoization & functional tests
+  test('media grid memoization: cache invalidation on photo data change', () => {
+    expect(FRONT_SRC).toContain('var mediaGridRendered = false;');
+    expect(FRONT_SRC).toContain('var cachedMediaGridDOM = null;');
+    expect(FRONT_SRC).toContain('function invalidateMediaGridCache() {');
+    expect(FRONT_SRC).toContain('mediaGridRendered = false;');
+    expect(FRONT_SRC).toContain('cachedMediaGridDOM = null;');
+    expect(FRONT_SRC).toContain('invalidateMediaGridCache();');
+  });
+
+  test('media grid rendering: memoizes DOM after first render', () => {
+    expect(FRONT_SRC).toContain('if (mediaGridRendered && cachedMediaGridDOM !== null) {');
+    expect(FRONT_SRC).toContain('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));');
+    expect(FRONT_SRC).toContain('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');');
+    expect(FRONT_SRC).toContain('cachedMediaGridDOM = grid.cloneNode(true);');
+    expect(FRONT_SRC).toContain('mediaGridRendered = true;');
+  });
+
+  test('media grid empty state: renders with semantic role and ARIA label', () => {
+    expect(FRONT_SRC).toContain('.setAttribute(\'role\', \'status\');');
+    expect(FRONT_SRC).toContain('.setAttribute(\'aria-label\', \'Media gallery empty\');');
+    expect(FRONT_SRC).toContain('empty.className = \'fgpx-media-empty\';');
+    expect(FRONT_SRC).toContain('No photos available for this track.');
+  });
+
+  test('media grid card ordering: GPS-linked photos before off-track', () => {
+    expect(FRONT_SRC).toContain('var trackLinked = [];');
+    expect(FRONT_SRC).toContain('var offTrack = [];');
+    expect(FRONT_SRC).toContain('if (item.isGpsLinked) trackLinked.push(item);');
+    expect(FRONT_SRC).toContain('else offTrack.push(item);');
+    expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
+  });
+
+  test('media card accessibility: aria-labels are 1-based indices', () => {
+    // Cards should say "Open photo 1", "Open photo 2", not "0" or "1"
+    expect(FRONT_SRC).toContain('\'Open photo \' + String(index + 1)');
+    expect(FRONT_SRC).not.toContain('\'Open photo \' + String(index)');
+  });
+
+  test('media card image: includes alt text fallback to title', () => {
+    expect(FRONT_SRC).toContain('img.alt = item.title || \'Photo\';');
+  });
+
+  test('media card click handler: invokes openMediaViewerAt with correct index', () => {
+    expect(FRONT_SRC).toContain('card.addEventListener(\'click\', function() {');
+    expect(FRONT_SRC).toContain('openMediaViewerAt(index);');
+  });
+
+  test('media grid metadata display: shows route distance and timestamp when available', () => {
+    expect(FRONT_SRC).toContain('if (item.routeKm) {');
+    expect(FRONT_SRC).toContain('km.textContent = item.routeKm;');
+    expect(FRONT_SRC).toContain('if (item.timeLabel) {');
+    expect(FRONT_SRC).toContain('time.textContent = item.timeLabel;');
+  });
+
+  test('media grid rebuilds on cloned nodes: re-attaches click listeners', () => {
+    expect(FRONT_SRC).toContain('for (var ci = 0; ci < clonedCards.length; ci++) {');
+    expect(FRONT_SRC).toContain('clonedCards[idx].addEventListener(\'click\', function() {');
+  });
+
+  test('media grid pagination: divides items into pages of 12', () => {
+    expect(FRONT_SRC).toContain('var mediaGridPageSize = 12;');
+    expect(FRONT_SRC).toContain('var mediaGridPage = 0;');
+    expect(FRONT_SRC).toContain('var totalPages = Math.ceil(totalItems / mediaGridPageSize);');
+    expect(FRONT_SRC).toContain('var startIdx = mediaGridPage * mediaGridPageSize;');
+  });
+
+  test('media grid pagination: shows prev/next buttons and page info', () => {
+    expect(FRONT_SRC).toContain('pagination.className = \'fgpx-media-pagination\';');
+    expect(FRONT_SRC).toContain('prevBtn.className = \'fgpx-media-page-prev\';');
+    expect(FRONT_SRC).toContain('nextBtn.className = \'fgpx-media-page-next\';');
+    expect(FRONT_SRC).toContain('pageInfo.textContent = \'Page \' + (mediaGridPage + 1) + \' of \' + totalPages;');
+  });
+
+  test('media grid pagination: disables prev button on first page', () => {
+    expect(FRONT_SRC).toContain('prevBtn.disabled = (mediaGridPage === 0);');
+  });
+
+  test('media grid pagination: disables next button on last page', () => {
+    expect(FRONT_SRC).toContain('nextBtn.disabled = (mediaGridPage >= totalPages - 1);');
+  });
+
+  test('media tab hidden when photosEnabled is false', () => {
+    expect(FRONT_SRC).toContain('if (FGPX.photosEnabled) {');
+    expect(FRONT_SRC).toContain('chartTabs.appendChild(tabMedia);');
   });
 });
