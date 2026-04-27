@@ -2829,35 +2829,65 @@
       function lon2tileX(lon, z){ return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
       function lat2tileY(lat, z){ var rad = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(rad) + 1/Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z)); }
       function tileUrlFromTemplate(tpl, z, x, y){ return tpl.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)); }
-      function getRasterTileTemplates() {
-        var tpls = [];
+      function getPrefetchTileTemplates() {
+        var out = [];
         try {
-          var st = map.getStyle(); var srcs = (st && st.sources) ? st.sources : {};
+          var st = map.getStyle();
+          var srcs = (st && st.sources) ? st.sources : {};
           for (var sid in srcs) {
             if (!Object.prototype.hasOwnProperty.call(srcs, sid)) continue;
             var sdef = srcs[sid];
-            if (sdef && (sdef.type === 'raster' || sdef.type === 'raster-dem')) {
-              var foundTiles = [];
-              // Prefer live source object: MapLibre resolves url-based TileJSON sources into .tiles
-              // before firing 'load', but getStyle() still returns the original spec with only 'url'.
-              // Without this, DEM sources defined via url (e.g. MapTiler terrain-rgb) are never prefetched.
-              try {
-                var live = (typeof map.getSource === 'function') ? map.getSource(sid) : null;
-                if (live && Array.isArray(live.tiles) && live.tiles.length > 0) { foundTiles = live.tiles; }
-              } catch(_) {}
-              // Fall back to style spec tiles array (for sources with direct tiles[] definition)
-              if (foundTiles.length === 0 && Array.isArray(sdef.tiles)) { foundTiles = sdef.tiles; }
-              foundTiles.forEach(function(t){ if (typeof t === 'string' && t.indexOf('{z}') !== -1) tpls.push(t); });
+            if (!sdef || (sdef.type !== 'raster' && sdef.type !== 'raster-dem')) continue;
+
+            var foundTiles = [];
+            var live = null;
+            try {
+              live = (typeof map.getSource === 'function') ? map.getSource(sid) : null;
+              if (live && Array.isArray(live.tiles) && live.tiles.length > 0) { foundTiles = live.tiles; }
+            } catch(_) {}
+
+            // Fall back to style spec tiles array (for sources with direct tiles[] definition)
+            if (foundTiles.length === 0 && Array.isArray(sdef.tiles)) { foundTiles = sdef.tiles; }
+
+            var srcMinZoom = null;
+            var srcMaxZoom = null;
+            if (live && isFinite(Number(live.minzoom))) srcMinZoom = Number(live.minzoom);
+            else if (isFinite(Number(sdef.minzoom))) srcMinZoom = Number(sdef.minzoom);
+            if (live && isFinite(Number(live.maxzoom))) srcMaxZoom = Number(live.maxzoom);
+            else if (isFinite(Number(sdef.maxzoom))) srcMaxZoom = Number(sdef.maxzoom);
+
+            for (var ti = 0; ti < foundTiles.length; ti++) {
+              var t = foundTiles[ti];
+              if (typeof t !== 'string' || t.indexOf('{z}') === -1) continue;
+              out.push({
+                sourceId: sid,
+                sourceType: sdef.type,
+                template: t,
+                minzoom: srcMinZoom,
+                maxzoom: srcMaxZoom,
+                key: sid + '|' + String(ti)
+              });
             }
           }
         } catch(_) {}
-        return tpls;
+        return out;
       }
-      function buildPrefetchList(z) {
+
+      function clampPrefetchZoom(rawZoom, templateMeta) {
+        var minZ = 0;
+        var maxZ = (templateMeta && templateMeta.sourceType === 'raster-dem') ? 14 : 19;
+        if (templateMeta && isFinite(Number(templateMeta.minzoom))) minZ = Math.round(Number(templateMeta.minzoom));
+        if (templateMeta && isFinite(Number(templateMeta.maxzoom))) maxZ = Math.round(Number(templateMeta.maxzoom));
+        if (maxZ < minZ) maxZ = minZ;
+        var z = isFinite(Number(rawZoom)) ? Math.round(Number(rawZoom)) : 12;
+        return Math.max(Math.max(1, minZ), Math.min(maxZ, z));
+      }
+
+      function buildPrefetchList(z, maxTiles) {
         var set = new Set();
         try {
           var PAD_TILES = 1;
-          var maxTiles = 300;
+          var cap = isFinite(Number(maxTiles)) ? Math.max(20, Math.round(Number(maxTiles))) : 300;
           var zUse = Math.max(1, Math.min(19, Math.round(z)));
           // Sample along the privacy window every ~500m
           var dStart = privacyEnabled ? privacyStartD : 0;
@@ -2869,11 +2899,11 @@
             for (var dx = -PAD_TILES; dx <= PAD_TILES; dx++) {
               for (var dy = -PAD_TILES; dy <= PAD_TILES; dy++) {
                 set.add(zUse + '/' + (x+dx) + '/' + (y+dy));
-                if (set.size >= maxTiles) break;
+                if (set.size >= cap) break;
               }
-              if (set.size >= maxTiles) break;
+              if (set.size >= cap) break;
             }
-            if (set.size >= maxTiles) break;
+            if (set.size >= cap) break;
           }
           // Ensure start/end tiles
           var pS = positionAtDistance(dStart), pE = positionAtDistance(dEnd);
@@ -2886,15 +2916,8 @@
         if (preloadCompleted || preloadingInProgress) { return Promise.resolve(); }
         preloadingInProgress = true;
         try {
-          var tpls = getRasterTileTemplates();
-          if (!tpls || tpls.length === 0) { 
-            preloadCompleted = true;
-            preloadingInProgress = false;
-            return Promise.resolve(); 
-          }
-          var z = isFinite(defaultZoomSetting) ? defaultZoomSetting : 12;
-          var list = buildPrefetchList(z);
-          if (!list || list.length === 0) { 
+          var templates = getPrefetchTileTemplates();
+          if (!templates || templates.length === 0) {
             preloadCompleted = true;
             preloadingInProgress = false;
             return Promise.resolve(); 
@@ -2913,14 +2936,20 @@
           var reqs = [];
           var timeoutMs = 4000;
           var controller = null;
-          list.forEach(function(key){
+          var totalTileBudget = 300;
+          var perTemplateBudget = Math.max(30, Math.floor(totalTileBudget / Math.max(1, templates.length)));
+          templates.forEach(function(meta) {
             try {
-              var parts = key.split('/'); var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
-              for (var i = 0; i < tpls.length; i++) {
-                var url = tileUrlFromTemplate(tpls[i], zt, xt, yt);
-                var p = fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){ /* ignore */ });
-                reqs.push(p);
-              }
+              var zUse = clampPrefetchZoom(defaultZoomSetting, meta);
+              var list = buildPrefetchList(zUse, perTemplateBudget);
+              list.forEach(function(key){
+                try {
+                  var parts = key.split('/');
+                  var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
+                  var url = tileUrlFromTemplate(meta.template, zt, xt, yt);
+                  reqs.push(fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){ /* ignore */ }));
+                } catch(_) {}
+              });
             } catch(_) {}
           });
           var prefetch = Promise.allSettled(reqs)
@@ -2984,8 +3013,8 @@
           var z = isFinite(defaultZoomSetting) ? Math.round(defaultZoomSetting) : 12;
           var dStart = privacyEnabled ? privacyStartD : 0;
           var dEnd = privacyEnabled ? privacyEndD : totalDistance;
-          // Prefetch at view zoom, z-2, z-4 — MapLibre requests DEM at these levels for mesh construction
-          var zLevels = [z, z - 2, z - 4]
+          // Prefetch at view zoom and immediate parent levels for stable terrain mesh transitions.
+          var zLevels = [z, z - 1, z - 2]
             .map(function(lv){ return Math.max(1, Math.min(demMaxzoom, lv)); })
             .filter(function(lv, i, arr){ return arr.indexOf(lv) === i; });
           var demSet = new Set();
@@ -4642,39 +4671,45 @@
       }
       function prefetchViewportTiles(margin, extraZoom, bearingDeg) {
         try {
-          var tpls = getRasterTileTemplates(); if (!tpls || tpls.length === 0) return;
+          var templates = getPrefetchTileTemplates(); if (!templates || templates.length === 0) return;
           var b = map.getBounds(); if (!b) return;
           var ex = expandBounds(b, margin || 0.2, bearingDeg); if (!ex) return;
           var zNow = Math.round(map.getZoom ? map.getZoom() : defaultZoomSetting);
           var levels = [zNow];
           if (extraZoom === true) { levels.push(zNow + 1); }
           var maxTiles = extraZoom ? 500 : 300;
-          var set = new Set();
-          levels.forEach(function(zz){
-            var z = Math.max(1, Math.min(19, zz));
-            var x0 = lon2tileX(ex.sw.lon, z), x1 = lon2tileX(ex.ne.lon, z);
-            var y0 = lat2tileY(ex.ne.lat, z), y1 = lat2tileY(ex.sw.lat, z); // note: TMS origin top-left
-            var minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
-            var minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
-            for (var x = minX; x <= maxX; x++) {
-              for (var y = minY; y <= maxY; y++) {
-                set.add(z + '/' + x + '/' + y);
-                if (set.size >= maxTiles) break;
-              }
-              if (set.size >= maxTiles) break;
-            }
-          });
+          var perTemplateBudget = Math.max(40, Math.floor(maxTiles / Math.max(1, templates.length)));
           var reqs = [];
-          set.forEach(function(key){
+          templates.forEach(function(meta) {
             try {
-              if (vpInflightKeys.has(key)) return;
-              vpInflightKeys.add(key);
-              var parts = key.split('/'); var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
-              for (var i = 0; i < tpls.length; i++) {
-                var url = tileUrlFromTemplate(tpls[i], zt, xt, yt);
-                var p = fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){});
-                reqs.push(p);
-              }
+              var set = new Set();
+              var levelSeen = Object.create(null);
+              levels.forEach(function(zz){
+                var z = clampPrefetchZoom(zz, meta);
+                if (levelSeen[z]) return;
+                levelSeen[z] = true;
+                var x0 = lon2tileX(ex.sw.lon, z), x1 = lon2tileX(ex.ne.lon, z);
+                var y0 = lat2tileY(ex.ne.lat, z), y1 = lat2tileY(ex.sw.lat, z); // note: TMS origin top-left
+                var minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+                var minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+                for (var x = minX; x <= maxX; x++) {
+                  for (var y = minY; y <= maxY; y++) {
+                    set.add(z + '/' + x + '/' + y);
+                    if (set.size >= perTemplateBudget) break;
+                  }
+                  if (set.size >= perTemplateBudget) break;
+                }
+              });
+              set.forEach(function(key){
+                try {
+                  var inflightKey = meta.key + '/' + key;
+                  if (vpInflightKeys.has(inflightKey)) return;
+                  vpInflightKeys.add(inflightKey);
+                  var parts = key.split('/'); var zt = parseInt(parts[0],10), xt = parseInt(parts[1],10), yt = parseInt(parts[2],10);
+                  var url = tileUrlFromTemplate(meta.template, zt, xt, yt);
+                  reqs.push(fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){}));
+                } catch(_) {}
+              });
             } catch(_) {}
           });
           Promise.allSettled(reqs).finally(function(){
@@ -5161,12 +5196,25 @@
         var rasterGate = tilePrefetchPromise || Promise.resolve();
         var demGate = demWarmup ? Promise.race([demWarmup, new Promise(function(r){ setTimeout(r, 4000); })]) : Promise.resolve();
         var gateProm = Promise.all([rasterGate, demGate]).then(function(){});
+        function doStartAfterGate() {
+          // After prefetch/DEM are done, wait for map to reach idle before zooming in.
+          // This ensures MapLibre has finished rendering at the overview zoom before we begin
+          // the zoom-in, so tiles at the playback zoom level are crisp from the start.
+          var mapIdleWait = new Promise(function(resolve) {
+            if (typeof map.isMoving === 'function' && !map.isMoving()) {
+              map.once('idle', resolve);
+              setTimeout(resolve, 1500); // cap: don't block longer than 1.5s
+            } else {
+              resolve();
+            }
+          });
+          mapIdleWait.then(function() {
+            if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
+            else { setPlaying(true); scheduleRaf(); }
+          });
+        }
         try { 
-          gateProm.then(function(){ 
-            // Only start zoom/playback after preloading is completely finished
-            if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
-            else { setPlaying(true); scheduleRaf(); } 
-          }); 
+          gateProm.then(doStartAfterGate);
         } catch(_) { 
           // Fallback: start immediately if promise fails
           if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
@@ -8588,6 +8636,7 @@
       var targetBearingSmooth = null; // temporal smoothing for target bearing
       var chartCooldown = 0; // seconds throttle for chart updates
       var bearingCooldown = 0; // seconds throttle for bearing updates
+      var cameraCooldown = 0; // seconds throttle for camera updates
       var forceCameraUpdate = true; // ensure first frame centers on marker
       var appliedBearing = null; // last bearing actually applied
       var currentPosLngLat = null; // last computed marker lng/lat for snap-to-center on seek
@@ -8635,23 +8684,21 @@
             map.once('moveend', function(){
               firstPlayZoomPending = false;
               // Give terrain a moment to settle at the final zoom/bearing before the first playback frame
-              try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.35 : 0.3, true, startBearing); } } catch (_) {}
+              try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, startBearing); } } catch (_) {}
               var started = false;
               var settleTimer = setTimeout(function(){
                 if (started) return;
                 started = true;
                 setPlaying(true);
                 scheduleRaf();
-              }, hasTerrain ? 180 : 0);
-              if (hasTerrain) {
-                map.once('idle', function(){
-                  if (started) return;
-                  started = true;
-                  try { clearTimeout(settleTimer); } catch (_) {}
-                  setPlaying(true);
-                  scheduleRaf();
-                });
-              }
+              }, 800);
+              map.once('idle', function(){
+                if (started) return;
+                started = true;
+                try { clearTimeout(settleTimer); } catch (_) {}
+                setPlaying(true);
+                scheduleRaf();
+              });
             });
           };
           // Gate the first zoom until map is idle to avoid tile churn
@@ -8725,6 +8772,7 @@
         cameraCenter = privacyEnabled ? positionAtDistance(privacyStartD).slice(0,2) : coords[0].slice(0, 2);
         chartCooldown = 0;
         forceCameraUpdate = true;
+        cameraCooldown = 0;
         appliedBearing = null;
         dayNightOverlayState = null;
         progressLineCooldown = 0;
@@ -8956,7 +9004,8 @@
         var routeProgSrc = map.getSource('fgpx-route-progress');
         if (routeProgSrc) {
           // Throttle progress line updates to ~40 FPS or 10 m movement
-          var needUpdate = progressNeedLineInit || (progressLineCooldown >= 0.083) || (Math.abs(d - progressLastDistance) >= 10);
+          var lineInterval = hasTerrain ? 0.12 : 0.083;
+          var needUpdate = progressNeedLineInit || (progressLineCooldown >= lineInterval) || (Math.abs(d - progressLastDistance) >= 10);
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
             while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < d) lo = mid + 1; else hi = mid; }
@@ -9122,7 +9171,11 @@
         var movePx = Math.hypot((nextPx.x - prevPx.x), (nextPx.y - prevPx.y));
         var bearingDeltaAbs = Math.abs(shortestAngleDelta(appliedBearing == null ? bearing : appliedBearing, bearing));
         // Only update camera if movement or rotation exceeds tiny thresholds, or forced
-        if (!userInteracting && (forceCameraUpdate || movePx > 0.5 || bearingDeltaAbs > 0.3)) {
+        var moveThresholdPx = hasTerrain ? 1.2 : 0.5;
+        var rotateThresholdDeg = hasTerrain ? 0.7 : 0.3;
+        var cameraInterval = hasTerrain ? 0.04 : 0.02;
+        var needCameraUpdate = forceCameraUpdate || (cameraCooldown >= cameraInterval) || (movePx > (moveThresholdPx * 2.2)) || (bearingDeltaAbs > (rotateThresholdDeg * 2.2));
+        if (!userInteracting && needCameraUpdate && (movePx > moveThresholdPx || bearingDeltaAbs > rotateThresholdDeg || forceCameraUpdate)) {
           cameraCenter[0] = nextCenterLng;
           cameraCenter[1] = nextCenterLat;
           var camOpts = { center: cameraCenter, bearing: bearing };
@@ -9130,16 +9183,20 @@
           map.jumpTo(camOpts);
           appliedBearing = bearing;
           forceCameraUpdate = false;
+          cameraCooldown = 0;
           // Dynamic edge prefetch at ~5–10 Hz; widen margin/zoom during larger rotations
           if (prefetchEnabled) {
             vpLastPrefetch += (lastFrameDt || 0.016);
             var extra = (bearingDeltaAbs > 1.0);
-            if (vpLastPrefetch >= (extra ? 0.1 : 0.18)) {
-              prefetchViewportTiles(extra ? 0.3 : 0.2, extra, bearing);
+            var terrainPrefetchInterval = extra ? 0.24 : 0.34;
+            var flatPrefetchInterval = extra ? 0.1 : 0.18;
+            var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
+            if (vpLastPrefetch >= prefetchInterval) {
+              prefetchViewportTiles(extra ? (hasTerrain ? 0.2 : 0.3) : (hasTerrain ? 0.15 : 0.2), hasTerrain ? false : extra, bearing);
               vpLastPrefetch = 0;
             }
             if (typeof map.setPrefetchZoomDelta === 'function') {
-              map.setPrefetchZoomDelta(extra ? (hasTerrain ? 7 : 5) : (hasTerrain ? 6 : 4));
+              map.setPrefetchZoomDelta(extra ? (hasTerrain ? 3 : 5) : (hasTerrain ? 2 : 4));
             }
           }
         }
@@ -9252,6 +9309,7 @@
         lastFrameDt = dt;
         chartCooldown += dt;
         bearingCooldown += dt;
+        cameraCooldown += dt;
         progressLineCooldown += dt;
         
         // Handle video recording frame capture
@@ -9475,15 +9533,12 @@
             stopRecording();
           }
           // At end handoff, prefetch once and briefly settle terrain before zoom-out transition.
-          try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.35 : 0.3, true, bearing); } } catch (_) {}
+          try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, bearing); } } catch (_) {}
           var endTransitionStarted = false;
           var endFitDuration = hasTerrain ? 1100 : 800;
           var endTransitionTimer = setTimeout(function(){
             if (endTransitionStarted) return;
             endTransitionStarted = true;
-            if (hasTerrain && terrainActive) {
-              try { map.setTerrain(null); terrainActive = false; terrainTemporarilyDisabled = true; } catch (_) {}
-            }
             fitMapToBounds(endFitDuration, hasTerrain ? { pitch: 0 } : null);
           }, hasTerrain ? 320 : 0);
           if (hasTerrain) {
@@ -9491,9 +9546,6 @@
               if (endTransitionStarted) return;
               endTransitionStarted = true;
               try { clearTimeout(endTransitionTimer); } catch (_) {}
-              if (terrainActive) {
-                try { map.setTerrain(null); terrainActive = false; terrainTemporarilyDisabled = true; } catch (_) {}
-              }
               fitMapToBounds(endFitDuration, { pitch: 0 });
             });
           }
