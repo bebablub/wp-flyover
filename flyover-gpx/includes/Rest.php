@@ -15,6 +15,12 @@ use WP_REST_Response;
  */
 final class Rest
 {
+    private static function resolve_photo_order_mode(): string
+    {
+        $mode = \sanitize_key((string) \get_option('fgpx_photo_order_mode', 'geo_first'));
+        return \in_array($mode, ['geo_first', 'time_first'], true) ? $mode : 'geo_first';
+    }
+
     /**
      * Compress coordinates using relative encoding for smaller payloads.
      * Reduces coordinate precision while maintaining visual accuracy.
@@ -831,6 +837,7 @@ final class Rest
             'bounds' => \is_array($bounds) ? $bounds : [],
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
+            'photoOrderMode' => self::resolve_photo_order_mode(),
             'waypoints' => $waypoints,
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,
@@ -1239,6 +1246,7 @@ final class Rest
             'bounds' => is_array($bounds) ? $bounds : [],
             'points_count' => $pointsCount,
             'photos' => self::dedupe_photos_by_location($photos),
+            'photoOrderMode' => self::resolve_photo_order_mode(),
             'waypoints' => $waypoints,
             'simplified' => $simplifyEnabled ? true : false,
             'estimatedPower' => $estimatedPower,

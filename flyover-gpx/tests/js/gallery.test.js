@@ -483,6 +483,18 @@ describe('gallery.js', () => {
     expect(window.FGPX.simulationCityWindowKm).toBe(14);
   });
 
+  test('gallery player photoOrderMode overrides existing global FGPX value', () => {
+    window.FGPX.photoOrderMode = 'geo_first';
+    window.FGPXGallery.playerConfig = Object.assign({}, window.FGPXGallery.playerConfig || {}, {
+      photoOrderMode: 'time_first',
+    });
+
+    loadGallery();
+    document.querySelector('.fgpx-gallery-card').click();
+
+    expect(window.FGPX.photoOrderMode).toBe('time_first');
+  });
+
   test('copy link falls back to execCommand when Clipboard API is unavailable', async () => {
     delete navigator.clipboard;
     document.execCommand = jest.fn(() => true);

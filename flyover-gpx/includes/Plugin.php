@@ -160,6 +160,7 @@ final class Plugin
             'wind_rose_color_west' => '',
             // Shortcode overrides for feature toggles
             'photos_enabled' => '',
+            'photo_order_mode' => '',
             'weather_visible_by_default' => '',
             'wind_analysis_enabled' => '',
             'daynight_enabled' => '',
@@ -303,6 +304,18 @@ final class Plugin
             return $optionValue === '1';
         };
 
+        $resolvePhotoOrderMode = function($attrRaw, $optionValue) {
+            $attr = \sanitize_key((string) $attrRaw);
+            if (\in_array($attr, ['geo_first', 'time_first'], true)) {
+                return $attr;
+            }
+            $fallback = \sanitize_key((string) $optionValue);
+            if (\in_array($fallback, ['geo_first', 'time_first'], true)) {
+                return $fallback;
+            }
+            return 'geo_first';
+        };
+
         // Helper function for color resolution
         $resolveColorAttr = function($attrRaw, $optionValue) {
             $attr = \trim($attrRaw);
@@ -336,6 +349,7 @@ final class Plugin
 
         // Resolve feature toggles
         $photosEnabledFinal = $resolveBooleanAttr((string) ($atts['photos_enabled'] ?? ''), $options['fgpx_photos_enabled']);
+        $photoOrderModeFinal = $resolvePhotoOrderMode((string) ($atts['photo_order_mode'] ?? ''), $options['fgpx_photo_order_mode'] ?? 'geo_first');
         $gpxDownloadFinal   = $resolveBooleanAttr((string) ($atts['gpx_download'] ?? ''), $options['fgpx_gpx_download_enabled']);
         $weatherVisibleByDefaultFinal = $resolveBooleanAttr((string) ($atts['weather_visible_by_default'] ?? ''), $options['fgpx_weather_visible_by_default']);
         $windAnalysisEnabledFinal = $resolveBooleanAttr((string) ($atts['wind_analysis_enabled'] ?? ''), $options['fgpx_wind_analysis_enabled']);
@@ -400,6 +414,7 @@ final class Plugin
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
             'showLabels' => $showLabelsFinal,
             'photosEnabled' => $photosEnabledFinal,
+            'photoOrderMode' => $photoOrderModeFinal,
             'privacyEnabled' => $privacyEnabledFinal,
             'privacyKm' => $privacyKmFinal,
             'hudEnabled' => $hudEnabledFinal,
@@ -586,6 +601,7 @@ final class Plugin
                   'defaultSpeed:' . $defaultSpeedFinal . ',' .
                   'showLabels:' . ($showLabelsFinal ? 'true' : 'false') . ',' .
                   'photosEnabled:' . ($photosEnabledFinal ? 'true' : 'false') . ',' .
+                  'photoOrderMode:"' . \esc_js($photoOrderModeFinal) . '",' .
                   'privacyEnabled:' . ($privacyEnabledFinal ? 'true' : 'false') . ',' .
                   'privacyKm:' . \floatval($privacyKmFinal) . ',' .
                   'hudEnabled:' . ($hudEnabledFinal ? 'true' : 'false') . ',' .

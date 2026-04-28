@@ -47,6 +47,14 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertStringContainsString("\$waypointsRaw = \\get_post_meta(\$id, 'fgpx_waypoints', true);", $source);
     }
 
+    public function test_photo_order_mode_is_exposed_in_both_rest_and_ajax_response_payloads(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertSame(2, substr_count($source, "'photoOrderMode' => self::resolve_photo_order_mode()"));
+    }
+
     public function test_admin_upload_path_clears_stale_waypoints_when_no_waypoints_exist(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';

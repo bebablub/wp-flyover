@@ -369,6 +369,10 @@ final class Admin
 		$galleryAutoSpeedValue = $options['fgpx_gallery_auto_speed_value'];
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
+		$photoOrderMode = isset($options['fgpx_photo_order_mode']) ? (string) $options['fgpx_photo_order_mode'] : 'geo_first';
+		if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
+			$photoOrderMode = 'geo_first';
+		}
 		$photoMaxDistance = $options['fgpx_photo_max_distance'];
 		$gpxDownloadEnabled = $options['fgpx_gpx_download_enabled'];
 		$privacyEnabled = $options['fgpx_privacy_enabled'];
@@ -629,6 +633,13 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
 		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_order_mode">' . \esc_html__('Photo ordering mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_photo_order_mode" name="fgpx_photo_order_mode">';
+		echo '<option value="geo_first"' . selected($photoOrderMode, 'geo_first', false) . '>' . \esc_html__('Route order (GPS first)', 'flyover-gpx') . '</option>';
+		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
@@ -2233,10 +2244,15 @@ final class Admin
 		// Use type-safe validation helpers for float and int values
 		$privacyKm = $this->getValidFloat('fgpx_privacy_km', 3.0, 0.0, 100.0);
 		$photoMaxDistance = $this->getValidInt('fgpx_photo_max_distance', 100, 1, 50000);
+		$photoOrderMode = isset($_POST['fgpx_photo_order_mode']) ? \sanitize_key((string) $_POST['fgpx_photo_order_mode']) : 'geo_first';
+		if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
+			$photoOrderMode = 'geo_first';
+		}
 		$simplifyTarget = $this->getValidInt('fgpx_backend_simplify_target', 1200, 300, 2500);
 		
 		\update_option('fgpx_privacy_km', (string) $privacyKm, true);
 		\update_option('fgpx_photo_max_distance', (string) $photoMaxDistance, true);
+		\update_option('fgpx_photo_order_mode', $photoOrderMode, true);
 		\update_option('fgpx_backend_simplify_target', (string) $simplifyTarget, true);
 		// Use type-safe validation helpers for color values
 		\update_option('fgpx_chart_color', $this->getValidColor('fgpx_chart_color', '#ff5500'), true);

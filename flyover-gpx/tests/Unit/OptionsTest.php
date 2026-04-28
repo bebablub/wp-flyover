@@ -79,6 +79,7 @@ final class OptionsTest extends TestCase
             // Features
             'hud_enabled'              => ['fgpx_hud_enabled'],
             'photos_enabled'           => ['fgpx_photos_enabled'],
+            'photo_order_mode'         => ['fgpx_photo_order_mode'],
             'photo_max_distance'       => ['fgpx_photo_max_distance'],
             'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
             'lazy_viewport'            => ['fgpx_lazy_viewport'],
@@ -118,6 +119,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
+        $this->assertSame('geo_first', Options::get('fgpx_photo_order_mode'));
         $this->assertSame('100',    Options::get('fgpx_photo_max_distance'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
@@ -226,7 +228,7 @@ final class OptionsTest extends TestCase
             'windRoseColorEast', 'windRoseColorWest',
             'daynightEnabled', 'daynightMapEnabled',
             'daynightMapColor', 'daynightMapOpacity',
-            'photosEnabled', 'photoMaxDistance', 'showLabels',
+            'photosEnabled', 'photoOrderMode', 'photoMaxDistance', 'showLabels',
             'defaultZoom', 'defaultPitch', 'styleJson',
             'backendSimplify', 'backendSimplifyTarget',
             'debugWeatherData',
@@ -270,10 +272,23 @@ final class OptionsTest extends TestCase
         // Strings
         $this->assertIsString($f['chartColor'],    'chartColor must be string');
         $this->assertIsString($f['chartColor2'],   'chartColor2 must be string');
+        $this->assertIsString($f['photoOrderMode'], 'photoOrderMode must be string');
         $this->assertIsString($f['styleJson'],     'styleJson must be string');
         $this->assertIsString($f['themeMode'],          'themeMode must be string');
         $this->assertIsString($f['themeAutoDarkStart'], 'themeAutoDarkStart must be string');
         $this->assertIsString($f['themeAutoDarkEnd'],   'themeAutoDarkEnd must be string');
+        $this->assertContains($f['photoOrderMode'], ['geo_first', 'time_first'], 'photoOrderMode must be a valid value');
         $this->assertContains($f['themeMode'], ['system', 'dark', 'bright', 'auto'], 'themeMode must be a valid value');
+    }
+
+    public function test_get_for_frontend_normalizes_photo_order_mode_with_whitelist_fallback(): void
+    {
+        $optionsFile = dirname(__DIR__, 2) . '/includes/Options.php';
+        $source = (string) file_get_contents($optionsFile);
+
+        $this->assertStringContainsString('$photoOrderMode = \\sanitize_key((string) $options[\'fgpx_photo_order_mode\']);', $source);
+        $this->assertStringContainsString('if (!\\in_array($photoOrderMode, [\'geo_first\', \'time_first\'], true))', $source);
+        $this->assertStringContainsString('$photoOrderMode = \'geo_first\';', $source);
+        $this->assertStringContainsString('\'photoOrderMode\' => $photoOrderMode', $source);
     }
 }

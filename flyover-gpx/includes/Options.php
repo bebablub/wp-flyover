@@ -42,6 +42,7 @@ final class Options
 
 		// Privacy & Features
 		'fgpx_photos_enabled' => '0',
+		'fgpx_photo_order_mode' => 'geo_first',
 		'fgpx_photo_max_distance' => '100',
 		'fgpx_gpx_download_enabled' => '0',
 		'fgpx_privacy_enabled' => '0',
@@ -284,6 +285,10 @@ final class Options
 	public static function getForFrontend(): array
 	{
 		$options = self::getAll();
+		$photoOrderMode = \sanitize_key((string) $options['fgpx_photo_order_mode']);
+		if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
+			$photoOrderMode = 'geo_first';
+		}
 		
 		return [
 			// Chart colors
@@ -314,6 +319,7 @@ final class Options
 			'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
 			'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
 			'photosEnabled' => $options['fgpx_photos_enabled'] === '1',
+			'photoOrderMode' => $photoOrderMode,
 			'photoMaxDistance' => (int) $options['fgpx_photo_max_distance'],
 			'showLabels' => $options['fgpx_show_labels'] !== '0',
 			'debugWeatherData' => $options['fgpx_debug_weather_data'] === '1',

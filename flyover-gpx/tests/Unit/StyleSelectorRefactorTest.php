@@ -10,6 +10,11 @@ use PHPUnit\Framework\TestCase;
 
 final class StyleSelectorRefactorTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        $GLOBALS['fgpx_test_localized_scripts'] = [];
+    }
+
     /**
      * Test new style modes: default, url, inline
      */
@@ -170,5 +175,31 @@ final class StyleSelectorRefactorTest extends TestCase
             // The Admin preview code should handle this internally
             $this->assertNotEquals($old, $new);
         }
+    }
+
+    public function test_shortcode_photo_order_mode_override_is_localized(): void
+    {
+        $html = (new Plugin())->render_shortcode([
+            'id' => '1',
+            'photo_order_mode' => 'time_first',
+        ]);
+
+        $this->assertStringContainsString('data-track-id="1"', $html);
+        $this->assertIsArray($GLOBALS['fgpx_test_localized_scripts'] ?? null);
+        $localized = $GLOBALS['fgpx_test_localized_scripts']['fgpx-lazy']['FGPX'] ?? null;
+        $this->assertIsArray($localized);
+        $this->assertSame('time_first', $localized['photoOrderMode'] ?? null);
+    }
+
+    public function test_shortcode_invalid_photo_order_mode_falls_back_to_geo_first(): void
+    {
+        (new Plugin())->render_shortcode([
+            'id' => '1',
+            'photo_order_mode' => 'invalid_mode',
+        ]);
+
+        $localized = $GLOBALS['fgpx_test_localized_scripts']['fgpx-lazy']['FGPX'] ?? null;
+        $this->assertIsArray($localized);
+        $this->assertSame('geo_first', $localized['photoOrderMode'] ?? null);
     }
 }

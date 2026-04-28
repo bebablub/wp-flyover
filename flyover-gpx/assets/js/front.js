@@ -1139,7 +1139,16 @@
       }
     } catch(e) { /* speed calculation error */ }
 
-    // New: dedupe photos by rounded location and precompute per-photo route distance (geo-first policy).
+    var photoOrderMode = (window.FGPX && typeof FGPX.photoOrderMode === 'string') ? String(FGPX.photoOrderMode) : 'geo_first';
+    if (photoOrderMode !== 'time_first' && photoOrderMode !== 'geo_first') { photoOrderMode = 'geo_first'; }
+
+    function parsePhotoTimestampMs(ph) {
+      if (!ph || !ph.timestamp) return NaN;
+      var ms = Date.parse(ph.timestamp);
+      return isNaN(ms) ? NaN : ms;
+    }
+
+    // New: dedupe photos by rounded location and precompute per-photo route distance.
     (function preparePhotos() {
       if (!Array.isArray(photos) || photos.length === 0) return;
       var seen = Object.create(null);
@@ -1153,6 +1162,7 @@
               var idx = nearestCoordIndex([ph.lon, ph.lat], coords);
               ph._idx = idx;
               ph._distAlong = cumDist[idx]; // meters along the route
+              ph._timestampMs = parsePhotoTimestampMs(ph);
               unique.push(ph);
               seen[key] = true; // drop subsequent photos at same location (prevents flicker)
             } else {
@@ -1161,18 +1171,42 @@
             }
           } else {
             // no GPS → keep; will fallback to timestamp if needed
+            ph._timestampMs = parsePhotoTimestampMs(ph);
             unique.push(ph);
           }
         }
-        // Ensure geo-cued photos trigger in correct order
-        unique.sort(function (a, b) {
-          var da = (typeof a._distAlong === 'number') ? a._distAlong : Infinity;
-          var db = (typeof b._distAlong === 'number') ? b._distAlong : Infinity;
-          return da - db;
-        });
+        if (photoOrderMode === 'time_first') {
+          unique.sort(function (a, b) {
+            var ta = (typeof a._timestampMs === 'number' && isFinite(a._timestampMs)) ? a._timestampMs : Infinity;
+            var tb = (typeof b._timestampMs === 'number' && isFinite(b._timestampMs)) ? b._timestampMs : Infinity;
+            if (ta !== tb) return ta - tb;
+            var ida = (typeof a.id === 'number') ? a.id : Infinity;
+            var idb = (typeof b.id === 'number') ? b.id : Infinity;
+            return ida - idb;
+          });
+        } else {
+          // Ensure geo-cued photos trigger in correct order
+          unique.sort(function (a, b) {
+            var da = (typeof a._distAlong === 'number') ? a._distAlong : Infinity;
+            var db = (typeof b._distAlong === 'number') ? b._distAlong : Infinity;
+            return da - db;
+          });
+        }
       } else {
         // No route distance available → keep original list (will fall back to timestamp cues)
         unique = photos.slice();
+        if (photoOrderMode === 'time_first') {
+          unique.sort(function (a, b) {
+            var ta = parsePhotoTimestampMs(a);
+            var tb = parsePhotoTimestampMs(b);
+            var sa = isNaN(ta) ? Infinity : ta;
+            var sb = isNaN(tb) ? Infinity : tb;
+            if (sa !== sb) return sa - sb;
+            var ida = (a && typeof a.id === 'number') ? a.id : Infinity;
+            var idb = (b && typeof b.id === 'number') ? b.id : Infinity;
+            return ida - idb;
+          });
+        }
       }
       photos = unique;
     })();
@@ -2699,6 +2733,7 @@
       var mediaViewerWasPlaying = false;
       var mediaGridRendered = false; // Memoization flag: grid DOM cached after first render
       var cachedMediaGridDOM = null; // Cached grid DOM and empty state for re-use on tab switch
+      var cachedMediaGridPage = -1; // Cached page index to avoid reusing stale page content
       var mediaGridPage = 0; // Current page for pagination (0-indexed)
       var mediaGridPageSize = 12; // Items per page (3x4 grid on desktop)
       var lastPlaybackSec = null; // for robust crossing detection at high speeds
@@ -2742,14 +2777,58 @@
           mediaItems = [];
           return;
         }
+
+        function estimatePhotoDistanceAlong(ph) {
+          if (!ph) return null;
+          if (typeof ph._distAlong === 'number' && isFinite(ph._distAlong)) return ph._distAlong;
+
+          if (typeof ph.lon === 'number' && typeof ph.lat === 'number' && Array.isArray(cumDist) && cumDist.length === coords.length) {
+            try {
+              var idx = nearestCoordIndex([ph.lon, ph.lat], coords);
+              if (isFinite(idx) && idx >= 0 && idx < cumDist.length) return Number(cumDist[idx]);
+            } catch (_) {}
+          }
+
+          if (ph.timestamp && Array.isArray(timeOffsets) && timeOffsets.length > 1 && Array.isArray(timestamps) && timestamps.length > 0 && Array.isArray(cumDist) && cumDist.length === coords.length) {
+            try {
+              var ts = Date.parse(ph.timestamp);
+              if (!isNaN(ts)) {
+                var baseTsStr = null;
+                for (var bt = 0; bt < timestamps.length; bt++) { if (timestamps[bt] != null) { baseTsStr = timestamps[bt]; break; } }
+                var t0 = baseTsStr ? Date.parse(baseTsStr) : NaN;
+                if (!isNaN(t0)) {
+                  var sec = (ts - t0) / 1000;
+                  var lo = 0, hi = timeOffsets.length - 1;
+                  while (lo < hi) { var mid = (lo + hi) >>> 1; if (timeOffsets[mid] < sec) lo = mid + 1; else hi = mid; }
+                  var i = Math.max(1, lo);
+                  var u0 = Number(timeOffsets[i - 1]);
+                  var u1 = Number(timeOffsets[i]);
+                  var u = (isFinite(u0) && isFinite(u1) && u1 > u0) ? (sec - u0) / (u1 - u0) : 0;
+                  var d0 = Number(cumDist[i - 1]) || 0;
+                  var d1 = Number(cumDist[i]) || d0;
+                  return d0 + ((d1 - d0) * u);
+                }
+              }
+            } catch (_) {}
+          }
+
+          return null;
+        }
+
         var trackLinked = [];
         var offTrack = [];
+        var orderedItems = [];
         for (var mi = 0; mi < photos.length; mi++) {
           var ph = photos[mi];
           if (!ph) continue;
           var thumb = String(ph.thumbUrl || ph.fullUrl || '');
           var full = String(ph.fullUrl || ph.thumbUrl || '');
           if (!thumb && !full) continue;
+          var routeDistMeters = estimatePhotoDistanceAlong(ph);
+          if (privacyEnabled) {
+            if (routeDistMeters == null) { continue; }
+            if (routeDistMeters < privacyStartD || routeDistMeters > privacyEndD) { continue; }
+          }
           var title = nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || extractFilenameFromUrl(full || thumb) || 'Photo';
           var caption = nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || '';
           var sourceLabel = '';
@@ -2762,8 +2841,8 @@
             if (!isNaN(ts.getTime())) timeLabel = ts.toLocaleString();
           }
           var routeKm = '';
-          if (typeof ph._distAlong === 'number' && isFinite(ph._distAlong)) {
-            routeKm = (ph._distAlong / 1000).toFixed(2) + ' km';
+          if (routeDistMeters != null && isFinite(routeDistMeters)) {
+            routeKm = (routeDistMeters / 1000).toFixed(2) + ' km';
           }
           var item = {
             photo: ph,
@@ -2776,10 +2855,11 @@
             routeKm: routeKm,
             isGpsLinked: (typeof ph.lat === 'number' && typeof ph.lon === 'number')
           };
+          orderedItems.push(item);
           if (item.isGpsLinked) trackLinked.push(item);
           else offTrack.push(item);
         }
-        mediaItems = trackLinked.concat(offTrack);
+        mediaItems = (photoOrderMode === 'time_first') ? orderedItems : trackLinked.concat(offTrack);
         invalidateMediaGridCache(); // Clear cached grid when media items change
       }
 
@@ -2804,29 +2884,31 @@
       function invalidateMediaGridCache() {
         mediaGridRendered = false;
         cachedMediaGridDOM = null;
+        cachedMediaGridPage = -1;
         mediaGridPage = 0; // Reset to first page when cache invalidated
       }
 
       function renderMediaGrid() {
         if (!ui.mediaPanel) return;
         // If grid already rendered, reuse cached DOM instead of rebuilding
-        if (mediaGridRendered && cachedMediaGridDOM !== null) {
+        if (mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {
           ui.mediaPanel.innerHTML = '';
           ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));
+          var startIdx = mediaGridPage * mediaGridPageSize;
           // Re-attach event listeners to cloned cards
           var clonedCards = ui.mediaPanel.querySelectorAll('.fgpx-media-card');
           for (var ci = 0; ci < clonedCards.length; ci++) {
             (function(idx) {
               clonedCards[idx].addEventListener('click', function() {
-                openMediaViewerAt(idx);
+                openMediaViewerAt(startIdx + idx);
               });
             })(ci);
           }
           // Re-attach pagination button listeners
           var prevBtn = ui.mediaPanel.querySelector('.fgpx-media-page-prev');
           var nextBtn = ui.mediaPanel.querySelector('.fgpx-media-page-next');
-          if (prevBtn) prevBtn.addEventListener('click', function() { mediaGridPage = Math.max(0, mediaGridPage - 1); renderMediaGrid(); });
-          if (nextBtn) nextBtn.addEventListener('click', function() { var maxPage = Math.ceil(mediaItems.length / mediaGridPageSize) - 1; mediaGridPage = Math.min(maxPage, mediaGridPage + 1); renderMediaGrid(); });
+          if (prevBtn) prevBtn.addEventListener('click', function() { mediaGridPage = Math.max(0, mediaGridPage - 1); mediaGridRendered = false; renderMediaGrid(); });
+          if (nextBtn) nextBtn.addEventListener('click', function() { var maxPage = Math.ceil(mediaItems.length / mediaGridPageSize) - 1; mediaGridPage = Math.min(maxPage, mediaGridPage + 1); mediaGridRendered = false; renderMediaGrid(); });
           return;
         }
         // First render: build DOM and cache it
@@ -2836,9 +2918,13 @@
           empty.className = 'fgpx-media-empty';
           empty.setAttribute('role', 'status');
           empty.setAttribute('aria-label', 'Media gallery empty');
-          empty.textContent = 'No photos available for this track.';
+          var privacyFilteredOut = privacyEnabled && Array.isArray(photos) && photos.length > 0;
+          empty.textContent = privacyFilteredOut
+            ? 'No photos available in the visible privacy window.'
+            : 'No photos available for this track.';
           ui.mediaPanel.appendChild(empty);
-          cachedMediaGridDOM = empty.cloneNode(true);
+          cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+          cachedMediaGridPage = mediaGridPage;
           mediaGridRendered = true;
           return;
         }
@@ -2901,6 +2987,7 @@
           prevBtn.disabled = (mediaGridPage === 0);
           prevBtn.addEventListener('click', function() {
             mediaGridPage = Math.max(0, mediaGridPage - 1);
+            mediaGridRendered = false;
             renderMediaGrid();
           });
           pagination.appendChild(prevBtn);
@@ -2917,6 +3004,7 @@
           nextBtn.disabled = (mediaGridPage >= totalPages - 1);
           nextBtn.addEventListener('click', function() {
             mediaGridPage = Math.min(totalPages - 1, mediaGridPage + 1);
+            mediaGridRendered = false;
             renderMediaGrid();
           });
           pagination.appendChild(nextBtn);
@@ -2924,8 +3012,9 @@
           ui.mediaPanel.appendChild(pagination);
         }
         
-        // Cache the grid without pagination controls for reuse
-        cachedMediaGridDOM = grid.cloneNode(true);
+        // Cache the rendered media panel for the active page.
+        cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+        cachedMediaGridPage = mediaGridPage;
         mediaGridRendered = true;
       }
 

@@ -17,6 +17,17 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString("\$weatherSampling = 'distance';", $source);
     }
 
+    public function test_photo_order_mode_is_whitelisted_to_known_modes(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString("\\sanitize_key((string) \\$_POST['fgpx_photo_order_mode'])", $source);
+        $this->assertStringContainsString("if (!\\in_array(\$photoOrderMode, ['geo_first', 'time_first'], true))", $source);
+        $this->assertStringContainsString("\$photoOrderMode = 'geo_first';", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_photo_order_mode', \$photoOrderMode, true);", $source);
+    }
+
     public function test_weather_priority_order_filters_unknown_tokens_and_restores_defaults(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';

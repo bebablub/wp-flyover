@@ -169,4 +169,14 @@ final class GalleryShortcodeTest extends TestCase
 
         $this->assertStringContainsString("'styleJson' => (string) (\$galleryCfg['styleJson'] ?? \$options['fgpx_default_style_json'])", $source);
     }
+
+    public function test_gallery_shortcode_accepts_photo_order_mode_shortcode_override(): void
+    {
+        $galleryFile = dirname(__DIR__, 2) . '/includes/GalleryShortcode.php';
+        $source = (string) file_get_contents($galleryFile);
+
+        $this->assertStringContainsString("'photo_order_mode' => \$galleryPhotoOrderModeDefault", $source);
+        $this->assertStringContainsString("\$photoOrderMode = \\sanitize_key((string) (\$atts['photo_order_mode'] ?? \$galleryPhotoOrderModeDefault));", $source);
+        $this->assertStringContainsString("'photoOrderMode' => \$photoOrderMode", $source);
+    }
 }

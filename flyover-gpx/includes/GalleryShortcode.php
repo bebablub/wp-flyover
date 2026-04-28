@@ -79,6 +79,10 @@ final class GalleryShortcode
 
         $galleryShowViewToggleDefault = (($options['fgpx_gallery_show_view_toggle'] ?? '1') === '1') ? '1' : '0';
         $galleryShowSearchDefault = (($options['fgpx_gallery_show_search'] ?? '1') === '1') ? '1' : '0';
+        $galleryPhotoOrderModeDefault = \sanitize_key((string) ($options['fgpx_photo_order_mode'] ?? 'geo_first'));
+        if (!\in_array($galleryPhotoOrderModeDefault, ['geo_first', 'time_first'], true)) {
+            $galleryPhotoOrderModeDefault = 'geo_first';
+        }
 
         $defaults = [
             'per_page' => (string) $galleryDefaultPerPage,
@@ -88,6 +92,7 @@ final class GalleryShortcode
             'show_view_toggle' => $galleryShowViewToggleDefault,
             'show_search' => $galleryShowSearchDefault,
             'default_sort' => $galleryDefaultSort,
+            'photo_order_mode' => $galleryPhotoOrderModeDefault,
         ];
 
         $atts = \shortcode_atts($defaults, $atts, 'flyover_gpx_gallery');
@@ -130,6 +135,10 @@ final class GalleryShortcode
         if (!\in_array($defaultSort, ['newest', 'distance', 'duration', 'gain', 'title'], true)) {
             $defaultSort = 'newest';
         }
+        $photoOrderMode = \sanitize_key((string) ($atts['photo_order_mode'] ?? $galleryPhotoOrderModeDefault));
+        if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
+            $photoOrderMode = 'geo_first';
+        }
         $themeMode = \sanitize_key((string) ($options['fgpx_theme_mode'] ?? 'system'));
         if ($themeMode === 'dark') {
             $themeAttr = ' data-fgpx-theme="dark"';
@@ -150,6 +159,7 @@ final class GalleryShortcode
             'resolvedApiKey' => $resolvedApiKey,
             'defaultSort' => $defaultSort,
             'showSearch' => $showSearch,
+            'photoOrderMode' => $photoOrderMode,
         ], $rootId);
 
         return '<div id="' . \esc_attr($rootId) . '" class="fgpx-gallery" data-root-id="' . \esc_attr($rootId) . '"' . $themeAttr . '>'
@@ -623,6 +633,7 @@ final class GalleryShortcode
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
             'showLabels' => $options['fgpx_show_labels'] !== '0',
             'photosEnabled' => $options['fgpx_photos_enabled'] === '1',
+            'photoOrderMode' => (isset($galleryCfg['photoOrderMode']) && \in_array((string) $galleryCfg['photoOrderMode'], ['geo_first', 'time_first'], true)) ? (string) $galleryCfg['photoOrderMode'] : 'geo_first',
             'privacyEnabled' => $options['fgpx_privacy_enabled'] === '1',
             'privacyKm' => (float) $options['fgpx_privacy_km'],
             'hudEnabled' => $options['fgpx_hud_enabled'] === '1',

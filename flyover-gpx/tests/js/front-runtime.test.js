@@ -46,6 +46,117 @@ function mockRejectedFetch(message) {
   return fetchMock;
 }
 
+function installMapLibreMock() {
+  class MockMap {
+    constructor() {
+      this._sources = {};
+      this._layers = {};
+      this._layout = {};
+      this._paint = {};
+    }
+
+    addControl() { return this; }
+    fitBounds() { return this; }
+    resize() { return this; }
+    remove() { return this; }
+    easeTo() { return this; }
+    flyTo() { return this; }
+    setCenter() { return this; }
+    setZoom() { return this; }
+    setPitch() { return this; }
+    setTerrain() { return this; }
+    hasImage() { return false; }
+    addImage() { return this; }
+    getCanvas() { return document.createElement('canvas'); }
+    getZoom() { return 12; }
+    getStyle() { return { layers: [], sources: {} }; }
+    getBounds() {
+      return {
+        getSouthWest: () => ({ lng: 0, lat: 0 }),
+        getNorthEast: () => ({ lng: 1, lat: 1 }),
+      };
+    }
+
+    addSource(id, source) {
+      this._sources[id] = Object.assign({}, source, {
+        setData: jest.fn(),
+      });
+      return this;
+    }
+
+    getSource(id) {
+      return this._sources[id] || null;
+    }
+
+    removeSource(id) {
+      delete this._sources[id];
+      return this;
+    }
+
+    addLayer(layer) {
+      if (layer && layer.id) this._layers[layer.id] = layer;
+      return this;
+    }
+
+    getLayer(id) {
+      return this._layers[id] || null;
+    }
+
+    removeLayer(id) {
+      delete this._layers[id];
+      return this;
+    }
+
+    setLayoutProperty(id, key, value) {
+      this._layout[id] = this._layout[id] || {};
+      this._layout[id][key] = value;
+      return this;
+    }
+
+    getLayoutProperty(id, key) {
+      return this._layout[id] ? this._layout[id][key] : undefined;
+    }
+
+    setPaintProperty(id, key, value) {
+      this._paint[id] = this._paint[id] || {};
+      this._paint[id][key] = value;
+      return this;
+    }
+
+    queryRenderedFeatures() { return []; }
+    project(lngLat) { return { x: lngLat[0] || 0, y: lngLat[1] || 0 }; }
+    unproject(point) { return { lng: point.x || 0, lat: point.y || 0 }; }
+
+    on(event, cb) {
+      if (event === 'load' || event === 'styledata' || event === 'idle') {
+        setTimeout(() => cb(), 0);
+      }
+      return this;
+    }
+
+    once(event, cb) {
+      if (event === 'load' || event === 'styledata' || event === 'idle') {
+        setTimeout(() => cb(), 0);
+      }
+      return this;
+    }
+  }
+
+  class MockMarker {
+    constructor() { this._lngLat = null; }
+    setLngLat(lngLat) { this._lngLat = lngLat; return this; }
+    addTo() { return this; }
+    remove() { return this; }
+  }
+
+  window.maplibregl = {
+    Map: MockMap,
+    Marker: MockMarker,
+    NavigationControl: function NavigationControl() {},
+    FullscreenControl: function FullscreenControl() {},
+  };
+}
+
 describe('front.js runtime minimal regressions', () => {
   let originalGlobalFetch;
   let originalWindowFetch;
@@ -597,10 +708,11 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('media grid rendering: memoizes DOM after first render', () => {
-    expect(FRONT_SRC).toContain('if (mediaGridRendered && cachedMediaGridDOM !== null) {');
+    expect(FRONT_SRC).toContain('if (mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {');
     expect(FRONT_SRC).toContain('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));');
     expect(FRONT_SRC).toContain('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');');
-    expect(FRONT_SRC).toContain('cachedMediaGridDOM = grid.cloneNode(true);');
+    expect(FRONT_SRC).toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
+    expect(FRONT_SRC).toContain('cachedMediaGridPage = mediaGridPage;');
     expect(FRONT_SRC).toContain('mediaGridRendered = true;');
   });
 
@@ -617,6 +729,24 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('if (item.isGpsLinked) trackLinked.push(item);');
     expect(FRONT_SRC).toContain('else offTrack.push(item);');
     expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
+  });
+
+  test('photo ordering mode: supports geo_first and time_first', () => {
+    expect(FRONT_SRC).toContain("var photoOrderMode = (window.FGPX && typeof FGPX.photoOrderMode === 'string') ? String(FGPX.photoOrderMode) : 'geo_first';");
+    expect(FRONT_SRC).toContain("if (photoOrderMode !== 'time_first' && photoOrderMode !== 'geo_first') { photoOrderMode = 'geo_first'; }");
+    expect(FRONT_SRC).toContain("if (photoOrderMode === 'time_first') {");
+  });
+
+  test('photo ordering mode: time_first sorts by timestamp and falls back by id', () => {
+    expect(FRONT_SRC).toContain('var ta = (typeof a._timestampMs === \'number\' && isFinite(a._timestampMs)) ? a._timestampMs : Infinity;');
+    expect(FRONT_SRC).toContain('if (ta !== tb) return ta - tb;');
+    expect(FRONT_SRC).toContain('var ida = (typeof a.id === \'number\') ? a.id : Infinity;');
+    expect(FRONT_SRC).toContain('return ida - idb;');
+  });
+
+  test('media grid ordering mode: time_first preserves prepared photo sequence', () => {
+    expect(FRONT_SRC).toContain("mediaItems = (photoOrderMode === 'time_first')");
+    expect(FRONT_SRC).toContain(': trackLinked.concat(offTrack);');
   });
 
   test('media card accessibility: aria-labels are 1-based indices', () => {
@@ -644,6 +774,13 @@ describe('front.js runtime minimal regressions', () => {
   test('media grid rebuilds on cloned nodes: re-attaches click listeners', () => {
     expect(FRONT_SRC).toContain('for (var ci = 0; ci < clonedCards.length; ci++) {');
     expect(FRONT_SRC).toContain('clonedCards[idx].addEventListener(\'click\', function() {');
+    expect(FRONT_SRC).toContain('openMediaViewerAt(startIdx + idx);');
+  });
+
+  test('media grid applies strict privacy window filter for derivable photos only', () => {
+    expect(FRONT_SRC).toContain('if (privacyEnabled) {');
+    expect(FRONT_SRC).toContain('if (routeDistMeters == null) { continue; }');
+    expect(FRONT_SRC).toContain('if (routeDistMeters < privacyStartD || routeDistMeters > privacyEndD) { continue; }');
   });
 
   test('media grid pagination: divides items into pages of 12', () => {
@@ -671,5 +808,156 @@ describe('front.js runtime minimal regressions', () => {
   test('media tab hidden when photosEnabled is false', () => {
     expect(FRONT_SRC).toContain('if (FGPX.photosEnabled) {');
     expect(FRONT_SRC).toContain('chartTabs.appendChild(tabMedia);');
+  });
+
+  test('runtime media pagination opens correct photo on page 2', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
+
+    const photos = [];
+    for (let i = 1; i <= 13; i += 1) {
+      photos.push({
+        id: i,
+        title: 'Photo ' + i,
+        caption: 'Photo ' + i,
+        lat: 48 + (i * 0.0001),
+        lon: 16 + (i * 0.0001),
+        timestamp: new Date(Date.UTC(2026, 0, 1, 0, i, 0)).toISOString(),
+        thumbUrl: 'https://example.test/p' + i + '-thumb.jpg',
+        fullUrl: 'https://example.test/p' + i + '.jpg',
+      });
+    }
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [[16, 48, 100], [16.02, 48.02, 120]],
+          properties: {
+            timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:13:00Z'],
+            cumulativeDistance: [0, 2000],
+            heartRates: [],
+            cadences: [],
+            temperatures: [],
+            powers: [],
+            windSpeeds: [],
+            windDirections: [],
+            windImpacts: [],
+          },
+        },
+        bounds: [16, 48, 16.02, 48.02],
+        stats: {},
+        photos,
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      photosEnabled: true,
+      photoOrderMode: 'time_first',
+      weatherEnabled: false,
+      privacyEnabled: false,
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
+    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
+    expect(mediaTab).toBeTruthy();
+    mediaTab.click();
+
+    const nextBtn = document.querySelector('#fgpx-app .fgpx-media-page-next');
+    expect(nextBtn).toBeTruthy();
+    nextBtn.click();
+
+    const firstCardPage2 = document.querySelector('#fgpx-app .fgpx-media-card');
+    expect(firstCardPage2).toBeTruthy();
+    firstCardPage2.click();
+
+    const overlayImg = document.querySelector('#fgpx-app .fgpx-photo-overlay img');
+    expect(overlayImg).toBeTruthy();
+    expect(String(overlayImg.getAttribute('src'))).toContain('p13.jpg');
+  });
+
+  test('runtime privacy mode hides media items without derivable route distance', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [[16, 48, 100], [16.04, 48.04, 110]],
+          properties: {
+            timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:10:00Z'],
+            cumulativeDistance: [0, 4000],
+            heartRates: [],
+            cadences: [],
+            temperatures: [],
+            powers: [],
+            windSpeeds: [],
+            windDirections: [],
+            windImpacts: [],
+          },
+        },
+        bounds: [16, 48, 16.04, 48.04],
+        stats: {},
+        photos: [
+          {
+            id: 1,
+            title: 'Start photo',
+            lat: 48,
+            lon: 16,
+            timestamp: '2026-01-01T00:00:10Z',
+            thumbUrl: 'https://example.test/start-thumb.jpg',
+            fullUrl: 'https://example.test/start.jpg',
+          },
+          {
+            id: 2,
+            title: 'Unknown offtrack',
+            lat: null,
+            lon: null,
+            timestamp: null,
+            thumbUrl: 'https://example.test/offtrack-thumb.jpg',
+            fullUrl: 'https://example.test/offtrack.jpg',
+          },
+        ],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      photosEnabled: true,
+      photoOrderMode: 'geo_first',
+      weatherEnabled: false,
+      privacyEnabled: true,
+      privacyKm: 1,
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
+    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
+    expect(mediaTab).toBeTruthy();
+    mediaTab.click();
+
+    const panelText = String(document.querySelector('#fgpx-app .fgpx-media-panel')?.textContent || '');
+    expect(panelText).not.toContain('Unknown offtrack');
   });
 });

@@ -137,6 +137,7 @@ Parameters:
 - `elevation_coloring` (optional): Enable/disable elevation-based route coloring for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 - `speed` (optional): Override default playback speed for this embed. Example: `speed="50"`. Defaults to admin setting.
 - `gpx_download` (optional): Show/hide the GPX download button for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
+- `photo_order_mode` (optional): Override photo ordering for this embed. Accepts `geo_first|time_first`. Defaults to admin setting.
 
 Additional per-shortcode overrides (all optional, defaulting to admin settings):
 
@@ -150,6 +151,7 @@ Additional per-shortcode overrides (all optional, defaulting to admin settings):
   - `wind_rose_color_north`, `wind_rose_color_south`, `wind_rose_color_east`, `wind_rose_color_west`
 - Features
   - `photos_enabled`: `true|false`
+  - `photo_order_mode`: `geo_first|time_first`
   - `weather_visible_by_default`: `true|false`
   - `wind_analysis_enabled`: `true|false`
   - `daynight_enabled`: `true|false` (chart visualization)
@@ -167,6 +169,7 @@ Examples:
 [flyover_gpx id="123" hud="false"]
 [flyover_gpx id="123" elevation_coloring="true" speed="75"]
 [flyover_gpx id="123" gpx_download="true"]
+[flyover_gpx id="123" photo_order_mode="time_first"]
 [flyover_gpx id="123" show_labels="true" speed_chart_color="#1976d2" power_chart_color="#059669"]
 [flyover_gpx id="123" wind_analysis_enabled="true" wind_impact_chart_color="#ff6b35" wind_rose_chart_color="#4ecdc4"]
 ```
@@ -218,6 +221,7 @@ Parameters (all optional):
 - `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
 - `show_search` (optional): Show search input. Accepts `1|0|true|false`. Default `1`.
 - `default_sort` (optional): Initial sort key. One of `newest|distance|duration|gain|title`. Default `newest`.
+- `photo_order_mode` (optional): Photo ordering for the inline player. One of `geo_first|time_first`. Default from admin setting.
 
 Default resolution order:
 
@@ -271,6 +275,7 @@ Examples:
 [flyover_gpx_gallery per_page="6" height="500px"]
 [flyover_gpx_gallery show_view_toggle="0"]
 [flyover_gpx_gallery show_search="0" default_sort="distance"]
+[flyover_gpx_gallery photo_order_mode="time_first"]
 ```
 ### Inline Style JSON (Admin)
 

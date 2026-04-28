@@ -58,6 +58,9 @@
     if (playerConfig.photosEnabled !== undefined) {
       window.FGPX.photosEnabled = playerConfig.photosEnabled;
     }
+    if (playerConfig.photoOrderMode !== undefined) {
+      window.FGPX.photoOrderMode = playerConfig.photoOrderMode;
+    }
   }
 
   function ensurePlayerAssets(cfg) {
