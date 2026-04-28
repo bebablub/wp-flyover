@@ -817,6 +817,57 @@ if (!function_exists('wp_get_attachment_url')) {
     }
 }
 
+if (!function_exists('wp_get_attachment_caption')) {
+    function wp_get_attachment_caption(int $attachmentId)
+    {
+        $post = get_post($attachmentId);
+        if ($post instanceof WP_Post) {
+            return (string) ($post->post_excerpt ?? '');
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('wp_update_post')) {
+    function wp_update_post(array $postarr, bool $wp_error = false)
+    {
+        if (isset($GLOBALS['fgpx_test_wp_update_post']) && is_callable($GLOBALS['fgpx_test_wp_update_post'])) {
+            return $GLOBALS['fgpx_test_wp_update_post']($postarr, $wp_error);
+        }
+
+        $postId = isset($postarr['ID']) ? (int) $postarr['ID'] : 0;
+        if ($postId <= 0) {
+            return $wp_error ? new WP_Error('invalid_post', 'Invalid post ID.') : 0;
+        }
+
+        $post = get_post($postId);
+        if (!$post instanceof WP_Post) {
+            return $wp_error ? new WP_Error('post_not_found', 'Post not found.') : 0;
+        }
+
+        $existing = isset($GLOBALS['fgpx_test_posts'][$postId]) ? $GLOBALS['fgpx_test_posts'][$postId] : [];
+        if ($existing instanceof WP_Post) {
+            $existing = get_object_vars($existing);
+        }
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+
+        foreach ($postarr as $key => $value) {
+            if ($key === 'ID') {
+                continue;
+            }
+            $existing[(string) $key] = $value;
+        }
+
+        $existing['ID'] = $postId;
+        $GLOBALS['fgpx_test_posts'][$postId] = new WP_Post($existing);
+
+        return $postId;
+    }
+}
+
 if (!function_exists('wp_upload_bits')) {
     function wp_upload_bits(string $name, $deprecated, string $bits): array
     {

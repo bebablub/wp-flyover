@@ -173,6 +173,84 @@
             });
         });
 
+        $('.fgpx-sync-gmedia-caption').on('click', function(e) {
+            e.preventDefault();
+
+            const $link = $(this);
+            const postId = $link.data('post-id');
+            const nonce = String($link.data('nonce') || '');
+            const gmediaAvailable = !!previewCfg.gmediaSyncAvailable;
+            const gmediaReason = String(previewCfg.gmediaSyncReason || '').trim();
+            const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now?');
+            const confirmOverwrite = String(previewCfg.gmediaSyncConfirmOverwrite || 'Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.');
+
+            if (!gmediaAvailable) {
+                showAdminNotice(gmediaReason || 'Grand Media is not available. Install and activate Grand Media before syncing captions.', 'error');
+                return;
+            }
+
+            if (!postId || !nonce) {
+                showAdminNotice('Invalid data for GMedia caption sync.', 'error');
+                return;
+            }
+
+            if (!confirm(confirmRun)) {
+                return;
+            }
+
+            const overwrite = confirm(confirmOverwrite);
+
+            $link.css('pointer-events', 'none').attr('aria-disabled', 'true');
+            const originalText = $link.text();
+            $link.text('Syncing...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_sync_gmedia_caption',
+                    post_id: postId,
+                    nonce: nonce,
+                    overwrite: overwrite ? '1' : '0'
+                },
+                success: function(response) {
+                    if (response && response.success) {
+                        $link.text('✓ Synced').css('color', '#46b450');
+                        const message = response.data && response.data.message
+                            ? String(response.data.message)
+                            : 'GMedia caption sync finished.';
+                        showAdminNotice(message, 'success');
+                    } else {
+                        $link.text('✗ Failed').css('color', '#dc3232');
+                        const message = response && response.data && response.data.message
+                            ? String(response.data.message)
+                            : 'GMedia caption sync failed.';
+                        showAdminNotice(message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    $link.text('✗ Error').css('color', '#dc3232');
+                    let message = 'Network error during GMedia caption sync.';
+                    try {
+                        const parsed = JSON.parse(xhr.responseText || '{}');
+                        if (parsed && parsed.data && parsed.data.message) {
+                            message = String(parsed.data.message);
+                        }
+                    } catch (_) {}
+
+                    showAdminNotice(message, 'error');
+                },
+                complete: function() {
+                    setTimeout(function() {
+                        $link.css('pointer-events', '').removeAttr('aria-disabled');
+                        if ($link.text() === 'Syncing...') {
+                            $link.text(originalText);
+                        }
+                    }, 1500);
+                }
+            });
+        });
+
         $('.fgpx-generate-preview').on('click', async function(e) {
             e.preventDefault();
 
@@ -418,6 +496,43 @@
             const triggerId = this.id;
             const select = triggerId === 'doaction2' ? $('#bulk-action-selector-bottom') : $('#bulk-action-selector-top');
             const action = String(select.val() || '');
+
+            if (action === 'fgpx_sync_gmedia_captions') {
+                const gmediaAvailable = !!previewCfg.gmediaSyncAvailable;
+                const gmediaReason = String(previewCfg.gmediaSyncReason || '').trim();
+                if (!gmediaAvailable) {
+                    e.preventDefault();
+                    showAdminNotice(gmediaReason || 'Grand Media is not available. Install and activate Grand Media before syncing captions.', 'error');
+                    return;
+                }
+
+                const selectedIds = $('input[name="post[]"]:checked').map(function() {
+                    return parseInt($(this).val(), 10);
+                }).get().filter(function(v) { return Number.isFinite(v) && v > 0; });
+
+                if (selectedIds.length === 0) {
+                    e.preventDefault();
+                    showAdminNotice('Select at least one track before running GMedia caption sync.', 'warning');
+                    return;
+                }
+
+                const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now?');
+                const confirmOverwrite = String(previewCfg.gmediaSyncConfirmOverwrite || 'Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.');
+                if (!confirm(confirmRun)) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const overwrite = confirm(confirmOverwrite);
+                const $form = $('#posts-filter');
+                $form.find('input[name="fgpx_sync_overwrite"]').remove();
+                $('<input>')
+                    .attr('type', 'hidden')
+                    .attr('name', 'fgpx_sync_overwrite')
+                    .val(overwrite ? '1' : '0')
+                    .appendTo($form);
+                return;
+            }
 
             if (action !== 'fgpx_generate_previews' && action !== 'fgpx_regenerate_previews') {
                 return;

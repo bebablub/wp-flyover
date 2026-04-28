@@ -48,6 +48,7 @@ final class Admin
 		\add_action('wp_ajax_fgpx_save_preview_mode', [$this, 'ajax_save_preview_mode']);
 		\add_action('wp_ajax_fgpx_clear_cache', [$this, 'ajax_clear_track_cache']);
 		\add_action('wp_ajax_fgpx_test_smart_api_keys', [$this, 'ajax_test_smart_api_keys']);
+		\add_action('wp_ajax_fgpx_sync_gmedia_caption', [$this, 'ajax_sync_gmedia_caption']);
 		\add_action('save_post', [$this, 'sync_track_preview_references_on_post_save'], 20, 3);
 		\add_action('post_updated', [$this, 'sync_track_preview_references_on_post_updated'], 20, 3);
 		// Invalidate track caches when embedding posts change status or are deleted
@@ -1410,6 +1411,9 @@ final class Admin
 		// Add weather enrichment action
 		$nonce = \wp_create_nonce('fgpx_enrich_weather');
 		$actions['fgpx_enrich_weather'] = '<a href="#" class="fgpx-enrich-weather" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($nonce) . '">' . \esc_html__('Enrich Weather', 'flyover-gpx') . '</a>';
+
+		$syncNonce = \wp_create_nonce('fgpx_sync_gmedia_caption');
+		$actions['fgpx_sync_gmedia_caption'] = '<a href="#" class="fgpx-sync-gmedia-caption" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($syncNonce) . '">' . \esc_html__('Sync GMedia Captions', 'flyover-gpx') . '</a>';
 
 		$previewNonce = \wp_create_nonce('fgpx_generate_preview');
 		$hasPreview = $this->get_track_preview_attachment_id((int) $post->ID) > 0;
@@ -3141,11 +3145,17 @@ final class Admin
 			\wp_enqueue_media();
 		}
 		$options = Options::getAll();
+		$gmediaDetection = GMediaCaptionSync::detect();
 		\wp_localize_script('fgpx-admin', 'FGPXAdminPreview', [
 			'restBase' => \esc_url_raw(\site_url('/wp-json/fgpx/v1')),
 			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
 			'defaultStyle' => (string) ($options['fgpx_default_style'] ?? 'raster'),
 			'defaultStyleUrl' => (string) ($options['fgpx_default_style_url'] ?? ''),
+			'gmediaSyncAvailable' => !empty($gmediaDetection['active']),
+			'gmediaSyncReason' => (string) ($gmediaDetection['reason'] ?? ''),
+			'gmediaSyncDefaultOverwrite' => true,
+			'gmediaSyncConfirmRun' => (string) \__('Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.', 'flyover-gpx'),
+			'gmediaSyncConfirmOverwrite' => (string) \__('Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.', 'flyover-gpx'),
 			'snapshotWidth' => 1200,
 			'snapshotHeight' => 630,
 			'bulkMaxTracks' => 25,
@@ -3762,7 +3772,38 @@ final class Admin
 	 */
 	public function maybe_show_admin_notice(): void
 	{
+		$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
+		$isTrackListScreen = $screen && isset($screen->id) && (string) $screen->id === 'edit-fgpx_track';
+
 		if (!isset($_GET['fgpx_msg'])) {
+			if (
+				$isTrackListScreen
+				&& !isset($_GET['fgpx_gmedia_synced'])
+				&& !isset($_GET['fgpx_gmedia_errors'])
+				&& !isset($_GET['fgpx_gmedia_unavailable'])
+			) {
+				$gmediaDetection = GMediaCaptionSync::detect();
+				if (!empty($gmediaDetection['active'])) {
+					$version = (string) ($gmediaDetection['version'] ?? 'unknown');
+					$dbVersion = (string) ($gmediaDetection['dbVersion'] ?? 'unknown');
+					echo '<div class="notice notice-info is-dismissible"><p>'
+						. sprintf(
+							\__('Grand Media detected (plugin version: %1$s, DB version: %2$s). Caption sync is ready.', 'flyover-gpx'),
+							\esc_html($version),
+							\esc_html($dbVersion)
+						)
+						. '</p></div>';
+				} else {
+					$reason = (string) ($gmediaDetection['reason'] ?? \__('Grand Media is not available.', 'flyover-gpx'));
+					echo '<div class="notice notice-warning is-dismissible"><p>'
+						. sprintf(
+							\__('Grand Media sync unavailable: %s', 'flyover-gpx'),
+							\esc_html($reason)
+						)
+						. '</p></div>';
+				}
+			}
+
 			if (isset($_GET['fgpx_preview_generated']) || isset($_GET['fgpx_preview_errors']) || isset($_GET['fgpx_preview_skipped'])) {
 				$generated = isset($_GET['fgpx_preview_generated']) ? (int) $_GET['fgpx_preview_generated'] : 0;
 				$errors = isset($_GET['fgpx_preview_errors']) ? (int) $_GET['fgpx_preview_errors'] : 0;
@@ -3815,6 +3856,36 @@ final class Admin
 							_n('%d track failed to enrich with weather data.', '%d tracks failed to enrich with weather data.', $errors, 'flyover-gpx'),
 							$errors
 						) . '</p></div>';
+				}
+			}
+
+			if (isset($_GET['fgpx_gmedia_synced']) || isset($_GET['fgpx_gmedia_errors']) || isset($_GET['fgpx_gmedia_unavailable'])) {
+				$updated = isset($_GET['fgpx_gmedia_synced']) ? (int) $_GET['fgpx_gmedia_synced'] : 0;
+				$matched = isset($_GET['fgpx_gmedia_matched']) ? (int) $_GET['fgpx_gmedia_matched'] : 0;
+				$errors = isset($_GET['fgpx_gmedia_errors']) ? (int) $_GET['fgpx_gmedia_errors'] : 0;
+				$unavailable = isset($_GET['fgpx_gmedia_unavailable']) ? (int) $_GET['fgpx_gmedia_unavailable'] : 0;
+
+				if ($unavailable === 1) {
+					echo '<div class="notice notice-error is-dismissible"><p>'
+						. \esc_html__('Grand Media is not available. Install and activate Grand Media before syncing captions.', 'flyover-gpx')
+						. '</p></div>';
+				} elseif ($errors > 0) {
+					echo '<div class="notice notice-warning is-dismissible"><p>'
+						. sprintf(
+							__('GMedia caption sync finished: %1$d captions updated from %2$d filename matches, with %3$d errors.', 'flyover-gpx'),
+							$updated,
+							$matched,
+							$errors
+						)
+						. '</p></div>';
+				} else {
+					echo '<div class="notice notice-success is-dismissible"><p>'
+						. sprintf(
+							__('GMedia caption sync finished: %1$d captions updated from %2$d filename matches.', 'flyover-gpx'),
+							$updated,
+							$matched
+						)
+						. '</p></div>';
 				}
 			}
 			return;
@@ -4099,6 +4170,7 @@ final class Admin
 	public function add_bulk_actions(array $actions): array
 	{
 		$actions['fgpx_enrich_weather'] = \esc_html__('Enrich with Weather Data', 'flyover-gpx');
+		$actions['fgpx_sync_gmedia_captions'] = \esc_html__('Sync GMedia Captions', 'flyover-gpx');
 		$actions['fgpx_generate_previews'] = \esc_html__('Generate Preview Images', 'flyover-gpx');
 		$actions['fgpx_regenerate_previews'] = \esc_html__('Regenerate Preview Images', 'flyover-gpx');
 		return $actions;
@@ -4111,6 +4183,34 @@ final class Admin
 	{
 		if (empty($post_ids)) {
 			return $redirect_to;
+		}
+
+		if ($doaction === 'fgpx_sync_gmedia_captions') {
+			$overwrite = !isset($_REQUEST['fgpx_sync_overwrite']) || (string) $_REQUEST['fgpx_sync_overwrite'] !== '0';
+			try {
+				$sync = GMediaCaptionSync::syncCaptions($overwrite);
+			} catch (\Throwable $e) {
+				$sync = [
+					'available' => false,
+					'message' => 'GMedia caption sync failed unexpectedly.',
+				];
+			}
+
+			if (!(bool) ($sync['available'] ?? false)) {
+				return \add_query_arg([
+					'fgpx_gmedia_unavailable' => 1,
+				], $redirect_to);
+			}
+
+			if ((int) ($sync['updated'] ?? 0) > 0) {
+				$this->invalidate_all_track_caches_after_caption_sync();
+			}
+
+			return \add_query_arg([
+				'fgpx_gmedia_synced' => (int) ($sync['updated'] ?? 0),
+				'fgpx_gmedia_matched' => (int) ($sync['matched'] ?? 0),
+				'fgpx_gmedia_errors' => (int) ($sync['errors'] ?? 0),
+			], $redirect_to);
 		}
 
 		if ($doaction === 'fgpx_generate_previews' || $doaction === 'fgpx_regenerate_previews') {
@@ -4283,6 +4383,80 @@ final class Admin
 				\wp_send_json_error(['message' => 'Weather enrichment failed: ' . $errorMsg], 500);
 			} else {
 				\wp_send_json_error(['message' => 'Failed to enrich with weather data (unknown error)'], 500);
+			}
+		}
+	}
+
+	/**
+	 * AJAX handler for syncing Grand Media titles into WP attachment captions.
+	 */
+	public function ajax_sync_gmedia_caption(): void
+	{
+		if (!$this->validateNonce('fgpx_sync_gmedia_caption', 'nonce', false)) {
+			\wp_send_json_error(['message' => 'Security check failed'], 403);
+		}
+
+		if (!$this->validateCapability('edit_posts', false)) {
+			\wp_send_json_error(['message' => 'Insufficient permissions'], 403);
+		}
+
+		$overwrite = !isset($_POST['overwrite']) || (string) $_POST['overwrite'] !== '0';
+		try {
+			$sync = GMediaCaptionSync::syncCaptions($overwrite);
+		} catch (\Throwable $e) {
+			\wp_send_json_error([
+				'message' => 'GMedia caption sync failed unexpectedly.',
+			], 500);
+		}
+
+		if (!(bool) ($sync['available'] ?? false)) {
+			\wp_send_json_error([
+				'message' => (string) ($sync['message'] ?? 'Grand Media is not available.'),
+				'result' => $sync,
+			], 400);
+		}
+
+		if ((int) ($sync['errors'] ?? 0) > 0) {
+			\wp_send_json_error([
+				'message' => (string) ($sync['message'] ?? 'Caption sync finished with errors.'),
+				'result' => $sync,
+			], 500);
+		}
+
+		if ((int) ($sync['updated'] ?? 0) > 0) {
+			$this->invalidate_all_track_caches_after_caption_sync();
+		}
+
+		\wp_send_json_success([
+			'message' => (string) ($sync['message'] ?? 'Caption sync finished.'),
+			'result' => $sync,
+		]);
+	}
+
+	/**
+	 * Caption sync updates attachment captions globally, so clear all track caches.
+	 */
+	private function invalidate_all_track_caches_after_caption_sync(): void
+	{
+		global $wpdb;
+
+		$trackIds = [];
+		if (
+			isset($wpdb)
+			&& isset($wpdb->posts)
+			&& \is_string($wpdb->posts)
+			&& \method_exists($wpdb, 'prepare')
+			&& \method_exists($wpdb, 'get_col')
+		) {
+			$query = $wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", 'fgpx_track');
+			if (\is_string($query) && $query !== '') {
+				$trackIds = array_map('intval', (array) $wpdb->get_col($query));
+			}
+		}
+
+		foreach ($trackIds as $trackId) {
+			if ($trackId > 0) {
+				self::clear_all_track_caches($trackId);
 			}
 		}
 	}
