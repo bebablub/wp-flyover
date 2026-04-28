@@ -810,6 +810,24 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('chartTabs.appendChild(tabMedia);');
   });
 
+  test('route arrows: spacing uses named heuristic with bounded percent denominator', () => {
+    expect(FRONT_SRC).toContain('var arrowSpacingReferencePx = 550;');
+    expect(FRONT_SRC).toContain('var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));');
+    expect(FRONT_SRC).toContain('if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }');
+    expect(FRONT_SRC).toContain('if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }');
+  });
+
+  test('route arrows: derives stroke color from theme mode and validates canvas context', () => {
+    expect(FRONT_SRC).toContain("var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';");
+    expect(FRONT_SRC).toContain("var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';");
+    expect(FRONT_SRC).toContain("if (!actx) { throw new Error('Route arrow canvas context unavailable'); }");
+    expect(FRONT_SRC).toContain('actx.strokeStyle = arrowStrokeColor;');
+  });
+
+  test('route arrows: logs warning instead of failing silently', () => {
+    expect(FRONT_SRC).toContain("} catch(e) { DBG.warn('Route arrow rendering skipped', e); }");
+  });
+
   test('runtime media pagination opens correct photo on page 2', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
     installMapLibreMock();

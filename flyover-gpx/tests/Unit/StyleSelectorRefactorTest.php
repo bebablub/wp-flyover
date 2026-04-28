@@ -202,4 +202,18 @@ final class StyleSelectorRefactorTest extends TestCase
         $this->assertIsArray($localized);
         $this->assertSame('geo_first', $localized['photoOrderMode'] ?? null);
     }
+
+    public function test_shortcode_arrow_overrides_are_localized_and_clamped(): void
+    {
+        (new Plugin())->render_shortcode([
+            'id' => '1',
+            'arrows_enabled' => 'true',
+            'arrows_km' => '250',
+        ]);
+
+        $localized = $GLOBALS['fgpx_test_localized_scripts']['fgpx-lazy']['FGPX'] ?? null;
+        $this->assertIsArray($localized);
+        $this->assertTrue($localized['arrowsEnabled'] ?? false);
+        $this->assertSame(100.0, $localized['arrowsKm'] ?? null);
+    }
 }

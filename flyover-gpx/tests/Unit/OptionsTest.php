@@ -78,6 +78,8 @@ final class OptionsTest extends TestCase
             'privacy_km'               => ['fgpx_privacy_km'],
             // Features
             'hud_enabled'              => ['fgpx_hud_enabled'],
+            'arrows_enabled'           => ['fgpx_arrows_enabled'],
+            'arrows_km'                => ['fgpx_arrows_km'],
             'photos_enabled'           => ['fgpx_photos_enabled'],
             'photo_order_mode'         => ['fgpx_photo_order_mode'],
             'photo_max_distance'       => ['fgpx_photo_max_distance'],
@@ -119,6 +121,8 @@ final class OptionsTest extends TestCase
         $this->assertSame('11',     Options::get('fgpx_default_zoom'));
         $this->assertSame('25',     Options::get('fgpx_default_speed'));
         $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
+        $this->assertSame('0',      Options::get('fgpx_arrows_enabled'));
+        $this->assertSame('5',      Options::get('fgpx_arrows_km'));
         $this->assertSame('geo_first', Options::get('fgpx_photo_order_mode'));
         $this->assertSame('100',    Options::get('fgpx_photo_max_distance'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));

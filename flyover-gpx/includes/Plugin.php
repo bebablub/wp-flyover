@@ -161,6 +161,8 @@ final class Plugin
             // Shortcode overrides for feature toggles
             'photos_enabled' => '',
             'photo_order_mode' => '',
+            'arrows_enabled' => '',
+            'arrows_km' => '',
             'weather_visible_by_default' => '',
             'wind_analysis_enabled' => '',
             'daynight_enabled' => '',
@@ -316,6 +318,14 @@ final class Plugin
             return 'geo_first';
         };
 
+        $resolveFloatRangeAttr = function($attrRaw, $optionValue, $min, $max) {
+            if ($attrRaw !== '' && \is_numeric($attrRaw)) {
+                return max($min, min($max, (float) $attrRaw));
+            }
+            $fallback = (float) $optionValue;
+            return max($min, min($max, $fallback));
+        };
+
         // Helper function for color resolution
         $resolveColorAttr = function($attrRaw, $optionValue) {
             $attr = \trim($attrRaw);
@@ -350,6 +360,8 @@ final class Plugin
         // Resolve feature toggles
         $photosEnabledFinal = $resolveBooleanAttr((string) ($atts['photos_enabled'] ?? ''), $options['fgpx_photos_enabled']);
         $photoOrderModeFinal = $resolvePhotoOrderMode((string) ($atts['photo_order_mode'] ?? ''), $options['fgpx_photo_order_mode'] ?? 'geo_first');
+        $arrowsEnabledFinal = $resolveBooleanAttr((string) ($atts['arrows_enabled'] ?? ''), $options['fgpx_arrows_enabled'] ?? '0');
+        $arrowsKmFinal = $resolveFloatRangeAttr((string) ($atts['arrows_km'] ?? ''), $options['fgpx_arrows_km'] ?? '5', 0.5, 100.0);
         $gpxDownloadFinal   = $resolveBooleanAttr((string) ($atts['gpx_download'] ?? ''), $options['fgpx_gpx_download_enabled']);
         $weatherVisibleByDefaultFinal = $resolveBooleanAttr((string) ($atts['weather_visible_by_default'] ?? ''), $options['fgpx_weather_visible_by_default']);
         $windAnalysisEnabledFinal = $resolveBooleanAttr((string) ($atts['wind_analysis_enabled'] ?? ''), $options['fgpx_wind_analysis_enabled']);
@@ -415,6 +427,8 @@ final class Plugin
             'showLabels' => $showLabelsFinal,
             'photosEnabled' => $photosEnabledFinal,
             'photoOrderMode' => $photoOrderModeFinal,
+            'arrowsEnabled' => $arrowsEnabledFinal,
+            'arrowsKm' => $arrowsKmFinal,
             'privacyEnabled' => $privacyEnabledFinal,
             'privacyKm' => $privacyKmFinal,
             'hudEnabled' => $hudEnabledFinal,
@@ -568,8 +582,8 @@ final class Plugin
                   'weatherColorRain:"' . \esc_js($weatherColorRain) . '",' .
                   'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
                   'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '",' .
-                  'arrowsEnabled:' . ($options['fgpx_arrows_enabled'] === '1' ? 'true' : 'false') . ',' .
-                  'arrowsKm:' . \floatval($options['fgpx_arrows_km']) .
+                                    'arrowsEnabled:' . ($arrowsEnabledFinal ? 'true' : 'false') . ',' .
+                                    'arrowsKm:' . \floatval($arrowsKmFinal) .
                 '} );',
                 'after'
             );
@@ -630,8 +644,8 @@ final class Plugin
                                     'daynightVisibleByDefault:' . ($daynightVisibleByDefaultFinal ? 'true' : 'false') . ',' .
                                     'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '",' .
                                     'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '",' .
-                                    'arrowsEnabled:' . ($options['fgpx_arrows_enabled'] === '1' ? 'true' : 'false') . ',' .
-                                    'arrowsKm:' . \floatval($options['fgpx_arrows_km']) .
+                                    'arrowsEnabled:' . ($arrowsEnabledFinal ? 'true' : 'false') . ',' .
+                                    'arrowsKm:' . \floatval($arrowsKmFinal) .
                 '};',
                 'after'
             );

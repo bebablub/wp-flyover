@@ -1531,19 +1531,25 @@
           var arrowsKm = parseFloat((FGPX.arrowsKm) || '5');
           if (!isFinite(arrowsKm) || arrowsKm <= 0) { arrowsKm = 5; }
           var arrowRepeatPct = (arrowsKm * 1000) / totalDistance * 100;
-          var arrowSpacingPx = Math.round(550 / arrowRepeatPct);
+          // Reference viewport width heuristic used to translate distance-based repeats
+          // into readable line symbol spacing across typical embed sizes.
+          var arrowSpacingReferencePx = 550;
+          var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));
           if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }
           if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }
           var arrowColor = FGPX.chartColor || '#ff5500';
+          var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';
+          var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';
           // Build a small canvas triangle pointing up (north = 0°).
           // MapLibre auto-rotates it to follow the line bearing (icon-rotation-alignment:'auto').
           var routeArrowIconId = 'fgpx-route-dir-arrow';
           if (!map.hasImage(routeArrowIconId)) {
             var ac = document.createElement('canvas'); ac.width = 20; ac.height = 20;
             var actx = ac.getContext('2d');
+            if (!actx) { throw new Error('Route arrow canvas context unavailable'); }
             actx.clearRect(0, 0, 20, 20);
             actx.fillStyle = arrowColor;
-            actx.strokeStyle = 'rgba(255,255,255,0.85)';
+            actx.strokeStyle = arrowStrokeColor;
             actx.lineWidth = 1.5;
             actx.beginPath();
             actx.moveTo(10, 1);   // tip
@@ -1569,7 +1575,7 @@
               'icon-keep-upright': false
             }
           });
-        } catch(_) {}
+        } catch(e) { DBG.warn('Route arrow rendering skipped', e); }
       }
 
       // Prepare elevation coloring data for progressive route

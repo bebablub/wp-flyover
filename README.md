@@ -135,6 +135,8 @@ Parameters:
 - `privacy_km` (optional): Override privacy distance in kilometers for this embed. Example: `privacy_km="3"`. Defaults to the admin setting.
 - `hud` (optional): Toggle the live HUD overlay (speed/distance/elevation/heading). Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 - `elevation_coloring` (optional): Enable/disable elevation-based route coloring for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
+- `arrows_enabled` (optional): Show/hide route direction arrows for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
+- `arrows_km` (optional): Override route arrow spacing in kilometers for this embed. Range `0.5` to `100`. Defaults to admin setting.
 - `speed` (optional): Override default playback speed for this embed. Example: `speed="50"`. Defaults to admin setting.
 - `gpx_download` (optional): Show/hide the GPX download button for this embed. Accepts `true|false|1|0|yes|no|on|off`. Defaults to admin setting.
 - `photo_order_mode` (optional): Override photo ordering for this embed. Accepts `geo_first|time_first`. Defaults to admin setting.
@@ -150,6 +152,8 @@ Additional per-shortcode overrides (all optional, defaulting to admin settings):
   - `wind_impact_chart_color`, `wind_rose_chart_color`
   - `wind_rose_color_north`, `wind_rose_color_south`, `wind_rose_color_east`, `wind_rose_color_west`
 - Features
+  - `arrows_enabled`: `true|false`
+  - `arrows_km`: float from `0.5` to `100`
   - `photos_enabled`: `true|false`
   - `photo_order_mode`: `geo_first|time_first`
   - `weather_visible_by_default`: `true|false`
@@ -167,6 +171,7 @@ Examples:
 [flyover_gpx id="123" style="inline"]
 [flyover_gpx id="123" privacy="true" privacy_km="2.5"]
 [flyover_gpx id="123" hud="false"]
+[flyover_gpx id="123" arrows_enabled="true" arrows_km="2"]
 [flyover_gpx id="123" elevation_coloring="true" speed="75"]
 [flyover_gpx id="123" gpx_download="true"]
 [flyover_gpx id="123" photo_order_mode="time_first"]
