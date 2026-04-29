@@ -173,3 +173,4 @@ final class GMediaCaptionSyncTest extends TestCase
         return $GLOBALS['wpdb'];
     }
 }
+}

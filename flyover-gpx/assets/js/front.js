@@ -2865,6 +2865,7 @@
           if (item.isGpsLinked) trackLinked.push(item);
           else offTrack.push(item);
         }
+        mediaItems = trackLinked.concat(offTrack);
         mediaItems = (photoOrderMode === 'time_first') ? orderedItems : trackLinked.concat(offTrack);
         invalidateMediaGridCache(); // Clear cached grid when media items change
       }
@@ -7672,9 +7673,12 @@
           canvas.width = 400;
           canvas.height = 200;
           var ctx = canvas.getContext('2d');
+          var gradient = 'rgba(255,85,0,0.6)';
           
           // Create gradient based on steepness thresholds
-          var gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+          if (ctx && typeof ctx.createLinearGradient === 'function') {
+            gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+          }
           
           // Use existing elevation coloring configuration
           var elevColorThreshold = parseFloat((window.FGPX && FGPX.elevColorThreshold) || '3'); // 3% grade threshold
@@ -7701,7 +7705,9 @@
               var r = parseInt(hex.substr(0, 2), 16);
               var g = parseInt(hex.substr(2, 2), 16);
               var b = parseInt(hex.substr(4, 2), 16);
-              gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+              if (gradient && typeof gradient.addColorStop === 'function') {
+                gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+              }
             }
           } else {
             // Fallback to solid color if no gradients available
@@ -7709,8 +7715,7 @@
             var r = parseInt(hex.substr(0, 2), 16);
             var g = parseInt(hex.substr(2, 2), 16);
             var b = parseInt(hex.substr(4, 2), 16);
-            gradient.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
-            gradient.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+            gradient = 'rgba(' + r + ',' + g + ',' + b + ', 0.6)';
           }
 
           // Elevation line chart (foreground line for position marker tracking)
@@ -8196,9 +8201,12 @@
             canvas.width = 400;
             canvas.height = 200;
             var ctx = canvas.getContext('2d');
+            var gradient = 'rgba(255,85,0,0.4)';
             
             // Create gradient based on steepness thresholds
-            var gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            if (ctx && typeof ctx.createLinearGradient === 'function') {
+              gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            }
             
             // Use existing elevation coloring configuration
             var elevColorThreshold = parseFloat((window.FGPX && FGPX.elevColorThreshold) || '3'); // 3% grade threshold
@@ -8225,7 +8233,9 @@
                 var r = parseInt(hex.substr(0, 2), 16);
                 var g = parseInt(hex.substr(2, 2), 16);
                 var b = parseInt(hex.substr(4, 2), 16);
-                gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.4)');
+                if (gradient && typeof gradient.addColorStop === 'function') {
+                  gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.4)');
+                }
               }
             } else {
               // Fallback to solid color if no gradients available
@@ -8233,8 +8243,7 @@
               var r = parseInt(hex.substr(0, 2), 16);
               var g = parseInt(hex.substr(2, 2), 16);
               var b = parseInt(hex.substr(4, 2), 16);
-              gradient.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ', 0.4)');
-              gradient.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ', 0.4)');
+              gradient = 'rgba(' + r + ',' + g + ',' + b + ', 0.4)';
             }
             
             datasets.push({ 
@@ -8290,9 +8299,12 @@
           canvas.width = 400;
           canvas.height = 200;
           var ctx = canvas.getContext('2d');
+          var gradient = 'rgba(255,85,0,0.6)';
           
           // Create gradient based on steepness thresholds
-          var gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+          if (ctx && typeof ctx.createLinearGradient === 'function') {
+            gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+          }
           
           // Use existing elevation coloring configuration
           var elevColorThreshold = parseFloat((window.FGPX && FGPX.elevColorThreshold) || '3'); // 3% grade threshold
@@ -8319,7 +8331,9 @@
               var r = parseInt(hex.substr(0, 2), 16);
               var g = parseInt(hex.substr(2, 2), 16);
               var b = parseInt(hex.substr(4, 2), 16);
-              gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+              if (gradient && typeof gradient.addColorStop === 'function') {
+                gradient.addColorStop(position, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+              }
             }
           } else {
             // Fallback to solid color if no gradients available
@@ -8327,8 +8341,7 @@
             var r = parseInt(hex.substr(0, 2), 16);
             var g = parseInt(hex.substr(2, 2), 16);
             var b = parseInt(hex.substr(4, 2), 16);
-            gradient.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
-            gradient.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ', 0.6)');
+            gradient = 'rgba(' + r + ',' + g + ',' + b + ', 0.6)';
           }
           
           // Speed line chart (added first for background)
@@ -9395,8 +9408,10 @@
         var routeProgSrc = map.getSource('fgpx-route-progress');
         if (routeProgSrc) {
           // Throttle progress line updates to ~40 FPS or 10 m movement
-          var lineInterval = hasTerrain ? 0.12 : 0.083;
-          var needUpdate = progressNeedLineInit || (progressLineCooldown >= lineInterval) || (Math.abs(d - progressLastDistance) >= 10);
+          var needUpdate = progressNeedLineInit
+            || (!hasTerrain && (progressLineCooldown >= 0.083))
+            || (hasTerrain && (progressLineCooldown >= 0.12))
+            || (Math.abs(d - progressLastDistance) >= 10);
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
             while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < d) lo = mid + 1; else hi = mid; }
@@ -9571,7 +9586,13 @@
           cameraCenter[1] = nextCenterLat;
           var camOpts = { center: cameraCenter, bearing: bearing };
           if (nextPitch != null) camOpts.pitch = nextPitch;
-          map.jumpTo(camOpts);
+          if (map && typeof map.jumpTo === 'function') {
+            map.jumpTo(camOpts);
+          } else if (map && typeof map.setCenter === 'function') {
+            map.setCenter(cameraCenter);
+            if (typeof map.setBearing === 'function' && isFinite(bearing)) map.setBearing(bearing);
+            if (nextPitch != null && typeof map.setPitch === 'function') map.setPitch(nextPitch);
+          }
           appliedBearing = bearing;
           forceCameraUpdate = false;
           cameraCooldown = 0;
@@ -10994,7 +11015,11 @@
           // Move camera immediately to marker
           if (currentPosLngLat && Array.isArray(currentPosLngLat)) {
             cameraCenter = currentPosLngLat.slice(0,2);
-            map.jumpTo({ center: cameraCenter });
+            if (map && typeof map.jumpTo === 'function') {
+              map.jumpTo({ center: cameraCenter });
+            } else if (map && typeof map.setCenter === 'function') {
+              map.setCenter(cameraCenter);
+            }
             // Re-apply visuals once after jump so day/night polygon uses the new viewport bounds.
             updateVisuals(progress);
           }

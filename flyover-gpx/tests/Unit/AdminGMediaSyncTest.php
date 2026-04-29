@@ -275,3 +275,4 @@ final class AdminGMediaSyncTest extends TestCase
         return $GLOBALS['wpdb'];
     }
 }
+}

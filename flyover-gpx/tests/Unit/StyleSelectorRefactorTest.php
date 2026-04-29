@@ -13,6 +13,12 @@ final class StyleSelectorRefactorTest extends TestCase
     protected function setUp(): void
     {
         $GLOBALS['fgpx_test_localized_scripts'] = [];
+        $GLOBALS['fgpx_test_inline_scripts'] = [];
+
+        $reflection = new \ReflectionClass(Plugin::class);
+        $counter = $reflection->getProperty('instanceCounter');
+        $counter->setAccessible(true);
+        $counter->setValue(null, 0);
     }
 
     /**

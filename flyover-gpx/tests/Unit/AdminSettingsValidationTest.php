@@ -22,10 +22,10 @@ final class AdminSettingsValidationTest extends TestCase
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
         $source = (string) file_get_contents($adminFile);
 
-        $this->assertStringContainsString("\\sanitize_key((string) \\$_POST['fgpx_photo_order_mode'])", $source);
-        $this->assertStringContainsString("if (!\\in_array(\$photoOrderMode, ['geo_first', 'time_first'], true))", $source);
-        $this->assertStringContainsString("\$photoOrderMode = 'geo_first';", $source);
-        $this->assertStringContainsString("\\update_option('fgpx_photo_order_mode', \$photoOrderMode, true);", $source);
+        $this->assertStringContainsString('\\sanitize_key((string) $_POST[\'fgpx_photo_order_mode\'])', $source);
+        $this->assertStringContainsString('if (!\\in_array($photoOrderMode, [\'geo_first\', \'time_first\'], true))', $source);
+        $this->assertStringContainsString('$photoOrderMode = \'geo_first\';', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_photo_order_mode\', $photoOrderMode, true);', $source);
     }
 
     public function test_arrow_settings_are_bounded_and_persisted(): void
@@ -33,8 +33,8 @@ final class AdminSettingsValidationTest extends TestCase
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
         $source = (string) file_get_contents($adminFile);
 
-        $this->assertStringContainsString("\\update_option('fgpx_arrows_enabled', isset(\\$_POST['fgpx_arrows_enabled']) ? '1' : '0', true);", $source);
-        $this->assertStringContainsString("\\update_option('fgpx_arrows_km', (string) max(0.5, min(100, (float) \\$_POST['fgpx_arrows_km'])), true);", $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_arrows_enabled\', isset($_POST[\'fgpx_arrows_enabled\']) ? \'1\' : \'0\', true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_arrows_km\', (string) max(0.5, min(100, (float) $_POST[\'fgpx_arrows_km\'])), true);', $source);
     }
 
     public function test_weather_priority_order_filters_unknown_tokens_and_restores_defaults(): void
