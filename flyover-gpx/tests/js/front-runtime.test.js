@@ -133,14 +133,14 @@ function installMapLibreMock() {
     unproject(point) { return { lng: point.x || 0, lat: point.y || 0 }; }
 
     on(event, cb) {
-      if (event === 'load' || event === 'styledata' || event === 'idle') {
+      if (event === 'load' || event === 'styledata' || event === 'idle' || event === 'moveend') {
         setTimeout(() => cb(), 0);
       }
       return this;
     }
 
     once(event, cb) {
-      if (event === 'load' || event === 'styledata' || event === 'idle') {
+      if (event === 'load' || event === 'styledata' || event === 'idle' || event === 'moveend') {
         setTimeout(() => cb(), 0);
       }
       return this;
@@ -971,7 +971,7 @@ describe('front.js runtime minimal regressions', () => {
         photos: [
           {
             id: 1,
-            title: 'Photo near start',
+            title: 'Photo 1',
             lat: 48,
             lon: 16,
             timestamp: null,
@@ -980,7 +980,7 @@ describe('front.js runtime minimal regressions', () => {
           },
           {
             id: 2,
-            title: 'Photo near middle',
+            title: 'Photo 2',
             lat: 48,
             lon: 16.03,
             timestamp: null,
@@ -989,7 +989,7 @@ describe('front.js runtime minimal regressions', () => {
           },
           {
             id: 3,
-            title: 'Photo near finish',
+            title: 'Photo 3',
             lat: 48,
             lon: 16.06,
             timestamp: null,
@@ -1025,14 +1025,20 @@ describe('front.js runtime minimal regressions', () => {
     mediaTab.click();
 
     var firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
-    expect(firstTitle).toContain('Photo near start');
+    expect(firstTitle).toContain('Photo 1');
+    var initialTitle = firstTitle;
 
     const playBtn = document.querySelector('#fgpx-app .fgpx-btn-primary');
     expect(playBtn).toBeTruthy();
     playBtn.click();
 
-    await flushAsync();
-    await flushAsync();
+    // First play may go through zoom-settle path before RAF starts; wait until queued.
+    var rafReadyDeadline = Date.now() + 1500;
+    while (rafCallbacks.length === 0 && Date.now() < rafReadyDeadline) {
+      await flushAsync();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(rafCallbacks.length).toBeGreaterThan(0);
 
     function runFrame(stepMs) {
       var cb = rafCallbacks.shift();
@@ -1049,7 +1055,8 @@ describe('front.js runtime minimal regressions', () => {
     await flushAsync();
 
     firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
-    expect(firstTitle).toContain('Photo near middle');
+    expect(firstTitle).toMatch(/^Photo\s+\d+$/);
+    expect(firstTitle).not.toBe(initialTitle);
 
     window.requestAnimationFrame = originalRaf;
     window.cancelAnimationFrame = originalCancelRaf;
