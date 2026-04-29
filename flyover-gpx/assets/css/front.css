@@ -1284,3 +1284,34 @@
 .maplibregl-ctrl-attrib {
   display: none;
 }
+
+.fgpx-map-mode-ctrl {
+  padding: 2px;
+}
+
+.fgpx-map-mode-select {
+  border: 0;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 8px;
+  min-width: 132px;
+}
+
+.fgpx-map-mode-select:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-map-mode-select {
+  background: #1f2937;
+  color: #f9fafb;
+}
+
+@media (max-width: 680px) {
+  .fgpx-map-mode-select {
+    min-width: 116px;
+    font-size: 11px;
+  }
+}

@@ -421,6 +421,17 @@ final class Plugin
             'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
             'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
             'styleJson' => $resolvedStyleJson,
+            'mapSelectorDefault' => (string) ($options['fgpx_map_selector_default'] ?? 'basic'),
+            'contoursEnabled' => (string) ($options['fgpx_contours_enabled'] ?? '1') === '1',
+            'contoursTilesUrl' => (string) ($options['fgpx_contours_tiles_url'] ?? ''),
+            'contoursSourceLayer' => (string) ($options['fgpx_contours_source_layer'] ?? 'contour'),
+            'satelliteLayerId' => (string) ($options['fgpx_satellite_layer_id'] ?? 'satellite'),
+            'satelliteTilesUrl' => (string) ($options['fgpx_satellite_tiles_url'] ?? ''),
+            'contoursColor' => (string) ($options['fgpx_contours_color'] ?? '#ffffff'),
+            'contoursWidth' => (float) ($options['fgpx_contours_width'] ?? '1.2'),
+            'contoursOpacity' => (float) ($options['fgpx_contours_opacity'] ?? '0.75'),
+            'contoursMinZoom' => (int) ($options['fgpx_contours_minzoom'] ?? '9'),
+            'contoursMaxZoom' => (int) ($options['fgpx_contours_maxzoom'] ?? '16'),
             'defaultZoom' => (int) $options['fgpx_default_zoom'],
             'defaultSpeed' => $defaultSpeedFinal,
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
@@ -478,6 +489,10 @@ final class Plugin
                 'simCondRain' => \esc_html__('Rain', 'flyover-gpx'),
                 'simCondSnow' => \esc_html__('Snow', 'flyover-gpx'),
                 'simCondWind' => \esc_html__('Wind', 'flyover-gpx'),
+                'mapModeLabel' => \esc_html__('Map mode', 'flyover-gpx'),
+                'mapModeBasic' => \esc_html__('Basic', 'flyover-gpx'),
+                'mapModeContours' => \esc_html__('Basic + Contours', 'flyover-gpx'),
+                'mapModeSatellite' => \esc_html__('Satellite', 'flyover-gpx'),
             ],
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
@@ -633,6 +648,17 @@ final class Plugin
                   'simulationCitiesEnabled:' . ($options['fgpx_simulation_cities_enabled'] === '1' ? 'true' : 'false') . ',' .
                   'simulationWaypointWindowKm:' . \floatval($options['fgpx_simulation_waypoint_window_km']) . ',' .
                   'simulationCityWindowKm:' . \floatval($options['fgpx_simulation_city_window_km']) . ',' .
+                  'mapSelectorDefault:"' . \esc_js((string) ($options['fgpx_map_selector_default'] ?? 'basic')) . '",' .
+                  'contoursEnabled:' . (($options['fgpx_contours_enabled'] ?? '1') === '1' ? 'true' : 'false') . ',' .
+                  'contoursTilesUrl:"' . \esc_js((string) ($options['fgpx_contours_tiles_url'] ?? '')) . '",' .
+                  'contoursSourceLayer:"' . \esc_js((string) ($options['fgpx_contours_source_layer'] ?? 'contour')) . '",' .
+                  'satelliteLayerId:"' . \esc_js((string) ($options['fgpx_satellite_layer_id'] ?? 'satellite')) . '",' .
+                  'satelliteTilesUrl:"' . \esc_js((string) ($options['fgpx_satellite_tiles_url'] ?? '')) . '",' .
+                  'contoursColor:"' . \esc_js((string) ($options['fgpx_contours_color'] ?? '#ffffff')) . '",' .
+                  'contoursWidth:' . \floatval($options['fgpx_contours_width'] ?? '1.2') . ',' .
+                  'contoursOpacity:' . \floatval($options['fgpx_contours_opacity'] ?? '0.75') . ',' .
+                  'contoursMinZoom:' . \intval($options['fgpx_contours_minzoom'] ?? '9') . ',' .
+                  'contoursMaxZoom:' . \intval($options['fgpx_contours_maxzoom'] ?? '16') . ',' .
                                     'weatherFogThreshold:' . \floatval($options['fgpx_weather_fog_threshold']) . ',' .
                                     'weatherRainThreshold:' . \floatval($options['fgpx_weather_rain_threshold']) . ',' .
                                     'weatherSnowThreshold:' . \floatval($options['fgpx_weather_snow_threshold']) . ',' .

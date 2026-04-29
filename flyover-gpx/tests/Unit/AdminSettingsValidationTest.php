@@ -47,6 +47,40 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString('\\update_option(\'fgpx_arrows_km\', (string) max(0.5, min(100, (float) $_POST[\'fgpx_arrows_km\'])), true);', $source);
     }
 
+    public function test_map_selector_default_is_whitelisted_to_known_modes(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('if (!\\in_array($mapSelectorDefault, [\'basic\', \'basic_contours\', \'satellite\'], true))', $source);
+        $this->assertStringContainsString('$mapSelectorDefault = \'basic\';', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_map_selector_default\', $mapSelectorDefault, true);', $source);
+    }
+
+    public function test_contour_settings_are_rendered_and_persisted_with_bounds(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('id="fgpx_contours_enabled" name="fgpx_contours_enabled" value="1"', $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_enabled', isset($_POST['fgpx_contours_enabled']) ? '1' : '0', true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_color', $this->getValidColor('fgpx_contours_color', '#ffffff'), true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_width', (string) max(0.1, min(6.0, $this->getValidFloat('fgpx_contours_width', 1.2, 0.1, 6.0))), true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_opacity', (string) max(0.1, min(1.0, $this->getValidFloat('fgpx_contours_opacity', 0.75, 0.1, 1.0))), true);", $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_contours_minzoom\', (string) $contoursMinzoom, true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_contours_maxzoom\', (string) $contoursMaxzoom, true);', $source);
+        $this->assertStringContainsString('id="fgpx_contours_source_layer" name="fgpx_contours_source_layer"', $source);
+        $this->assertStringContainsString('$contoursSourceLayerRaw = isset($_POST[\'fgpx_contours_source_layer\']) ? (string) \wp_unslash($_POST[\'fgpx_contours_source_layer\']) : \'contour\';', $source);
+        $this->assertStringContainsString('$contoursSourceLayer = \\trim((string) \\sanitize_text_field($contoursSourceLayerRaw));', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_contours_source_layer\', $contoursSourceLayer, true);', $source);
+        $this->assertStringContainsString('id="fgpx_satellite_layer_id" name="fgpx_satellite_layer_id"', $source);
+        $this->assertStringContainsString('$satelliteLayerIdRaw = isset($_POST[\'fgpx_satellite_layer_id\']) ? (string) \\wp_unslash($_POST[\'fgpx_satellite_layer_id\']) : \'satellite\';', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_satellite_layer_id\', $satelliteLayerId, true);', $source);
+        $this->assertStringContainsString('id="fgpx_satellite_tiles_url" name="fgpx_satellite_tiles_url"', $source);
+        $this->assertStringContainsString('$satelliteTilesUrlRaw = isset($_POST[\'fgpx_satellite_tiles_url\']) ? \trim((string) \wp_unslash($_POST[\'fgpx_satellite_tiles_url\'])) : \''\';', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_satellite_tiles_url\', $satelliteTilesUrl, true);', $source);
+    }
+
     public function test_weather_priority_order_filters_unknown_tokens_and_restores_defaults(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';

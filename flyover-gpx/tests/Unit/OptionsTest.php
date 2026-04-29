@@ -67,6 +67,12 @@ final class OptionsTest extends TestCase
         return [
             // Map display
             'default_style'            => ['fgpx_default_style'],
+            'map_selector_default'     => ['fgpx_map_selector_default'],
+            'contours_enabled'         => ['fgpx_contours_enabled'],
+            'contours_tiles_url'       => ['fgpx_contours_tiles_url'],
+            'contours_source_layer'    => ['fgpx_contours_source_layer'],
+            'satellite_layer_id'       => ['fgpx_satellite_layer_id'],
+            'satellite_tiles_url'      => ['fgpx_satellite_tiles_url'],
             'smart_api_mode'           => ['fgpx_smart_api_keys_mode'],
             'smart_api_pool'           => ['fgpx_smart_api_keys_pool'],
             'smart_api_test_override'  => ['fgpx_smart_api_keys_test_url_override'],
@@ -115,6 +121,15 @@ final class OptionsTest extends TestCase
     {
         // get_option stub returns $default → Options returns definition defaults
         $this->assertSame('default', Options::get('fgpx_default_style'));
+        $this->assertSame('basic', Options::get('fgpx_map_selector_default'));
+        $this->assertSame('1', Options::get('fgpx_contours_enabled'));
+        $this->assertSame('https://api.maptiler.com/tiles/contours-v2/{z}/{x}/{y}.pbf?key={{API_KEY}}', Options::get('fgpx_contours_tiles_url'));
+        $this->assertSame('contour', Options::get('fgpx_contours_source_layer'));
+        $this->assertSame('satellite', Options::get('fgpx_satellite_layer_id'));
+        $this->assertSame('https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}', Options::get('fgpx_satellite_tiles_url'));
+        $this->assertSame('#ffffff', Options::get('fgpx_contours_color'));
+        $this->assertSame('1.2', Options::get('fgpx_contours_width'));
+        $this->assertSame('0.75', Options::get('fgpx_contours_opacity'));
         $this->assertSame('off',   Options::get('fgpx_smart_api_keys_mode'));
         $this->assertSame('',      Options::get('fgpx_smart_api_keys_pool'));
         $this->assertSame('',      Options::get('fgpx_smart_api_keys_test_url_override'));

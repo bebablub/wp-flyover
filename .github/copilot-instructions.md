@@ -28,8 +28,8 @@ These instructions apply to the whole repository. The WordPress plugin code live
 ## Testing Expectations
 - Don't test to detailed, test only main flows and most important edge cases, not every single line of code.
 - Don't test implementation details, test expected behavior and outputs.
-- Don't try to run tests cause needed binaries may not be available
-- Do always verfy your code against tests by a code review
+- Don't try to run tests cause needed binaries may not be available.
+- Do always veriprocfy your code against tests by a code review.
 
 ## Link, Do Not Duplicate
 Use existing docs for details instead of repeating them:

@@ -352,6 +352,28 @@ final class Admin
 		$defStyle = $options['fgpx_default_style'];
 		$defStyleUrl = $options['fgpx_default_style_url'];
 		$defStyleJson = $options['fgpx_default_style_json'];
+		$mapSelectorDefault = isset($options['fgpx_map_selector_default']) ? \sanitize_key((string) $options['fgpx_map_selector_default']) : 'basic';
+		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
+			$mapSelectorDefault = 'basic';
+		}
+		$contoursEnabled = ($options['fgpx_contours_enabled'] ?? '1') === '1';
+		$contoursTilesUrl = (string) ($options['fgpx_contours_tiles_url'] ?? '');
+		$contoursSourceLayer = \trim((string) ($options['fgpx_contours_source_layer'] ?? 'contour'));
+		$contoursSourceLayer = (string) \preg_replace('/[^A-Za-z0-9_:\.-]/', '', $contoursSourceLayer);
+		if ($contoursSourceLayer === '') {
+			$contoursSourceLayer = 'contour';
+		}
+		$satelliteLayerId = \trim((string) ($options['fgpx_satellite_layer_id'] ?? 'satellite'));
+		$satelliteLayerId = (string) \preg_replace('/[^A-Za-z0-9_:\.-]/', '', $satelliteLayerId);
+		if ($satelliteLayerId === '') {
+			$satelliteLayerId = 'satellite';
+		}
+		$satelliteTilesUrl = (string) ($options['fgpx_satellite_tiles_url'] ?? '');
+		$contoursColor = (string) ($options['fgpx_contours_color'] ?? '#ffffff');
+		$contoursWidth = (string) ($options['fgpx_contours_width'] ?? '1.2');
+		$contoursOpacity = (string) ($options['fgpx_contours_opacity'] ?? '0.75');
+		$contoursMinzoom = (string) ($options['fgpx_contours_minzoom'] ?? '9');
+		$contoursMaxzoom = (string) ($options['fgpx_contours_maxzoom'] ?? '16');
 		$smartApiMode = SmartApiKeys::normalizeMode((string) ($options['fgpx_smart_api_keys_mode'] ?? SmartApiKeys::MODE_OFF));
 		$smartApiPool = (string) ($options['fgpx_smart_api_keys_pool'] ?? '');
 		$smartApiTestUrlOverride = (string) ($options['fgpx_smart_api_keys_test_url_override'] ?? '');
@@ -448,6 +470,49 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_default_style_json">' . \esc_html__('Inline style JSON (optional)', 'flyover-gpx') . '</label></th><td>';
 		echo '<textarea id="fgpx_default_style_json" name="fgpx_default_style_json" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($styleJsonValue) . '</textarea>';
 		echo '<p class="description">' . \esc_html__('If provided, this full MapLibre style JSON takes precedence over URL and default raster.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_map_selector_default">' . \esc_html__('Default map selector mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_map_selector_default" name="fgpx_map_selector_default">';
+		echo '<option value="basic"' . selected($mapSelectorDefault, 'basic', false) . '>' . \esc_html__('Basic', 'flyover-gpx') . '</option>';
+		echo '<option value="basic_contours"' . selected($mapSelectorDefault, 'basic_contours', false) . '>' . \esc_html__('Basic + Contours', 'flyover-gpx') . '</option>';
+		echo '<option value="satellite"' . selected($mapSelectorDefault, 'satellite', false) . '>' . \esc_html__('Satellite', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Default mode for the on-map selector (next to fullscreen). Satellite mode uses an existing "satellite" layer from your style when available, otherwise falls back to the Satellite tiles URL below. If your tile URLs use {{API_KEY}}, configure Smart API key mode and key pool or provide URLs with a fixed key.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_enabled">' . \esc_html__('Enable contours mode in selector', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_contours_enabled" name="fgpx_contours_enabled" value="1"' . ($contoursEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Allow the Basic + Contours map mode.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_color">' . \esc_html__('Contour line color', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_contours_color" name="fgpx_contours_color" value="' . \esc_attr($contoursColor) . '" />';
+		echo '<p class="description">' . \esc_html__('Contour overlay color used in Basic + Contours mode.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_width">' . \esc_html__('Contour line width', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_contours_width" name="fgpx_contours_width" class="small-text" min="0.1" max="6" step="0.1" value="' . \esc_attr($contoursWidth) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_opacity">' . \esc_html__('Contour opacity', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_contours_opacity" name="fgpx_contours_opacity" class="small-text" min="0.1" max="1.0" step="0.05" value="' . \esc_attr($contoursOpacity) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_minzoom">' . \esc_html__('Contour min zoom', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_contours_minzoom" name="fgpx_contours_minzoom" class="small-text" min="0" max="22" step="1" value="' . \esc_attr($contoursMinzoom) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_maxzoom">' . \esc_html__('Contour max zoom', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_contours_maxzoom" name="fgpx_contours_maxzoom" class="small-text" min="0" max="22" step="1" value="' . \esc_attr($contoursMaxzoom) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_tiles_url">' . \esc_html__('Contour tiles URL template (advanced)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_contours_tiles_url" name="fgpx_contours_tiles_url" class="regular-text" value="' . \esc_attr($contoursTilesUrl) . '" placeholder="https://api.maptiler.com/tiles/contours-v2/{z}/{x}/{y}.pbf?key={{API_KEY}}" />';
+		echo '<p class="description">' . \esc_html__('Vector tile URL for contour lines. Supports {{API_KEY}} placeholder with Smart API key mode.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_contours_source_layer">' . \esc_html__('Contour source-layer name (advanced)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_contours_source_layer" name="fgpx_contours_source_layer" class="regular-text" value="' . \esc_attr($contoursSourceLayer) . '" placeholder="contour" />';
+		echo '<p class="description">' . \esc_html__('Vector source-layer name inside contour tiles. For MapTiler contours-v2 this is usually "contour".', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_satellite_layer_id">' . \esc_html__('Satellite style layer id (advanced)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_satellite_layer_id" name="fgpx_satellite_layer_id" class="regular-text" value="' . \esc_attr($satelliteLayerId) . '" placeholder="satellite" />';
+		echo '<p class="description">' . \esc_html__('Layer id in your style that should be toggled for Satellite mode (default: satellite). Use this when your custom style names the satellite raster layer differently.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_satellite_tiles_url">' . \esc_html__('Satellite tiles URL template (advanced)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_satellite_tiles_url" name="fgpx_satellite_tiles_url" class="regular-text" value="' . \esc_attr($satelliteTilesUrl) . '" placeholder="https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}" />';
+		echo '<p class="description">' . \esc_html__('Raster tile URL used as automatic Satellite fallback when your main style has no matching style layer id. Supports {{API_KEY}} placeholder with Smart API key mode.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_smart_api_keys_mode">' . \esc_html__('Smart API key mode', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_smart_api_keys_mode" name="fgpx_smart_api_keys_mode">';
@@ -2194,6 +2259,57 @@ final class Admin
 				\update_option('fgpx_default_style_json', $trimmed, true);
 			}
 		}
+		$mapSelectorDefaultRaw = isset($_POST['fgpx_map_selector_default']) ? (string) $_POST['fgpx_map_selector_default'] : 'basic';
+		$mapSelectorDefault = \sanitize_key($mapSelectorDefaultRaw);
+		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
+			$mapSelectorDefault = 'basic';
+		}
+		\update_option('fgpx_map_selector_default', $mapSelectorDefault, true);
+		\update_option('fgpx_contours_enabled', isset($_POST['fgpx_contours_enabled']) ? '1' : '0', true);
+		$contoursTilesUrlRaw = isset($_POST['fgpx_contours_tiles_url']) ? \trim((string) \wp_unslash($_POST['fgpx_contours_tiles_url'])) : '';
+		$contoursTilesUrl = '';
+		if ($contoursTilesUrlRaw !== '') {
+			if (\strpos($contoursTilesUrlRaw, SmartApiKeys::PLACEHOLDER) !== false) {
+				$contoursTilesUrl = \preg_match('#^https?://#i', $contoursTilesUrlRaw) ? $contoursTilesUrlRaw : '';
+			} else {
+				$contoursTilesUrl = (string) \esc_url_raw($contoursTilesUrlRaw);
+			}
+		}
+		\update_option('fgpx_contours_tiles_url', $contoursTilesUrl, true);
+		$contoursSourceLayerRaw = isset($_POST['fgpx_contours_source_layer']) ? (string) \wp_unslash($_POST['fgpx_contours_source_layer']) : 'contour';
+		$contoursSourceLayer = \trim((string) \sanitize_text_field($contoursSourceLayerRaw));
+		$contoursSourceLayer = (string) \preg_replace('/[^A-Za-z0-9_:\.-]/', '', $contoursSourceLayer);
+		if ($contoursSourceLayer === '') {
+			$contoursSourceLayer = 'contour';
+		}
+		\update_option('fgpx_contours_source_layer', $contoursSourceLayer, true);
+		$satelliteLayerIdRaw = isset($_POST['fgpx_satellite_layer_id']) ? (string) \wp_unslash($_POST['fgpx_satellite_layer_id']) : 'satellite';
+		$satelliteLayerId = \trim((string) \sanitize_text_field($satelliteLayerIdRaw));
+		$satelliteLayerId = (string) \preg_replace('/[^A-Za-z0-9_:\.-]/', '', $satelliteLayerId);
+		if ($satelliteLayerId === '') {
+			$satelliteLayerId = 'satellite';
+		}
+		\update_option('fgpx_satellite_layer_id', $satelliteLayerId, true);
+		$satelliteTilesUrlRaw = isset($_POST['fgpx_satellite_tiles_url']) ? \trim((string) \wp_unslash($_POST['fgpx_satellite_tiles_url'])) : '';
+		$satelliteTilesUrl = '';
+		if ($satelliteTilesUrlRaw !== '') {
+			if (\strpos($satelliteTilesUrlRaw, SmartApiKeys::PLACEHOLDER) !== false) {
+				$satelliteTilesUrl = \preg_match('#^https?://#i', $satelliteTilesUrlRaw) ? $satelliteTilesUrlRaw : '';
+			} else {
+				$satelliteTilesUrl = (string) \esc_url_raw($satelliteTilesUrlRaw);
+			}
+		}
+		\update_option('fgpx_satellite_tiles_url', $satelliteTilesUrl, true);
+		\update_option('fgpx_contours_color', $this->getValidColor('fgpx_contours_color', '#ffffff'), true);
+		\update_option('fgpx_contours_width', (string) max(0.1, min(6.0, $this->getValidFloat('fgpx_contours_width', 1.2, 0.1, 6.0))), true);
+		\update_option('fgpx_contours_opacity', (string) max(0.1, min(1.0, $this->getValidFloat('fgpx_contours_opacity', 0.75, 0.1, 1.0))), true);
+		$contoursMinzoom = $this->getValidInt('fgpx_contours_minzoom', 9, 0, 22);
+		$contoursMaxzoom = $this->getValidInt('fgpx_contours_maxzoom', 16, 0, 22);
+		if ($contoursMaxzoom < $contoursMinzoom) {
+			$contoursMaxzoom = $contoursMinzoom;
+		}
+		\update_option('fgpx_contours_minzoom', (string) $contoursMinzoom, true);
+		\update_option('fgpx_contours_maxzoom', (string) $contoursMaxzoom, true);
 		$smartModeRaw = isset($_POST['fgpx_smart_api_keys_mode']) ? (string) $_POST['fgpx_smart_api_keys_mode'] : SmartApiKeys::MODE_OFF;
 		\update_option('fgpx_smart_api_keys_mode', SmartApiKeys::normalizeMode($smartModeRaw), true);
 		$smartPoolRaw = isset($_POST['fgpx_smart_api_keys_pool']) ? (string) \wp_unslash($_POST['fgpx_smart_api_keys_pool']) : '';

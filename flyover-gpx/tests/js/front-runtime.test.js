@@ -654,6 +654,39 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("DBG.log('Wind text layer deferred until needed');");
   });
 
+  test('map mode control degrades safely when API placeholders are unresolved', () => {
+    expect(FRONT_SRC).toContain('function resolveTemplateUrl(url) {');
+    expect(FRONT_SRC).toContain("if (raw.indexOf('{{API_KEY}}') !== -1) {");
+    expect(FRONT_SRC).toContain("if (!resolvedApiKey) return '';" );
+    expect(FRONT_SRC).toContain('var resolvedContoursTilesUrl = resolveTemplateUrl(contoursTilesUrl);');
+    expect(FRONT_SRC).toContain('var resolvedSatelliteTilesUrl = resolveTemplateUrl(satelliteTilesUrl);');
+    expect(FRONT_SRC).toContain("var contoursModeAvailable = contoursEnabled && resolvedContoursTilesUrl !== '';" );
+  });
+
+  test('map mode control is hidden when only basic mode is available', () => {
+    expect(FRONT_SRC).toContain('function shouldShowMapModeControl() {');
+    expect(FRONT_SRC).toContain('return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();');
+    expect(FRONT_SRC).toContain('function syncMapModeControl() {');
+    expect(FRONT_SRC).toContain('if (!shouldShowMapModeControl()) {');
+    expect(FRONT_SRC).toContain("if (selectorMode !== 'basic') {");
+  });
+
+  test('map mode control uses configurable contour source-layer and localized labels', () => {
+    expect(FRONT_SRC).toContain("var contoursSourceLayer = String((window.FGPX && FGPX.contoursSourceLayer) || 'contour').trim();");
+    expect(FRONT_SRC).toContain("'source-layer': contoursSourceLayer,");
+    expect(FRONT_SRC).toContain("var i18nMapMode = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};");
+    expect(FRONT_SRC).toContain("select.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Map mode');");
+    expect(FRONT_SRC).toContain("addOption('basic', i18nMapMode.mapModeBasic || 'Basic');");
+    expect(FRONT_SRC).toContain("addOption('basic_contours', i18nMapMode.mapModeContours || 'Basic + Contours');");
+    expect(FRONT_SRC).toContain("addOption('satellite', i18nMapMode.mapModeSatellite || 'Satellite');");
+  });
+
+  test('satellite mode uses configurable style layer id before fallback layer', () => {
+    expect(FRONT_SRC).toContain("var satelliteLayerId = String((window.FGPX && FGPX.satelliteLayerId) || 'satellite').trim();");
+    expect(FRONT_SRC).toContain('return !!map.getLayer(satelliteLayerId);');
+    expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent(satelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');");
+  });
+
   test('phase3 normalizes WP boolean-like option values safely', () => {
     expect(FRONT_SRC).toContain('function toBoolOption(value, fallback) {');
     expect(FRONT_SRC).toContain('var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);');

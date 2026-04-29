@@ -1293,6 +1293,27 @@
     if (styleMode === 'vector') { styleMode = 'url'; }
     if (styleMode === 'raster') { styleMode = 'default'; }
     var initialStyle = inlineStyle || (styleMode === 'url' && styleUrl ? styleUrl : buildOSMRasterStyle());
+    var selectorModeRaw = String((window.FGPX && FGPX.mapSelectorDefault) || 'basic').toLowerCase();
+    var contoursEnabled = !window.FGPX || FGPX.contoursEnabled !== false;
+    var contoursTilesUrl = String((window.FGPX && FGPX.contoursTilesUrl) || '');
+    var contoursSourceLayer = String((window.FGPX && FGPX.contoursSourceLayer) || 'contour').trim();
+    if (!contoursSourceLayer) {
+      contoursSourceLayer = 'contour';
+    }
+    var satelliteLayerId = String((window.FGPX && FGPX.satelliteLayerId) || 'satellite').trim();
+    if (!/^[A-Za-z0-9_:\.-]+$/.test(satelliteLayerId)) {
+      satelliteLayerId = 'satellite';
+    }
+    var satelliteTilesUrl = String((window.FGPX && FGPX.satelliteTilesUrl) || '');
+    var contoursColor = String((window.FGPX && FGPX.contoursColor) || '#ffffff');
+    var contoursWidth = (window.FGPX && isFinite(Number(FGPX.contoursWidth))) ? Number(FGPX.contoursWidth) : 1.2;
+    var contoursOpacity = (window.FGPX && isFinite(Number(FGPX.contoursOpacity))) ? Number(FGPX.contoursOpacity) : 0.75;
+    var contoursMinZoom = (window.FGPX && isFinite(Number(FGPX.contoursMinZoom))) ? Number(FGPX.contoursMinZoom) : 9;
+    var contoursMaxZoom = (window.FGPX && isFinite(Number(FGPX.contoursMaxZoom))) ? Number(FGPX.contoursMaxZoom) : 16;
+    var selectorMode = selectorModeRaw;
+    if (selectorMode !== 'basic' && selectorMode !== 'basic_contours' && selectorMode !== 'satellite') {
+      selectorMode = 'basic';
+    }
 
     // Prefetch master switch (default true if undefined)
     var prefetchEnabled = !(window.FGPX && FGPX.prefetchEnabled === false);
@@ -1312,6 +1333,24 @@
       }
     } : undefined;
 
+    function resolveTemplateUrl(url) {
+      var raw = String(url || '');
+      if (!raw) return '';
+      if (raw.indexOf('{{API_KEY}}') !== -1) {
+        if (!resolvedApiKey) return '';
+        return raw.replace(/\{\{API_KEY\}\}/g, resolvedApiKey);
+      }
+      return raw;
+    }
+
+    var resolvedContoursTilesUrl = resolveTemplateUrl(contoursTilesUrl);
+    var resolvedSatelliteTilesUrl = resolveTemplateUrl(satelliteTilesUrl);
+    var contoursModeAvailable = contoursEnabled && resolvedContoursTilesUrl !== '';
+    var i18nMapMode = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
+    if (!contoursModeAvailable && selectorMode === 'basic_contours') {
+      selectorMode = 'basic';
+    }
+
     var map = new window.maplibregl.Map({
       container: ui.mapEl,
       style: initialStyle,
@@ -1330,6 +1369,206 @@
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
     map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
+
+    var contourSourceId = 'fgpx-contours-' + (el.id || 'fgpx');
+    var contourLayerId = contourSourceId + '-line';
+    var fallbackSatelliteSourceId = 'fgpx-satellite-' + (el.id || 'fgpx') + '-source';
+    var fallbackSatelliteLayerId = 'fgpx-satellite-' + (el.id || 'fgpx') + '-layer';
+    var mapModeControl = null;
+    var mapModeControlSelect = null;
+
+    function setLayerVisibilityIfPresent(layerId, visibility) {
+      try {
+        if (!map.getLayer(layerId)) return;
+        var current = map.getLayoutProperty(layerId, 'visibility');
+        if (current !== visibility) {
+          map.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+      } catch (_) {}
+    }
+
+    function hasConfiguredSatelliteLayer() {
+      try {
+        return !!map.getLayer(satelliteLayerId);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function hasSatelliteLayer() {
+      try {
+        return hasConfiguredSatelliteLayer() || !!map.getLayer(fallbackSatelliteLayerId);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function ensureSatelliteLayer() {
+      try {
+        if (hasConfiguredSatelliteLayer() || map.getLayer(fallbackSatelliteLayerId)) {
+          return true;
+        }
+        if (!resolvedSatelliteTilesUrl) {
+          return false;
+        }
+        if (!map.getSource(fallbackSatelliteSourceId)) {
+          map.addSource(fallbackSatelliteSourceId, {
+            type: 'raster',
+            tiles: [resolvedSatelliteTilesUrl],
+            tileSize: 512,
+            minzoom: 0,
+            maxzoom: 22
+          });
+        }
+        if (!map.getLayer(fallbackSatelliteLayerId)) {
+          var beforeLayer = map.getLayer('fgpx-route-line') ? 'fgpx-route-line' : undefined;
+          map.addLayer({
+            id: fallbackSatelliteLayerId,
+            type: 'raster',
+            source: fallbackSatelliteSourceId,
+            paint: { 'raster-fade-duration': 100 },
+            layout: { visibility: 'none' }
+          }, beforeLayer);
+        }
+        return true;
+      } catch (e) {
+        DBG.warn('Failed to ensure fallback satellite layer', e);
+        return false;
+      }
+    }
+
+    function ensureContourLayer() {
+      if (!contoursModeAvailable) return false;
+      try {
+        if (!map.getSource(contourSourceId)) {
+          map.addSource(contourSourceId, {
+            type: 'vector',
+            tiles: [resolvedContoursTilesUrl],
+            minzoom: Math.max(0, Math.min(22, contoursMinZoom)),
+            maxzoom: Math.max(0, Math.min(22, contoursMaxZoom))
+          });
+        }
+        if (!map.getLayer(contourLayerId)) {
+          var beforeLayerId = map.getLayer('fgpx-route-line') ? 'fgpx-route-line' : undefined;
+          map.addLayer({
+            id: contourLayerId,
+            type: 'line',
+            source: contourSourceId,
+            'source-layer': contoursSourceLayer,
+            paint: {
+              'line-color': contoursColor,
+              'line-width': Math.max(0.1, Math.min(6, contoursWidth)),
+              'line-opacity': Math.max(0.1, Math.min(1, contoursOpacity))
+            },
+            layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' }
+          }, beforeLayerId);
+        }
+        return true;
+      } catch (e) {
+        DBG.warn('Failed to ensure contour layer', e);
+        return false;
+      }
+    }
+
+    function shouldShowMapModeControl() {
+      return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();
+    }
+
+    function syncMapModeControl() {
+      if (!shouldShowMapModeControl()) {
+        if (mapModeControl) {
+          try { map.removeControl(mapModeControl); } catch (_) {}
+          mapModeControl = null;
+          mapModeControlSelect = null;
+        }
+        if (selectorMode !== 'basic') {
+          selectorMode = 'basic';
+        }
+        return;
+      }
+
+      if (!mapModeControl) {
+        mapModeControl = new MapModeControl();
+        map.addControl(mapModeControl, 'top-right');
+      }
+
+      if (mapModeControlSelect) {
+        try { mapModeControlSelect.querySelector('option[value="basic_contours"]').disabled = !contoursModeAvailable; } catch(_) {}
+        try { mapModeControlSelect.querySelector('option[value="satellite"]').disabled = !(hasSatelliteLayer() || !!resolvedSatelliteTilesUrl); } catch(_) {}
+        mapModeControlSelect.value = selectorMode;
+      }
+    }
+
+    function applyMapSelectorMode(mode) {
+      var nextMode = String(mode || 'basic').toLowerCase();
+      if (nextMode !== 'basic' && nextMode !== 'basic_contours' && nextMode !== 'satellite') {
+        nextMode = 'basic';
+      }
+      if (!contoursModeAvailable && nextMode === 'basic_contours') {
+        nextMode = 'basic';
+      }
+
+      if (nextMode === 'satellite') {
+        ensureSatelliteLayer();
+        if (!hasSatelliteLayer()) {
+          nextMode = 'basic';
+        }
+      }
+
+      setLayerVisibilityIfPresent(satelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');
+      setLayerVisibilityIfPresent(fallbackSatelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');
+
+      if (nextMode === 'basic_contours') {
+        if (ensureContourLayer()) {
+          setLayerVisibilityIfPresent(contourLayerId, 'visible');
+        }
+      } else {
+        setLayerVisibilityIfPresent(contourLayerId, 'none');
+      }
+
+      selectorMode = nextMode;
+      syncMapModeControl();
+    }
+
+    var MapModeControl = function() {};
+    MapModeControl.prototype.onAdd = function(ctrlMap) {
+      this._map = ctrlMap;
+      var container = document.createElement('div');
+      container.className = 'maplibregl-ctrl maplibregl-ctrl-group fgpx-map-mode-ctrl';
+      var select = document.createElement('select');
+      select.className = 'fgpx-map-mode-select';
+      select.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Map mode');
+
+      function addOption(value, label) {
+        var opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        select.appendChild(opt);
+      }
+
+      addOption('basic', i18nMapMode.mapModeBasic || 'Basic');
+      addOption('basic_contours', i18nMapMode.mapModeContours || 'Basic + Contours');
+      addOption('satellite', i18nMapMode.mapModeSatellite || 'Satellite');
+
+      select.value = selectorMode;
+      select.addEventListener('change', function() {
+        applyMapSelectorMode(select.value);
+      });
+      container.appendChild(select);
+      mapModeControlSelect = select;
+      this._container = container;
+      return container;
+    };
+    MapModeControl.prototype.onRemove = function() {
+      if (this._container && this._container.parentNode) {
+        this._container.parentNode.removeChild(this._container);
+      }
+      this._map = undefined;
+    };
+    // Do NOT call syncMapModeControl() here — the style hasn't loaded yet, so hasSatelliteLayer()
+    // would always return false and the control would be incorrectly hidden for styles that embed
+    // a satellite layer without a fallback tile URL. The map.once('load') path calls
+    // applyMapSelectorMode() → syncMapModeControl() once actual layer info is available.
 
     DBG.log('map created', { prefetchEnabled: prefetchEnabled, defaultZoom: defaultZoomSetting });
 
@@ -1418,6 +1657,7 @@
         weatherTextLayersSupported = null;
         weatherOverlayReduced = null;
         weatherOverlayProfileKey = '';
+        applyMapSelectorMode(selectorMode);
       });
 
       // Precompute cities from MapTiler POI layer for Simulation tab.
@@ -1523,6 +1763,7 @@
       map.addSource('fgpx-route', { type: 'geojson', data: routeData, lineMetrics: true });
       // Background route (faint)
       map.addLayer({ id: 'fgpx-route-line', type: 'line', source: 'fgpx-route', paint: { 'line-color': '#cccccc', 'line-width': 2 } });
+      applyMapSelectorMode(selectorMode);
 
       // Direction arrows along the background route
       // Uses canvas-based icon images so it works on raster (no glyphs) and vector styles alike.
@@ -10573,16 +10814,6 @@
           startRecording();
         }
       });
-
-      function setLayerVisibilityIfPresent(layerId, visibility) {
-        try {
-          if (!map.getLayer(layerId)) return;
-          var current = map.getLayoutProperty(layerId, 'visibility');
-          if (current !== visibility) {
-            map.setLayoutProperty(layerId, 'visibility', visibility);
-          }
-        } catch (_) {}
-      }
 
       function refreshWeatherTextLayerSupport(logResult) {
         if (weatherTextLayersSupported === true) return true;
