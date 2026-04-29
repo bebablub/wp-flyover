@@ -28,6 +28,16 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString('\\update_option(\'fgpx_photo_order_mode\', $photoOrderMode, true);', $source);
     }
 
+    public function test_photo_queue_rotation_setting_is_rendered_and_persisted_as_boolean(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('$photoQueueRotationEnabled = ($options[\'fgpx_photo_queue_rotation_enabled\'] ?? \'0\') === \'1\';', $source);
+        $this->assertStringContainsString('id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_photo_queue_rotation_enabled\', $this->getValidBool(\'fgpx_photo_queue_rotation_enabled\') ? \'1\' : \'0\', true);', $source);
+    }
+
     public function test_arrow_settings_are_bounded_and_persisted(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';

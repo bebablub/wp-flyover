@@ -373,6 +373,7 @@ final class Admin
 		if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
 			$photoOrderMode = 'geo_first';
 		}
+		$photoQueueRotationEnabled = ($options['fgpx_photo_queue_rotation_enabled'] ?? '0') === '1';
 		$photoMaxDistance = $options['fgpx_photo_max_distance'];
 		$gpxDownloadEnabled = $options['fgpx_gpx_download_enabled'];
 		$privacyEnabled = $options['fgpx_privacy_enabled'];
@@ -640,6 +641,10 @@ final class Admin
 		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_queue_rotation_enabled">' . \esc_html__('Rotate media gallery with playback', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"' . ($photoQueueRotationEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Keep the next upcoming photo in the first gallery position and move passed photos to the end with animation', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('When enabled, the Media tab behaves like a rotating queue during playback and recomputes order after seek or rewind.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
@@ -2236,6 +2241,7 @@ final class Admin
 		// Use type-safe validation helpers for boolean values
 		\update_option('fgpx_show_labels', $this->getValidBool('fgpx_show_labels') ? '1' : '0', true);
 		\update_option('fgpx_photos_enabled', $this->getValidBool('fgpx_photos_enabled') ? '1' : '0', true);
+		\update_option('fgpx_photo_queue_rotation_enabled', $this->getValidBool('fgpx_photo_queue_rotation_enabled') ? '1' : '0', true);
 		\update_option('fgpx_gpx_download_enabled', $this->getValidBool('fgpx_gpx_download_enabled') ? '1' : '0', true);
 		\update_option('fgpx_hud_enabled', $this->getValidBool('fgpx_hud_enabled') ? '1' : '0', true);
 		\update_option('fgpx_privacy_enabled', $this->getValidBool('fgpx_privacy_enabled') ? '1' : '0', true);

@@ -427,6 +427,7 @@ final class Plugin
             'showLabels' => $showLabelsFinal,
             'photosEnabled' => $photosEnabledFinal,
             'photoOrderMode' => $photoOrderModeFinal,
+            'photoQueueRotationEnabled' => ($options['fgpx_photo_queue_rotation_enabled'] ?? '0') === '1',
             'arrowsEnabled' => $arrowsEnabledFinal,
             'arrowsKm' => $arrowsKmFinal,
             'privacyEnabled' => $privacyEnabledFinal,

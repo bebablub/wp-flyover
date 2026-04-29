@@ -973,9 +973,75 @@
   margin: 0;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.18s ease, filter 0.18s ease;
 }
 
+.fgpx .fgpx-media-card.fgpx-media-card-next {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 149, 0, 0.5);
+}
+
+.fgpx .fgpx-media-card.fgpx-media-card-upcoming {
+  opacity: 1;
+}
+
+.fgpx .fgpx-media-card.fgpx-media-card-passed {
+  opacity: 0.72;
+  filter: saturate(0.82);
+}
+
+.fgpx .fgpx-media-card.fgpx-media-card-exiting {
+  animation: fgpx-media-card-exit 0.18s ease forwards;
+}
+
+.fgpx .fgpx-media-card.fgpx-media-card-entering {
+  animation: fgpx-media-card-enter 0.24s ease;
+}
+
+.fgpx .fgpx-media-card.fgpx-media-card-tail-entering {
+  animation: fgpx-media-card-tail 0.28s ease;
+}
+
+@keyframes fgpx-media-card-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+@keyframes fgpx-media-card-enter {
+  0% {
+    opacity: 0.48;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fgpx-media-card-tail {
+  0% {
+    opacity: 0.2;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 0.72;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fgpx .fgpx-media-card,
+  .fgpx .fgpx-media-card-meta {
+    transition: none;
+    animation: none;
+  }
+}
 .fgpx .fgpx-media-card:hover,
 .fgpx .fgpx-media-card:focus-visible {
   transform: translateY(-2px);

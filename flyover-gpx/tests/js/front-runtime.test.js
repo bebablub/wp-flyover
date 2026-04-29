@@ -13,6 +13,11 @@ const FRONT_SRC = fs.readFileSync(
   'utf8'
 );
 
+const FRONT_CSS_SRC = fs.readFileSync(
+  path.resolve(__dirname, '../../assets/css/front.css'),
+  'utf8'
+);
+
 function loadFront() {
   // eslint-disable-next-line no-eval
   eval(FRONT_SRC);
@@ -701,19 +706,43 @@ describe('front.js runtime minimal regressions', () => {
   test('media grid memoization: cache invalidation on photo data change', () => {
     expect(FRONT_SRC).toContain('var mediaGridRendered = false;');
     expect(FRONT_SRC).toContain('var cachedMediaGridDOM = null;');
-    expect(FRONT_SRC).toContain('function invalidateMediaGridCache() {');
+    expect(FRONT_SRC).toContain('function invalidateMediaGridCache(preservePage) {');
     expect(FRONT_SRC).toContain('mediaGridRendered = false;');
     expect(FRONT_SRC).toContain('cachedMediaGridDOM = null;');
-    expect(FRONT_SRC).toContain('invalidateMediaGridCache();');
+    expect(FRONT_SRC).toContain('invalidateMediaGridCache(true);');
   });
 
   test('media grid rendering: memoizes DOM after first render', () => {
-    expect(FRONT_SRC).toContain('if (mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {');
+    expect(FRONT_SRC).toContain('var allowMediaGridCache = !photoQueueRotationEnabled;');
+    expect(FRONT_SRC).toContain('if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {');
     expect(FRONT_SRC).toContain('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));');
     expect(FRONT_SRC).toContain('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');');
     expect(FRONT_SRC).toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
     expect(FRONT_SRC).toContain('cachedMediaGridPage = mediaGridPage;');
     expect(FRONT_SRC).toContain('mediaGridRendered = true;');
+  });
+
+  test('media queue rotation recomputes displayed order from playback state', () => {
+    expect(FRONT_SRC).toContain("var photoQueueRotationEnabled = !!(FGPX && (FGPX.photoQueueRotationEnabled === true || FGPX.photoQueueRotationEnabled === '1'));");
+    expect(FRONT_SRC).toContain('function buildRotatedMediaItems() {');
+    expect(FRONT_SRC).toContain('function syncMediaDisplayOrder(force) {');
+    expect(FRONT_SRC).toContain('var mediaDisplayItems = [];');
+    expect(FRONT_SRC).toContain('syncMediaDisplayOrder(false);');
+    expect(FRONT_SRC).toContain('syncMediaDisplayOrder(true);');
+    expect(FRONT_SRC).toContain('tOffset = timeOffsets[Math.max(0, lo2s)] || 0;');
+  });
+
+  test('media queue rotation preserves current page during runtime reorder', () => {
+    expect(FRONT_SRC).toContain('invalidateMediaGridCache(true);');
+    expect(FRONT_SRC).toContain('if (!preservePage) {');
+    expect(FRONT_SRC).toContain('if (mediaGridPage >= totalPages) mediaGridPage = totalPages - 1;');
+  });
+
+  test('media queue rotation styles define exit and handoff states', () => {
+    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-exiting {');
+    expect(FRONT_CSS_SRC).toContain('@keyframes fgpx-media-card-exit {');
+    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-entering {');
+    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-tail-entering {');
   });
 
   test('media grid empty state: renders with semantic role and ARIA label', () => {
@@ -903,6 +932,127 @@ describe('front.js runtime minimal regressions', () => {
     const overlayImg = document.querySelector('#fgpx-app .fgpx-photo-overlay img');
     expect(overlayImg).toBeTruthy();
     expect(String(overlayImg.getAttribute('src'))).toContain('p13.jpg');
+  });
+
+  test('runtime media queue rotation updates during geo-only playback', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
+
+    const rafCallbacks = [];
+    let rafNow = 0;
+    const originalRaf = window.requestAnimationFrame;
+    const originalCancelRaf = window.cancelAnimationFrame;
+    window.requestAnimationFrame = jest.fn(function(cb) {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    window.cancelAnimationFrame = jest.fn();
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [[16, 48, 100], [16.03, 48, 110], [16.06, 48, 120]],
+          properties: {
+            timestamps: [],
+            cumulativeDistance: [0, 2200, 4400],
+            heartRates: [],
+            cadences: [],
+            temperatures: [],
+            powers: [],
+            windSpeeds: [],
+            windDirections: [],
+            windImpacts: [],
+          },
+        },
+        bounds: [16, 48, 16.06, 48],
+        stats: {},
+        photos: [
+          {
+            id: 1,
+            title: 'Photo near start',
+            lat: 48,
+            lon: 16,
+            timestamp: null,
+            thumbUrl: 'https://example.test/start-thumb.jpg',
+            fullUrl: 'https://example.test/start.jpg',
+          },
+          {
+            id: 2,
+            title: 'Photo near middle',
+            lat: 48,
+            lon: 16.03,
+            timestamp: null,
+            thumbUrl: 'https://example.test/middle-thumb.jpg',
+            fullUrl: 'https://example.test/middle.jpg',
+          },
+          {
+            id: 3,
+            title: 'Photo near finish',
+            lat: 48,
+            lon: 16.06,
+            timestamp: null,
+            thumbUrl: 'https://example.test/finish-thumb.jpg',
+            fullUrl: 'https://example.test/finish.jpg',
+          },
+        ],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      photosEnabled: true,
+      photoOrderMode: 'time_first',
+      photoQueueRotationEnabled: true,
+      weatherEnabled: false,
+      privacyEnabled: false,
+      prefetchEnabled: false,
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
+    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
+    expect(mediaTab).toBeTruthy();
+    mediaTab.click();
+
+    var firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
+    expect(firstTitle).toContain('Photo near start');
+
+    const playBtn = document.querySelector('#fgpx-app .fgpx-btn-primary');
+    expect(playBtn).toBeTruthy();
+    playBtn.click();
+
+    await flushAsync();
+    await flushAsync();
+
+    function runFrame(stepMs) {
+      var cb = rafCallbacks.shift();
+      expect(typeof cb).toBe('function');
+      rafNow += stepMs;
+      cb(rafNow);
+    }
+
+    runFrame(0);
+    runFrame(20000);
+    runFrame(20000);
+
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    await flushAsync();
+
+    firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
+    expect(firstTitle).toContain('Photo near middle');
+
+    window.requestAnimationFrame = originalRaf;
+    window.cancelAnimationFrame = originalCancelRaf;
   });
 
   test('runtime privacy mode hides media items without derivable route distance', async () => {

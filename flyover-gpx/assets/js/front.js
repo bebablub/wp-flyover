@@ -1141,6 +1141,15 @@
 
     var photoOrderMode = (window.FGPX && typeof FGPX.photoOrderMode === 'string') ? String(FGPX.photoOrderMode) : 'geo_first';
     if (photoOrderMode !== 'time_first' && photoOrderMode !== 'geo_first') { photoOrderMode = 'geo_first'; }
+    var photoQueueRotationEnabled = !!(FGPX && (FGPX.photoQueueRotationEnabled === true || FGPX.photoQueueRotationEnabled === '1'));
+    var trackStartTimestampMs = NaN;
+    if (Array.isArray(timestamps) && timestamps.length > 0) {
+      for (var tsi = 0; tsi < timestamps.length; tsi++) {
+        if (timestamps[tsi] == null) continue;
+        trackStartTimestampMs = Date.parse(timestamps[tsi]);
+        if (!isNaN(trackStartTimestampMs)) break;
+      }
+    }
 
     function parsePhotoTimestampMs(ph) {
       if (!ph || !ph.timestamp) return NaN;
@@ -1148,27 +1157,19 @@
       return isNaN(ms) ? NaN : ms;
     }
 
-    // New: dedupe photos by rounded location and precompute per-photo route distance.
+    // Precompute per-photo route distance/timestamp metadata and normalize ordering.
     (function preparePhotos() {
       if (!Array.isArray(photos) || photos.length === 0) return;
-      var seen = Object.create(null);
       var unique = [];
       if (Array.isArray(cumDist) && cumDist.length === coords.length) {
         for (var i = 0; i < photos.length; i++) {
           var ph = photos[i];
           if (typeof ph.lat === 'number' && typeof ph.lon === 'number') {
-            var key = getLocationKey(ph.lat, ph.lon);
-            if (key && !seen[key]) {
-              var idx = nearestCoordIndex([ph.lon, ph.lat], coords);
-              ph._idx = idx;
-              ph._distAlong = cumDist[idx]; // meters along the route
-              ph._timestampMs = parsePhotoTimestampMs(ph);
-              unique.push(ph);
-              seen[key] = true; // drop subsequent photos at same location (prevents flicker)
-            } else {
-              // duplicate location → skip
-              // console.debug('[FGPX] drop duplicate photo at', ph.lat, ph.lon, key);
-            }
+            var idx = nearestCoordIndex([ph.lon, ph.lat], coords);
+            ph._idx = idx;
+            ph._distAlong = cumDist[idx]; // meters along the route
+            ph._timestampMs = parsePhotoTimestampMs(ph);
+            unique.push(ph);
           } else {
             // no GPS → keep; will fallback to timestamp if needed
             ph._timestampMs = parsePhotoTimestampMs(ph);
@@ -1211,7 +1212,7 @@
       photos = unique;
     })();
 
-    DBG.log('photos after dedupe', photos.length);
+    DBG.log('photos prepared', photos.length);
 
     // Helper: map a distance along the route to an interpolated lng/lat
     function positionAtDistance(d) {
@@ -2734,6 +2735,7 @@
       var shownPhotoKeys = new Set();
       var photoQueue = [];
       var mediaItems = [];
+      var mediaDisplayItems = [];
       var mediaViewerActive = false;
       var mediaViewerIndex = -1;
       var mediaViewerWasPlaying = false;
@@ -2742,6 +2744,9 @@
       var cachedMediaGridPage = -1; // Cached page index to avoid reusing stale page content
       var mediaGridPage = 0; // Current page for pagination (0-indexed)
       var mediaGridPageSize = 12; // Items per page (3x4 grid on desktop)
+      var mediaRotationLeadKey = '';
+      var mediaRotationTimer = null;
+      var mediaAnimationHint = null;
       var lastPlaybackSec = null; // for robust crossing detection at high speeds
       var lastPlaybackDist = null; // meters; for distance-based triggering
       var photosByTime = null; // [{p: photoObject, pSec: number}...] sorted by pSec
@@ -2751,37 +2756,173 @@
       var mapCities = []; // [{name, lat, lon, distanceMeters, type}] sorted by distanceMeters
 
 
-      // Local shadow to access the in-scope queue/overlay state
-      function isLocationAlreadyQueued(lat, lon) {
-        if (typeof lat !== 'number' || typeof lon !== 'number') return false;
-        var key = getLocationKey(lat, lon);
-        if (!key) return false;
-        // Check queue
-        for (var i = 0; i < photoQueue.length; i++) {
-          var qp = photoQueue[i];
-            if (typeof qp.lat === 'number' && typeof qp.lon === 'number' && getLocationKey(qp.lat, qp.lon) === key) {
-              return true;
-            }
-        }
-        // Check currently displayed
-        if (overlayActive && currentDisplayedPhoto &&
-            typeof currentDisplayedPhoto.lat === 'number' &&
-            typeof currentDisplayedPhoto.lon === 'number' &&
-            getLocationKey(currentDisplayedPhoto.lat, currentDisplayedPhoto.lon) === key) {
-          return true;
-        }
-        return false;
+      function getMediaItemKey(item, fallbackIndex) {
+        if (!item) return String(fallbackIndex || '');
+        var ph = item.photo || item;
+        return String(
+          (ph && (ph.id || ph.fullUrl || ph.thumbUrl || ph.timestamp)) ||
+          item.fullUrl ||
+          item.thumbUrl ||
+          item.title ||
+          fallbackIndex ||
+          ''
+        );
       }
+
+      function getDisplayedMediaItems() {
+        return (Array.isArray(mediaDisplayItems) && mediaDisplayItems.length > 0) ? mediaDisplayItems : mediaItems;
+      }
+
+      function getCurrentPlaybackSec() {
+        if (isFinite(Number(tOffset))) return Number(tOffset);
+        if (isFinite(lastPlaybackSec)) return Number(lastPlaybackSec);
+        if (hasTimestamps && Array.isArray(timeOffsets) && timeOffsets.length > 0 && Array.isArray(cumDist) && cumDist.length === timeOffsets.length) {
+          var distNow = progress * totalDistance;
+          var loSec = 0, hiSec = timeOffsets.length - 1;
+          while (loSec < hiSec) {
+            var midSec = (loSec + hiSec) >>> 1;
+            if (cumDist[midSec] < distNow) loSec = midSec + 1;
+            else hiSec = midSec;
+          }
+          var resolvedSec = Number(timeOffsets[Math.max(0, loSec)]);
+          return isFinite(resolvedSec) ? resolvedSec : null;
+        }
+        return null;
+      }
+
+      function canRotateMediaQueue() {
+        return !!(FGPX.photosEnabled && photoQueueRotationEnabled && Array.isArray(mediaItems) && mediaItems.length > 1);
+      }
+
+      function buildRotatedMediaItems() {
+        var items = Array.isArray(mediaItems) ? mediaItems.slice() : [];
+        var ii;
+        for (ii = 0; ii < items.length; ii++) {
+          if (items[ii]) items[ii].mediaQueueState = 'upcoming';
+        }
+        if (!canRotateMediaQueue()) {
+          if (items[0]) items[0].mediaQueueState = 'next';
+          return items;
+        }
+
+        var currentDist = isFinite(progress * totalDistance) ? (progress * totalDistance) : 0;
+        var currentSec = getCurrentPlaybackSec();
+        var leadIndex = -1;
+
+        for (ii = 0; ii < items.length; ii++) {
+          var item = items[ii];
+          if (!item) continue;
+          var isUpcoming = false;
+          if (photoOrderMode === 'time_first' && currentSec != null && isFinite(item.playbackSec)) {
+            isUpcoming = item.playbackSec >= currentSec;
+          } else if (isFinite(item.routeDistMeters)) {
+            isUpcoming = item.routeDistMeters >= currentDist;
+          } else if (photoOrderMode === 'time_first' && isFinite(item.playbackSec) && currentSec == null) {
+            isUpcoming = true;
+          }
+          if (isUpcoming) {
+            leadIndex = ii;
+            break;
+          }
+        }
+
+        if (leadIndex < 0) {
+          for (ii = 0; ii < items.length; ii++) {
+            if (items[ii]) items[ii].mediaQueueState = 'passed';
+          }
+          return items;
+        }
+
+        var rotated = leadIndex > 0 ? items.slice(leadIndex).concat(items.slice(0, leadIndex)) : items;
+        var upcomingCount = rotated.length - leadIndex;
+        for (ii = 0; ii < rotated.length; ii++) {
+          if (!rotated[ii]) continue;
+          if (ii === 0) rotated[ii].mediaQueueState = 'next';
+          else if (ii < upcomingCount) rotated[ii].mediaQueueState = 'upcoming';
+          else rotated[ii].mediaQueueState = 'passed';
+        }
+        return rotated;
+      }
+
+      function mediaOrdersMatch(nextItems) {
+        var currentItems = getDisplayedMediaItems();
+        if (!Array.isArray(currentItems) || currentItems.length !== nextItems.length) return false;
+        for (var oi = 0; oi < nextItems.length; oi++) {
+          if (getMediaItemKey(currentItems[oi], oi) !== getMediaItemKey(nextItems[oi], oi)) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function clearMediaRotationTimer() {
+        if (mediaRotationTimer !== null) {
+          clearTimeout(mediaRotationTimer);
+          mediaRotationTimer = null;
+        }
+      }
+
+      function applyMediaDisplayOrder(nextItems, animationHint) {
+        mediaDisplayItems = nextItems;
+        mediaRotationLeadKey = nextItems.length > 0 ? getMediaItemKey(nextItems[0], 0) : '';
+        mediaAnimationHint = animationHint || null;
+        invalidateMediaGridCache(true);
+        if (currentChartTab === 'media' && ui.mediaPanel) {
+          renderMediaGrid();
+        }
+      }
+
+      function syncMediaDisplayOrder(force) {
+        var nextItems = buildRotatedMediaItems();
+        if (mediaOrdersMatch(nextItems)) {
+          mediaDisplayItems = nextItems;
+          mediaRotationLeadKey = nextItems.length > 0 ? getMediaItemKey(nextItems[0], 0) : '';
+          return;
+        }
+
+        var previousLeadKey = mediaRotationLeadKey;
+        var nextLeadKey = nextItems.length > 0 ? getMediaItemKey(nextItems[0], 0) : '';
+        clearMediaRotationTimer();
+
+        if (!force && canRotateMediaQueue() && previousLeadKey && previousLeadKey !== nextLeadKey && currentChartTab === 'media' && ui.mediaPanel && ui.mediaPanel.style.display !== 'none') {
+          var firstCard = ui.mediaPanel.querySelector('.fgpx-media-card');
+          if (firstCard) {
+            firstCard.classList.add('fgpx-media-card-exiting');
+            mediaRotationTimer = setTimeout(function() {
+              mediaRotationTimer = null;
+              applyMediaDisplayOrder(nextItems, { enteringKey: nextLeadKey, tailKey: previousLeadKey });
+            }, 180);
+            return;
+          }
+        }
+
+        applyMediaDisplayOrder(nextItems, (!force && previousLeadKey !== nextLeadKey) ? { enteringKey: nextLeadKey, tailKey: previousLeadKey } : null);
+      }
+
+      registerTeardown(function() {
+        clearMediaRotationTimer();
+      });
 
       function buildMediaItems() {
         // Only build media items if photos are enabled and available
         if (!FGPX.photosEnabled) {
           mediaItems = [];
+          mediaDisplayItems = [];
           return;
         }
         if (!Array.isArray(photos) || photos.length === 0) {
           mediaItems = [];
+          mediaDisplayItems = [];
           return;
+        }
+
+        function estimatePhotoPlaybackSec(ph) {
+          if (!ph || !ph.timestamp || isNaN(trackStartTimestampMs)) return null;
+          if (typeof ph._playbackSec === 'number' && isFinite(ph._playbackSec)) return ph._playbackSec;
+          var ts = Date.parse(ph.timestamp);
+          if (isNaN(ts)) return null;
+          ph._playbackSec = Math.max(0, (ts - trackStartTimestampMs) / 1000);
+          return ph._playbackSec;
         }
 
         function estimatePhotoDistanceAlong(ph) {
@@ -2846,6 +2987,7 @@
             var ts = new Date(ph.timestamp);
             if (!isNaN(ts.getTime())) timeLabel = ts.toLocaleString();
           }
+          var playbackSec = estimatePhotoPlaybackSec(ph);
           var routeKm = '';
           if (routeDistMeters != null && isFinite(routeDistMeters)) {
             routeKm = (routeDistMeters / 1000).toFixed(2) + ' km';
@@ -2859,6 +3001,8 @@
             sourceLabel: sourceLabel,
             timeLabel: timeLabel,
             routeKm: routeKm,
+            routeDistMeters: routeDistMeters,
+            playbackSec: playbackSec,
             isGpsLinked: (typeof ph.lat === 'number' && typeof ph.lon === 'number')
           };
           orderedItems.push(item);
@@ -2867,14 +3011,17 @@
         }
         mediaItems = trackLinked.concat(offTrack);
         mediaItems = (photoOrderMode === 'time_first') ? orderedItems : trackLinked.concat(offTrack);
-        invalidateMediaGridCache(); // Clear cached grid when media items change
+        mediaDisplayItems = mediaItems.slice();
+        mediaRotationLeadKey = mediaDisplayItems.length > 0 ? getMediaItemKey(mediaDisplayItems[0], 0) : '';
+        syncMediaDisplayOrder(true);
       }
 
       function openMediaViewerAt(index) {
-        if (!Array.isArray(mediaItems) || mediaItems.length === 0) return;
+        var activeMediaItems = getDisplayedMediaItems();
+        if (!Array.isArray(activeMediaItems) || activeMediaItems.length === 0) return;
         if (!isFinite(index)) return;
-        var safeIndex = Math.max(0, Math.min(mediaItems.length - 1, Number(index) | 0));
-        var item = mediaItems[safeIndex];
+        var safeIndex = Math.max(0, Math.min(activeMediaItems.length - 1, Number(index) | 0));
+        var item = activeMediaItems[safeIndex];
         if (!item) return;
         mediaViewerWasPlaying = !!playing;
         if (mediaViewerWasPlaying) {
@@ -2888,17 +3035,21 @@
       }
 
       // Invalidate media grid cache when track data changes
-      function invalidateMediaGridCache() {
+      function invalidateMediaGridCache(preservePage) {
         mediaGridRendered = false;
         cachedMediaGridDOM = null;
         cachedMediaGridPage = -1;
-        mediaGridPage = 0; // Reset to first page when cache invalidated
+        if (!preservePage) {
+          mediaGridPage = 0;
+        }
       }
 
       function renderMediaGrid() {
         if (!ui.mediaPanel) return;
+        var activeMediaItems = getDisplayedMediaItems();
+        var allowMediaGridCache = !photoQueueRotationEnabled;
         // If grid already rendered, reuse cached DOM instead of rebuilding
-        if (mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {
+        if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {
           ui.mediaPanel.innerHTML = '';
           ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));
           var startIdx = mediaGridPage * mediaGridPageSize;
@@ -2915,12 +3066,12 @@
           var prevBtn = ui.mediaPanel.querySelector('.fgpx-media-page-prev');
           var nextBtn = ui.mediaPanel.querySelector('.fgpx-media-page-next');
           if (prevBtn) prevBtn.addEventListener('click', function() { mediaGridPage = Math.max(0, mediaGridPage - 1); mediaGridRendered = false; renderMediaGrid(); });
-          if (nextBtn) nextBtn.addEventListener('click', function() { var maxPage = Math.ceil(mediaItems.length / mediaGridPageSize) - 1; mediaGridPage = Math.min(maxPage, mediaGridPage + 1); mediaGridRendered = false; renderMediaGrid(); });
+          if (nextBtn) nextBtn.addEventListener('click', function() { var maxPage = Math.ceil(activeMediaItems.length / mediaGridPageSize) - 1; mediaGridPage = Math.min(maxPage, mediaGridPage + 1); mediaGridRendered = false; renderMediaGrid(); });
           return;
         }
         // First render: build DOM and cache it
         ui.mediaPanel.innerHTML = '';
-        if (!Array.isArray(mediaItems) || mediaItems.length === 0) {
+        if (!Array.isArray(activeMediaItems) || activeMediaItems.length === 0) {
           var empty = document.createElement('div');
           empty.className = 'fgpx-media-empty';
           empty.setAttribute('role', 'status');
@@ -2930,14 +3081,19 @@
             ? 'No photos available in the visible privacy window.'
             : 'No photos available for this track.';
           ui.mediaPanel.appendChild(empty);
-          cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
-          cachedMediaGridPage = mediaGridPage;
-          mediaGridRendered = true;
+          if (allowMediaGridCache) {
+            cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+            cachedMediaGridPage = mediaGridPage;
+            mediaGridRendered = true;
+          }
           return;
         }
         // Calculate pagination
-        var totalItems = mediaItems.length;
+        var totalItems = activeMediaItems.length;
         var totalPages = Math.ceil(totalItems / mediaGridPageSize);
+        if (totalPages <= 0) totalPages = 1;
+        if (mediaGridPage >= totalPages) mediaGridPage = totalPages - 1;
+        if (mediaGridPage < 0) mediaGridPage = 0;
         var startIdx = mediaGridPage * mediaGridPageSize;
         var endIdx = Math.min(startIdx + mediaGridPageSize, totalItems);
         
@@ -2945,10 +3101,23 @@
         grid.className = 'fgpx-media-grid';
         for (var gi = startIdx; gi < endIdx; gi++) {
           (function(index) {
-            var item = mediaItems[index];
+            var item = activeMediaItems[index];
+            var itemKey = getMediaItemKey(item, index);
             var card = document.createElement('button');
             card.type = 'button';
             card.className = 'fgpx-media-card';
+            card.setAttribute('data-media-key', itemKey);
+            if (photoQueueRotationEnabled) {
+              if (item.mediaQueueState === 'next') card.className += ' fgpx-media-card-next';
+              else if (item.mediaQueueState === 'passed') card.className += ' fgpx-media-card-passed';
+              else card.className += ' fgpx-media-card-upcoming';
+              if (mediaAnimationHint && mediaAnimationHint.enteringKey === itemKey && index === startIdx) {
+                card.className += ' fgpx-media-card-entering';
+              }
+              if (mediaAnimationHint && mediaAnimationHint.tailKey === itemKey && index === endIdx - 1) {
+                card.className += ' fgpx-media-card-tail-entering';
+              }
+            }
             card.setAttribute('aria-label', 'Open photo ' + String(index + 1));
             var img = document.createElement('img');
             img.className = 'fgpx-media-card-image';
@@ -3020,9 +3189,16 @@
         }
         
         // Cache the rendered media panel for the active page.
-        cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
-        cachedMediaGridPage = mediaGridPage;
-        mediaGridRendered = true;
+        if (allowMediaGridCache) {
+          cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+          cachedMediaGridPage = mediaGridPage;
+          mediaGridRendered = true;
+        } else {
+          mediaGridRendered = false;
+          cachedMediaGridDOM = null;
+          cachedMediaGridPage = -1;
+        }
+        mediaAnimationHint = null;
       }
 
       function addPhotoMarkers() {
@@ -5128,16 +5304,17 @@
       overlay.appendChild(overlayCounter);
       ui.mapEl.appendChild(overlay);
       function updateOverlayViewerControls() {
-        var viewerVisible = mediaViewerActive && Array.isArray(mediaItems) && mediaItems.length > 0;
+        var activeMediaItems = getDisplayedMediaItems();
+        var viewerVisible = mediaViewerActive && Array.isArray(activeMediaItems) && activeMediaItems.length > 0;
         overlayPrev.style.display = viewerVisible ? 'block' : 'none';
         overlayNext.style.display = viewerVisible ? 'block' : 'none';
         overlayCounter.style.display = viewerVisible ? 'block' : 'none';
         if (!viewerVisible) return;
         overlayPrev.disabled = mediaViewerIndex <= 0;
-        overlayNext.disabled = mediaViewerIndex >= (mediaItems.length - 1);
+        overlayNext.disabled = mediaViewerIndex >= (activeMediaItems.length - 1);
         overlayPrev.style.opacity = overlayPrev.disabled ? '0.4' : '1';
         overlayNext.style.opacity = overlayNext.disabled ? '0.4' : '1';
-        overlayCounter.textContent = String(mediaViewerIndex + 1) + ' / ' + String(mediaItems.length);
+        overlayCounter.textContent = String(mediaViewerIndex + 1) + ' / ' + String(activeMediaItems.length);
       }
       function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
@@ -5419,15 +5596,17 @@
       overlayNext.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        var activeMediaItems = getDisplayedMediaItems();
         if (!mediaViewerActive) return;
-        if (mediaViewerIndex >= mediaItems.length - 1) return;
+        if (mediaViewerIndex >= activeMediaItems.length - 1) return;
         openMediaViewerAt(mediaViewerIndex + 1);
       });
       // ESC to close
       var onOverlayKeydown = function(e){
         if (!document.contains(root)) return;
+        var activeMediaItems = getDisplayedMediaItems();
         if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowRight' || e.code === 'ArrowRight')) {
-          if (mediaViewerIndex < mediaItems.length - 1) {
+          if (mediaViewerIndex < activeMediaItems.length - 1) {
             e.preventDefault();
             openMediaViewerAt(mediaViewerIndex + 1);
           }
@@ -5849,6 +6028,7 @@
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
           if (cinemaEl) cinemaEl.style.display = 'none';
           if (ui.mediaPanel) {
+            syncMediaDisplayOrder(true);
             renderMediaGrid();
             ui.mediaPanel.style.display = 'block';
           }
@@ -9221,6 +9401,7 @@
               photoDistPtr = loPd;
             }
           } catch(_) {}
+          syncMediaDisplayOrder(true);
         } catch(_) {}
       }
 
@@ -9812,19 +9993,12 @@
                       } catch(_) {}
                     }
                     if (isValidPhoto) {
-                      // Check if a photo at this location is already queued or displayed
-                      if (isLocationAlreadyQueued(p.lat, p.lon)) {
-                        isValidPhoto = false; // Mark as invalid to skip
-                      }
-                      
-                      if (isValidPhoto) {
-                        shownPhotoKeys.add(key);
-                        photoQueue.push(p);
-                        DBG.log('enqueue photo', { id: p.id, dist: p._distAlong });
-                        // If this is the first photo and no overlay is active, process it immediately
-                        if (photoQueue.length === 1 && !overlayActive) {
-                          processNextPhoto();
-                        }
+                      shownPhotoKeys.add(key);
+                      photoQueue.push(p);
+                      DBG.log('enqueue photo', { id: p.id, dist: p._distAlong });
+                      // If this is the first photo and no overlay is active, process it immediately
+                      if (photoQueue.length === 1 && !overlayActive) {
+                        processNextPhoto();
                       }
                     }
                   }
@@ -9854,20 +10028,13 @@
                           } catch(_) {}
                         }
                         if (isValidPhoto) {
-                          // Check if a photo at this location is already queued or displayed
-                          if (isLocationAlreadyQueued(pNext.lat, pNext.lon)) {
-                            isValidPhoto = false; // Mark as invalid to skip
-                          }
-                          
-                          if (isValidPhoto) {
-                            shownPhotoKeys.add(key2); 
-                            photoQueue.push(pNext); 
-                            photoPtr++; 
-                            DBG.log('enqueue photo', { id: pNext.id, dist: pNext._distAlong });
-                            // If this is the first photo and no overlay is active, process it immediately
-                            if (photoQueue.length === 1 && !overlayActive) {
-                              processNextPhoto();
-                            }
+                          shownPhotoKeys.add(key2); 
+                          photoQueue.push(pNext); 
+                          photoPtr++; 
+                          DBG.log('enqueue photo', { id: pNext.id, dist: pNext._distAlong });
+                          // If this is the first photo and no overlay is active, process it immediately
+                          if (photoQueue.length === 1 && !overlayActive) {
+                            processNextPhoto();
                           }
                         }
                       }
@@ -9906,19 +10073,12 @@
                             } catch(_) {}
                           }
                           if (isValidPhoto) {
-                            // Check if a photo at this location is already queued or displayed
-                            if (isLocationAlreadyQueued(pD.lat, pD.lon)) {
-                              isValidPhoto = false; // Mark as invalid to skip
-                            }
-                            
-                            if (isValidPhoto) {
-                              shownPhotoKeys.add(keyD); 
-                              photoQueue.push(pD); 
-                              DBG.log('enqueue photo', { id: pD.id, dist: pD._distAlong });
-                              // If this is the first photo and no overlay is active, process it immediately
-                              if (photoQueue.length === 1 && !overlayActive) {
-                                processNextPhoto();
-                              }
+                            shownPhotoKeys.add(keyD); 
+                            photoQueue.push(pD); 
+                            DBG.log('enqueue photo', { id: pD.id, dist: pD._distAlong });
+                            // If this is the first photo and no overlay is active, process it immediately
+                            if (photoQueue.length === 1 && !overlayActive) {
+                              processNextPhoto();
                             }
                           }
                         }
@@ -9932,6 +10092,13 @@
             lastPlaybackSec = currentSec;
             lastPlaybackDist = dNowFrame;
             // Photos are now processed immediately when queued, so no need for frame-end processing
+          }
+        } catch(_) {}
+
+        // Keep media queue rotation in sync for both timestamped and geo-only playback.
+        try {
+          if (canRotateMediaQueue() && currentChartTab === 'media' && ui.mediaPanel && ui.mediaPanel.style.display !== 'none') {
+            syncMediaDisplayOrder(false);
           }
         } catch(_) {}
 
@@ -11004,6 +11171,9 @@
             }
           } catch(_) {}
         }
+        try {
+          syncMediaDisplayOrder(true);
+        } catch(_) {}
         // Prepare for immediate camera update and auto-play from the new position
         forceCameraUpdate = true;
         appliedBearing = null;

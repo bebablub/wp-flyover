@@ -82,6 +82,7 @@ final class OptionsTest extends TestCase
             'arrows_km'                => ['fgpx_arrows_km'],
             'photos_enabled'           => ['fgpx_photos_enabled'],
             'photo_order_mode'         => ['fgpx_photo_order_mode'],
+            'photo_queue_rotation'     => ['fgpx_photo_queue_rotation_enabled'],
             'photo_max_distance'       => ['fgpx_photo_max_distance'],
             'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
             'lazy_viewport'            => ['fgpx_lazy_viewport'],
@@ -124,6 +125,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('0',      Options::get('fgpx_arrows_enabled'));
         $this->assertSame('5',      Options::get('fgpx_arrows_km'));
         $this->assertSame('geo_first', Options::get('fgpx_photo_order_mode'));
+        $this->assertSame('0',      Options::get('fgpx_photo_queue_rotation_enabled'));
         $this->assertSame('100',    Options::get('fgpx_photo_max_distance'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
@@ -232,7 +234,7 @@ final class OptionsTest extends TestCase
             'windRoseColorEast', 'windRoseColorWest',
             'daynightEnabled', 'daynightMapEnabled',
             'daynightMapColor', 'daynightMapOpacity',
-            'photosEnabled', 'photoOrderMode', 'photoMaxDistance', 'showLabels',
+            'photosEnabled', 'photoOrderMode', 'photoQueueRotationEnabled', 'photoMaxDistance', 'showLabels',
             'defaultZoom', 'defaultPitch', 'styleJson',
             'backendSimplify', 'backendSimplifyTarget',
             'debugWeatherData',
@@ -254,6 +256,7 @@ final class OptionsTest extends TestCase
         $this->assertIsBool($f['daynightEnabled'],     'daynightEnabled must be bool');
         $this->assertIsBool($f['daynightMapEnabled'],  'daynightMapEnabled must be bool');
         $this->assertIsBool($f['photosEnabled'],       'photosEnabled must be bool');
+        $this->assertIsBool($f['photoQueueRotationEnabled'], 'photoQueueRotationEnabled must be bool');
         $this->assertIsBool($f['showLabels'],          'showLabels must be bool');
         $this->assertIsBool($f['backendSimplify'],     'backendSimplify must be bool');
         $this->assertIsBool($f['debugWeatherData'],    'debugWeatherData must be bool');
