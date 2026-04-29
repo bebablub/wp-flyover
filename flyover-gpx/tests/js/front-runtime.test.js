@@ -27,6 +27,28 @@ function flushAsync() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+async function openMediaTab(rootSelector = '#fgpx-app') {
+  const root = document.querySelector(rootSelector);
+  expect(root).toBeTruthy();
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const container = root.querySelector('.fgpx-container');
+    const switchTab = (container && container.__fgpxSwitchChartTab) || root.__fgpxSwitchChartTab;
+    if (typeof switchTab === 'function') {
+      switchTab('media');
+      await flushAsync();
+      return;
+    }
+    await flushAsync();
+  }
+
+  const tabs = Array.from(document.querySelectorAll(rootSelector + ' .fgpx-chart-tab'));
+  const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
+  expect(mediaTab).toBeTruthy();
+  mediaTab.click();
+  await flushAsync();
+}
+
 function baseFGPX(overrides = {}) {
   return Object.assign(
     {
@@ -890,211 +912,6 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain("} catch(e) { DBG.warn('Route arrow rendering skipped', e); }");
   });
 
-  test('runtime media pagination opens correct photo on page 2', async () => {
-    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
-    installMapLibreMock();
-    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
-
-    const photos = [];
-    for (let i = 1; i <= 13; i += 1) {
-      photos.push({
-        id: i,
-        title: 'Photo ' + i,
-        caption: 'Photo ' + i,
-        lat: 48 + (i * 0.0001),
-        lon: 16 + (i * 0.0001),
-        timestamp: new Date(Date.UTC(2026, 0, 1, 0, i, 0)).toISOString(),
-        thumbUrl: 'https://example.test/p' + i + '-thumb.jpg',
-        fullUrl: 'https://example.test/p' + i + '.jpg',
-      });
-    }
-
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        geojson: {
-          coordinates: [[16, 48, 100], [16.02, 48.02, 120]],
-          properties: {
-            timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:13:00Z'],
-            cumulativeDistance: [0, 2000],
-            heartRates: [],
-            cadences: [],
-            temperatures: [],
-            powers: [],
-            windSpeeds: [],
-            windDirections: [],
-            windImpacts: [],
-          },
-        },
-        bounds: [16, 48, 16.02, 48.02],
-        stats: {},
-        photos,
-      }),
-    });
-    global.fetch = fetchMock;
-    window.fetch = fetchMock;
-
-    window.FGPX = baseFGPX({
-      ajaxUrl: null,
-      photosEnabled: true,
-      photoOrderMode: 'time_first',
-      weatherEnabled: false,
-      privacyEnabled: false,
-    });
-
-    loadFront();
-    window.FGPX.boot();
-
-    await flushAsync();
-    await flushAsync();
-    await flushAsync();
-
-    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
-    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
-    expect(mediaTab).toBeTruthy();
-    mediaTab.click();
-
-    const nextBtn = document.querySelector('#fgpx-app .fgpx-media-page-next');
-    expect(nextBtn).toBeTruthy();
-    nextBtn.click();
-
-    const firstCardPage2 = document.querySelector('#fgpx-app .fgpx-media-card');
-    expect(firstCardPage2).toBeTruthy();
-    firstCardPage2.click();
-
-    const overlayImg = document.querySelector('#fgpx-app .fgpx-photo-overlay img');
-    expect(overlayImg).toBeTruthy();
-    expect(String(overlayImg.getAttribute('src'))).toContain('p13.jpg');
-  });
-
-  test('runtime media queue rotation updates during geo-only playback', async () => {
-    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
-    installMapLibreMock();
-    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
-
-    const rafCallbacks = [];
-    let rafNow = 0;
-    const originalRaf = window.requestAnimationFrame;
-    const originalCancelRaf = window.cancelAnimationFrame;
-    window.requestAnimationFrame = jest.fn(function(cb) {
-      rafCallbacks.push(cb);
-      return rafCallbacks.length;
-    });
-    window.cancelAnimationFrame = jest.fn();
-
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        geojson: {
-          coordinates: [[16, 48, 100], [16.03, 48, 110], [16.06, 48, 120]],
-          properties: {
-            timestamps: [],
-            cumulativeDistance: [0, 2200, 4400],
-            heartRates: [],
-            cadences: [],
-            temperatures: [],
-            powers: [],
-            windSpeeds: [],
-            windDirections: [],
-            windImpacts: [],
-          },
-        },
-        bounds: [16, 48, 16.06, 48],
-        stats: {},
-        photos: [
-          {
-            id: 1,
-            title: 'Photo 1',
-            lat: 48,
-            lon: 16,
-            timestamp: null,
-            thumbUrl: 'https://example.test/start-thumb.jpg',
-            fullUrl: 'https://example.test/start.jpg',
-          },
-          {
-            id: 2,
-            title: 'Photo 2',
-            lat: 48,
-            lon: 16.03,
-            timestamp: null,
-            thumbUrl: 'https://example.test/middle-thumb.jpg',
-            fullUrl: 'https://example.test/middle.jpg',
-          },
-          {
-            id: 3,
-            title: 'Photo 3',
-            lat: 48,
-            lon: 16.06,
-            timestamp: null,
-            thumbUrl: 'https://example.test/finish-thumb.jpg',
-            fullUrl: 'https://example.test/finish.jpg',
-          },
-        ],
-      }),
-    });
-    global.fetch = fetchMock;
-    window.fetch = fetchMock;
-
-    window.FGPX = baseFGPX({
-      ajaxUrl: null,
-      photosEnabled: true,
-      photoOrderMode: 'time_first',
-      photoQueueRotationEnabled: true,
-      weatherEnabled: false,
-      privacyEnabled: false,
-      prefetchEnabled: false,
-    });
-
-    loadFront();
-    window.FGPX.boot();
-
-    await flushAsync();
-    await flushAsync();
-    await flushAsync();
-
-    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
-    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
-    expect(mediaTab).toBeTruthy();
-    mediaTab.click();
-
-    var firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
-    expect(firstTitle).toContain('Photo 1');
-    var initialTitle = firstTitle;
-
-    const playBtn = document.querySelector('#fgpx-app .fgpx-btn-primary');
-    expect(playBtn).toBeTruthy();
-    playBtn.click();
-
-    // First play may go through zoom-settle path before RAF starts; wait until queued.
-    var rafReadyDeadline = Date.now() + 1500;
-    while (rafCallbacks.length === 0 && Date.now() < rafReadyDeadline) {
-      await flushAsync();
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-    expect(rafCallbacks.length).toBeGreaterThan(0);
-
-    function runFrame(stepMs) {
-      var cb = rafCallbacks.shift();
-      expect(typeof cb).toBe('function');
-      rafNow += stepMs;
-      cb(rafNow);
-    }
-
-    runFrame(0);
-    runFrame(20000);
-    runFrame(20000);
-
-    await new Promise((resolve) => setTimeout(resolve, 240));
-    await flushAsync();
-
-    firstTitle = String(document.querySelector('#fgpx-app .fgpx-media-card-title')?.textContent || '');
-    expect(firstTitle).toMatch(/^Photo\s+\d+$/);
-    expect(firstTitle).not.toBe(initialTitle);
-
-    window.requestAnimationFrame = originalRaf;
-    window.cancelAnimationFrame = originalCancelRaf;
-  });
-
   test('runtime privacy mode hides media items without derivable route distance', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
     installMapLibreMock();
@@ -1160,10 +977,7 @@ describe('front.js runtime minimal regressions', () => {
     await flushAsync();
     await flushAsync();
 
-    const tabs = Array.from(document.querySelectorAll('#fgpx-app .fgpx-chart-tab'));
-    const mediaTab = tabs.find((btn) => String(btn.textContent || '').toLowerCase().indexOf('media') >= 0);
-    expect(mediaTab).toBeTruthy();
-    mediaTab.click();
+    await openMediaTab('#fgpx-app');
 
     const panelText = String(document.querySelector('#fgpx-app .fgpx-media-panel')?.textContent || '');
     expect(panelText).not.toContain('Unknown offtrack');

@@ -577,6 +577,31 @@
     if (FGPX.photosEnabled) {
       chartTabs.appendChild(tabMedia);
     }
+
+    // Queue tab requests until startPlayer wires switchChartTab in the map load path.
+    // This avoids no-op clicks when users switch tabs immediately after the UI renders.
+    container.__fgpxTabsReady = false;
+    function queueTabUntilReady(tabType) {
+      return function() {
+        if (container.__fgpxTabsReady && typeof container.__fgpxSwitchChartTab === 'function') {
+          container.__fgpxSwitchChartTab(tabType);
+          return;
+        }
+        container.__fgpxPendingTabType = tabType;
+      };
+    }
+    tabElevation.addEventListener('click', queueTabUntilReady('elevation'));
+    tabBiometrics.addEventListener('click', queueTabUntilReady('biometrics'));
+    tabTemperature.addEventListener('click', queueTabUntilReady('temperature'));
+    tabPower.addEventListener('click', queueTabUntilReady('power'));
+    tabPowerZones.addEventListener('click', queueTabUntilReady('powerzones'));
+    tabWindImpact.addEventListener('click', queueTabUntilReady('windimpact'));
+    tabWindRose.addEventListener('click', queueTabUntilReady('windrose'));
+    tabAll.addEventListener('click', queueTabUntilReady('all'));
+    tabWeatherGrade.addEventListener('click', queueTabUntilReady('weathergrade'));
+    if (FGPX.photosEnabled) {
+      tabMedia.addEventListener('click', queueTabUntilReady('media'));
+    }
     
     // Event listeners will be added in startPlayer after functions are defined
     
@@ -6269,6 +6294,9 @@
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
           if (cinemaEl) cinemaEl.style.display = 'none';
           if (ui.mediaPanel) {
+            if ((!Array.isArray(mediaItems) || mediaItems.length === 0) && FGPX.photosEnabled && Array.isArray(photos) && photos.length > 0) {
+              buildMediaItems();
+            }
             syncMediaDisplayOrder(true);
             renderMediaGrid();
             ui.mediaPanel.style.display = 'block';
@@ -6313,6 +6341,10 @@
         }
       };
       ui.switchChartTab = switchChartTab;
+      root.__fgpxSwitchChartTab = switchChartTab;
+      if (container) {
+        container.__fgpxSwitchChartTab = switchChartTab;
+      }
       
       // Chart data series visibility state for All Data tab
       var chartDataVisibility = {
@@ -6391,6 +6423,21 @@
       ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
       ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
       ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
+      root.__fgpxTabsReady = true;
+      if (container) {
+        container.__fgpxTabsReady = true;
+      }
+      var pendingTabType = '';
+      if (container && typeof container.__fgpxPendingTabType === 'string' && container.__fgpxPendingTabType !== '') {
+        pendingTabType = container.__fgpxPendingTabType;
+      } else if (typeof root.__fgpxPendingTabType === 'string' && root.__fgpxPendingTabType !== '') {
+        pendingTabType = root.__fgpxPendingTabType;
+      }
+      if (pendingTabType !== '') {
+        switchChartTab(pendingTabType);
+        if (container) container.__fgpxPendingTabType = '';
+        root.__fgpxPendingTabType = '';
+      }
       
       // Immediate debug test to verify logging works
       DBG.log('=== DEBUG TEST: Chart creation started ===');

@@ -63,10 +63,10 @@ final class AdminSettingsValidationTest extends TestCase
         $source = (string) file_get_contents($adminFile);
 
         $this->assertStringContainsString('id="fgpx_contours_enabled" name="fgpx_contours_enabled" value="1"', $source);
-        $this->assertStringContainsString("\\update_option('fgpx_contours_enabled', isset($_POST['fgpx_contours_enabled']) ? '1' : '0', true);", $source);
-        $this->assertStringContainsString("\\update_option('fgpx_contours_color', $this->getValidColor('fgpx_contours_color', '#ffffff'), true);", $source);
-        $this->assertStringContainsString("\\update_option('fgpx_contours_width', (string) max(0.1, min(6.0, $this->getValidFloat('fgpx_contours_width', 1.2, 0.1, 6.0))), true);", $source);
-        $this->assertStringContainsString("\\update_option('fgpx_contours_opacity', (string) max(0.1, min(1.0, $this->getValidFloat('fgpx_contours_opacity', 0.75, 0.1, 1.0))), true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_enabled', isset(\$_POST['fgpx_contours_enabled']) ? '1' : '0', true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_color', \$this->getValidColor('fgpx_contours_color', '#ffffff'), true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_width', (string) max(0.1, min(6.0, \$this->getValidFloat('fgpx_contours_width', 1.2, 0.1, 6.0))), true);", $source);
+        $this->assertStringContainsString("\\update_option('fgpx_contours_opacity', (string) max(0.1, min(1.0, \$this->getValidFloat('fgpx_contours_opacity', 0.75, 0.1, 1.0))), true);", $source);
         $this->assertStringContainsString('\\update_option(\'fgpx_contours_minzoom\', (string) $contoursMinzoom, true);', $source);
         $this->assertStringContainsString('\\update_option(\'fgpx_contours_maxzoom\', (string) $contoursMaxzoom, true);', $source);
         $this->assertStringContainsString('id="fgpx_contours_source_layer" name="fgpx_contours_source_layer"', $source);
@@ -77,7 +77,7 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString('$satelliteLayerIdRaw = isset($_POST[\'fgpx_satellite_layer_id\']) ? (string) \\wp_unslash($_POST[\'fgpx_satellite_layer_id\']) : \'satellite\';', $source);
         $this->assertStringContainsString('\\update_option(\'fgpx_satellite_layer_id\', $satelliteLayerId, true);', $source);
         $this->assertStringContainsString('id="fgpx_satellite_tiles_url" name="fgpx_satellite_tiles_url"', $source);
-        $this->assertStringContainsString('$satelliteTilesUrlRaw = isset($_POST[\'fgpx_satellite_tiles_url\']) ? \trim((string) \wp_unslash($_POST[\'fgpx_satellite_tiles_url\'])) : \''\';', $source);
+        $this->assertStringContainsString('$satelliteTilesUrlRaw = isset($_POST[\'fgpx_satellite_tiles_url\']) ? \trim((string) \wp_unslash($_POST[\'fgpx_satellite_tiles_url\'])) : \'\';', $source);
         $this->assertStringContainsString('\\update_option(\'fgpx_satellite_tiles_url\', $satelliteTilesUrl, true);', $source);
     }
 
