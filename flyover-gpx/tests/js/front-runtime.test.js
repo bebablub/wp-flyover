@@ -368,6 +368,34 @@ describe('front.js runtime minimal regressions', () => {
     expect(calledUrls[1]).toContain('strategy=latest_embed');
   });
 
+  test('gallery can use AJAX-first mode when configured', async () => {
+    document.body.innerHTML =
+      '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
+
+    window.maplibregl = {};
+    window.Chart = function ChartStub() {};
+
+    const fetchMock = mockRejectedFetch('network down');
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: 'http://example.com/wp-admin/admin-ajax.php',
+      instances: {
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed', galleryPreferAjaxFirst: true },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+
+    const calledUrls = fetchMock.mock.calls.map((args) => String(args[0]));
+    expect(calledUrls.length).toBe(2);
+    expect(calledUrls[0]).toContain('admin-ajax.php');
+    expect(calledUrls[0]).toContain('strategy=latest_embed');
+    expect(calledUrls[1]).toContain('/wp-json/fgpx/v1/track/7?strategy=latest_embed');
+  });
+
   test('cache key builder includes strategy token for differentiation', () => {
     expect(FRONT_SRC).toContain("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';");
     expect(FRONT_SRC).toContain("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;");
@@ -516,12 +544,11 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
   });
 
-  test('overlay supports media viewer previous and next navigation', () => {
-    expect(FRONT_SRC).toContain("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';");
-    expect(FRONT_SRC).toContain("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';");
+  test('overlay has close button and no prev/next nav', () => {
+    expect(FRONT_SRC).toContain("overlayClose.className = 'fgpx-photo-overlay-close';");
     expect(FRONT_SRC).toContain('function updateOverlayViewerControls() {');
-    expect(FRONT_SRC).toContain("if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowRight' || e.code === 'ArrowRight')) {");
-    expect(FRONT_SRC).toContain("if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowLeft' || e.code === 'ArrowLeft')) {");
+    expect(FRONT_SRC).not.toContain("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';");
+    expect(FRONT_SRC).not.toContain("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';");
     expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex + 1);');
     expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex - 1);');
   });
@@ -867,8 +894,8 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('if (routeDistMeters < privacyStartD || routeDistMeters > privacyEndD) { continue; }');
   });
 
-  test('media grid pagination: divides items into pages of 12', () => {
-    expect(FRONT_SRC).toContain('var mediaGridPageSize = 12;');
+  test('media grid pagination: divides items into configured page size', () => {
+    expect(FRONT_SRC).toContain('var mediaGridPageSize = Math.max(4, Math.min(48, Number(window.FGPX && window.FGPX.galleryPerPage) || 16));');
     expect(FRONT_SRC).toContain('var mediaGridPage = 0;');
     expect(FRONT_SRC).toContain('var totalPages = Math.ceil(totalItems / mediaGridPageSize);');
     expect(FRONT_SRC).toContain('var startIdx = mediaGridPage * mediaGridPageSize;');

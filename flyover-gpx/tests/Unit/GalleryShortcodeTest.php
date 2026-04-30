@@ -179,4 +179,12 @@ final class GalleryShortcodeTest extends TestCase
         $this->assertStringContainsString("\$photoOrderMode = \\sanitize_key((string) (\$atts['photo_order_mode'] ?? \$galleryPhotoOrderModeDefault));", $source);
         $this->assertStringContainsString("'photoOrderMode' => \$photoOrderMode", $source);
     }
+
+    public function test_gallery_player_config_forces_photos_enabled(): void
+    {
+        $galleryFile = dirname(__DIR__, 2) . '/includes/GalleryShortcode.php';
+        $source = (string) file_get_contents($galleryFile);
+
+        $this->assertStringContainsString("'photosEnabled' => true", $source);
+    }
 }

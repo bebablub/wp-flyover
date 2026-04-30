@@ -97,6 +97,7 @@ final class OptionsTest extends TestCase
             'gallery_default_sort'     => ['fgpx_gallery_default_sort'],
             'gallery_show_view_toggle' => ['fgpx_gallery_show_view_toggle'],
             'gallery_show_search'      => ['fgpx_gallery_show_search'],
+            'gallery_ajax_first'       => ['fgpx_gallery_ajax_first'],
             'weather_enabled'          => ['fgpx_weather_enabled'],
             'daynight_enabled'         => ['fgpx_daynight_enabled'],
             'elevation_coloring'       => ['fgpx_elevation_coloring'],
@@ -141,7 +142,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('5',      Options::get('fgpx_arrows_km'));
         $this->assertSame('geo_first', Options::get('fgpx_photo_order_mode'));
         $this->assertSame('0',      Options::get('fgpx_photo_queue_rotation_enabled'));
-        $this->assertSame('100',    Options::get('fgpx_photo_max_distance'));
+        $this->assertSame('500',    Options::get('fgpx_photo_max_distance'));
         $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
         $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
         $this->assertSame('0.1',    Options::get('fgpx_weather_rain_threshold'));
@@ -149,11 +150,12 @@ final class OptionsTest extends TestCase
         $this->assertSame('3',      Options::get('fgpx_weather_wind_threshold'));
         $this->assertSame('50',     Options::get('fgpx_weather_cloud_threshold'));
         $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
-        $this->assertSame('12',     Options::get('fgpx_gallery_per_page'));
+        $this->assertSame('16',     Options::get('fgpx_gallery_per_page'));
         $this->assertSame('636px',  Options::get('fgpx_gallery_player_height'));
         $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_view_toggle'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_search'));
+        $this->assertSame('0',      Options::get('fgpx_gallery_ajax_first'));
         // Theme defaults
         $this->assertSame('system', Options::get('fgpx_theme_mode'));
         $this->assertSame('22:00',  Options::get('fgpx_theme_auto_dark_start'));

@@ -352,7 +352,11 @@ final class Admin
 		$defStyle = $options['fgpx_default_style'];
 		$defStyleUrl = $options['fgpx_default_style_url'];
 		$defStyleJson = $options['fgpx_default_style_json'];
-		$mapSelectorDefault = isset($options['fgpx_map_selector_default']) ? \sanitize_key((string) $options['fgpx_map_selector_default']) : 'basic';
+		$mapSelectorDefault = isset($options['fgpx_map_selector_default']) ? \sanitize_key((string) $options['fgpx_map_selector_default']) : 'satellite';
+		// Back-compat: old stored values
+		if ($mapSelectorDefault === 'basic' || $mapSelectorDefault === '') { $mapSelectorDefault = 'satellite'; }
+		if ($mapSelectorDefault === 'basic_contours') { $mapSelectorDefault = 'satellite_contours'; }
+		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) { $mapSelectorDefault = 'satellite'; }
 		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
 			$mapSelectorDefault = 'basic';
 		}
@@ -386,6 +390,7 @@ final class Admin
 		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
 		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
+		$galleryAjaxFirst = (string) ($options['fgpx_gallery_ajax_first'] ?? '0');
 		$galleryAutoSpeedEnabled = $options['fgpx_gallery_auto_speed_enabled'];
 		$galleryAutoSpeedThresholdKm = $options['fgpx_gallery_auto_speed_threshold_km'];
 		$galleryAutoSpeedValue = $options['fgpx_gallery_auto_speed_value'];
@@ -473,9 +478,8 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_map_selector_default">' . \esc_html__('Default map selector mode', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_map_selector_default" name="fgpx_map_selector_default">';
-		echo '<option value="basic"' . selected($mapSelectorDefault, 'basic', false) . '>' . \esc_html__('Basic', 'flyover-gpx') . '</option>';
-		echo '<option value="basic_contours"' . selected($mapSelectorDefault, 'basic_contours', false) . '>' . \esc_html__('Basic + Contours', 'flyover-gpx') . '</option>';
 		echo '<option value="satellite"' . selected($mapSelectorDefault, 'satellite', false) . '>' . \esc_html__('Satellite', 'flyover-gpx') . '</option>';
+		echo '<option value="satellite_contours"' . selected($mapSelectorDefault, 'satellite_contours', false) . '>' . \esc_html__('Satellite + Contours', 'flyover-gpx') . '</option>';
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Default mode for the on-map selector (next to fullscreen). Satellite mode uses an existing "satellite" layer from your style when available, otherwise falls back to the Satellite tiles URL below. If your tile URLs use {{API_KEY}}, configure Smart API key mode and key pool or provide URLs with a fixed key.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
@@ -570,6 +574,9 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gallery_show_search">' . \esc_html__('Show gallery search by default', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gallery_show_search" name="fgpx_gallery_show_search" value="1"' . ($galleryShowSearch === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show search input when shortcode does not define show_search.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_ajax_first">' . \esc_html__('Gallery player: AJAX-first track loading', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gallery_ajax_first" name="fgpx_gallery_ajax_first" value="1"' . ($galleryAjaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before REST for gallery player track payloads (recommended when /wp-json is blocked by firewall).', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_enabled">' . \esc_html__('Auto-speed by distance', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gallery_auto_speed_enabled" name="fgpx_gallery_auto_speed_enabled" value="1"' . ($galleryAutoSpeedEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Override playback speed in gallery based on track distance.', 'flyover-gpx') . '</label>';
@@ -2259,10 +2266,13 @@ final class Admin
 				\update_option('fgpx_default_style_json', $trimmed, true);
 			}
 		}
-		$mapSelectorDefaultRaw = isset($_POST['fgpx_map_selector_default']) ? (string) $_POST['fgpx_map_selector_default'] : 'basic';
+		$mapSelectorDefaultRaw = isset($_POST['fgpx_map_selector_default']) ? (string) $_POST['fgpx_map_selector_default'] : 'satellite';
 		$mapSelectorDefault = \sanitize_key($mapSelectorDefaultRaw);
-		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
-			$mapSelectorDefault = 'basic';
+		// Back-compat
+		if ($mapSelectorDefault === 'basic') { $mapSelectorDefault = 'satellite'; }
+		if ($mapSelectorDefault === 'basic_contours') { $mapSelectorDefault = 'satellite_contours'; }
+		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) {
+			$mapSelectorDefault = 'satellite';
 		}
 		\update_option('fgpx_map_selector_default', $mapSelectorDefault, true);
 		\update_option('fgpx_contours_enabled', isset($_POST['fgpx_contours_enabled']) ? '1' : '0', true);
@@ -2331,7 +2341,7 @@ final class Admin
 		\update_option('fgpx_default_zoom', (string) $zoom, true);
 		\update_option('fgpx_default_speed', (string) $speed, true);
 		\update_option('fgpx_default_pitch', (string) $pitch, true);
-		$galleryPerPage = $this->getValidInt('fgpx_gallery_per_page', 12, 4, 48);
+		$galleryPerPage = $this->getValidInt('fgpx_gallery_per_page', 16, 4, 48);
 		$galleryPlayerHeight = isset($_POST['fgpx_gallery_player_height']) ? \sanitize_text_field((string) $_POST['fgpx_gallery_player_height']) : '636px';
 		if ($galleryPlayerHeight === '' || !\preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $galleryPlayerHeight)) {
 			$galleryPlayerHeight = '636px';
@@ -2347,6 +2357,7 @@ final class Admin
 		\update_option('fgpx_gallery_default_sort', $galleryDefaultSort, true);
 		\update_option('fgpx_gallery_show_view_toggle', $this->getValidBool('fgpx_gallery_show_view_toggle') ? '1' : '0', true);
 		\update_option('fgpx_gallery_show_search', $this->getValidBool('fgpx_gallery_show_search') ? '1' : '0', true);
+		\update_option('fgpx_gallery_ajax_first', $this->getValidBool('fgpx_gallery_ajax_first') ? '1' : '0', true);
 		\update_option('fgpx_gallery_auto_speed_enabled', $this->getValidBool('fgpx_gallery_auto_speed_enabled') ? '1' : '0', true);
 		$galleryAutoSpeedThresholdKm = $this->getValidInt('fgpx_gallery_auto_speed_threshold_km', 200, 1, 99999);
 		\update_option('fgpx_gallery_auto_speed_threshold_km', (string) $galleryAutoSpeedThresholdKm, true);

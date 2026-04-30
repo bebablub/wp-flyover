@@ -42,6 +42,11 @@
   function applyPlayerConfig(cfg) {
     var playerConfig = cfg.playerConfig || {};
     var forceOverrideKeys = {
+      restUrl: true,
+      restBase: true,
+      ajaxUrl: true,
+      nonce: true,
+      hostPostId: true,
       simulationEnabled: true,
       simulationWaypointsEnabled: true,
       simulationCitiesEnabled: true,
@@ -565,6 +570,20 @@
   function initGallery(root, cfg) {
     applyGalleryTheme(root, cfg);
 
+    function resolvePerPageValue() {
+      var raw = cfg && cfg.perPage;
+      if (!isFinite(Number(raw)) || Number(raw) <= 0) {
+        raw = cfg && cfg.per_page;
+      }
+      var n = Number(raw);
+      if (!isFinite(n) || n <= 0) {
+        return null;
+      }
+      return Math.max(4, Math.min(48, n | 0));
+    }
+
+    var resolvedPerPage = resolvePerPageValue();
+
     var tracks = Array.isArray(cfg.tracks) ? cfg.tracks.slice() : [];
     var galleryRootId = String(root && root.getAttribute('data-root-id') || '');
     var strings = cfg.strings || {};
@@ -576,7 +595,7 @@
 
     var serverMode = !Array.isArray(cfg.tracks) && !!(cfg.endpointUrl || (cfg.ajaxUrl && cfg.ajaxAction));
     var viewMode = 'grid';
-    var visibleCount = Number(cfg.perPage) || 12;
+    var visibleCount = resolvedPerPage || 16;
     var searchTerm = '';
     var sortKey = cfg.defaultSort || 'newest';
     var currentPage = 0;
@@ -671,7 +690,7 @@
 
       return requestGalleryPayload(cfg, {
         page: nextPage,
-        per_page: Number(cfg.perPage) || 12,
+        per_page: resolvedPerPage,
         sort: sortKey,
         search: searchTerm
       }).then(function (payload) {
@@ -680,6 +699,12 @@
         }
 
         var items = Array.isArray(payload && payload.items) ? payload.items : [];
+        if (!resolvedPerPage) {
+          var pp = Number(payload && payload.pagination && payload.pagination.perPage);
+          if (isFinite(pp) && pp > 0) {
+            resolvedPerPage = Math.max(4, Math.min(48, pp | 0));
+          }
+        }
         tracks = reset ? items : tracks.concat(items);
   pendingRevealFromIndex = reset ? -1 : Math.max(0, tracks.length - items.length);
         currentPage = nextPage;
@@ -752,7 +777,7 @@
     if (searchInput) {
       searchInput.addEventListener('input', function () {
         searchTerm = normalize(searchInput.value);
-        visibleCount = Number(cfg.perPage) || 12;
+        visibleCount = resolvedPerPage || 16;
         if (serverMode) {
           clearTimeout(searchDebounceId);
           searchDebounceId = setTimeout(function () {
@@ -768,7 +793,7 @@
       sortSelect.value = sortKey;
       sortSelect.addEventListener('change', function () {
         sortKey = sortSelect.value;
-        visibleCount = Number(cfg.perPage) || 12;
+        visibleCount = resolvedPerPage || 16;
         if (serverMode) {
           clearTimeout(searchDebounceId);
           loadTracks(true);
@@ -787,7 +812,7 @@
           return;
         }
         pendingRevealFromIndex = visibleCount;
-        visibleCount += Number(cfg.perPage) || 12;
+        visibleCount += (resolvedPerPage || 16);
         render();
       });
     }

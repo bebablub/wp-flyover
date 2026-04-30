@@ -421,7 +421,12 @@ final class Plugin
             'simulationWaypointWindowKm' => (float) $options['fgpx_simulation_waypoint_window_km'],
             'simulationCityWindowKm' => (float) $options['fgpx_simulation_city_window_km'],
             'styleJson' => $resolvedStyleJson,
-            'mapSelectorDefault' => (string) ($options['fgpx_map_selector_default'] ?? 'basic'),
+            'mapSelectorDefault' => (function() use ($options) {
+                $v = \sanitize_key((string) ($options['fgpx_map_selector_default'] ?? 'satellite'));
+                if ($v === 'basic' || $v === '') { return 'satellite'; }
+                if ($v === 'basic_contours') { return 'satellite_contours'; }
+                return \in_array($v, ['satellite', 'satellite_contours'], true) ? $v : 'satellite';
+            })(),
             'contoursEnabled' => (string) ($options['fgpx_contours_enabled'] ?? '1') === '1',
             'contoursTilesUrl' => (string) ($options['fgpx_contours_tiles_url'] ?? ''),
             'contoursSourceLayer' => (string) ($options['fgpx_contours_source_layer'] ?? 'contour'),
@@ -439,6 +444,7 @@ final class Plugin
             'photosEnabled' => $photosEnabledFinal,
             'photoOrderMode' => $photoOrderModeFinal,
             'photoQueueRotationEnabled' => ($options['fgpx_photo_queue_rotation_enabled'] ?? '0') === '1',
+            'galleryPerPage' => max(4, min(48, (int) ($options['fgpx_gallery_per_page'] ?? 16))),
             'arrowsEnabled' => $arrowsEnabledFinal,
             'arrowsKm' => $arrowsKmFinal,
             'privacyEnabled' => $privacyEnabledFinal,
@@ -490,9 +496,8 @@ final class Plugin
                 'simCondSnow' => \esc_html__('Snow', 'flyover-gpx'),
                 'simCondWind' => \esc_html__('Wind', 'flyover-gpx'),
                 'mapModeLabel' => \esc_html__('Map mode', 'flyover-gpx'),
-                'mapModeBasic' => \esc_html__('Basic', 'flyover-gpx'),
-                'mapModeContours' => \esc_html__('Basic + Contours', 'flyover-gpx'),
                 'mapModeSatellite' => \esc_html__('Satellite', 'flyover-gpx'),
+                'mapModeSatelliteContours' => \esc_html__('Satellite + Contours', 'flyover-gpx'),
             ],
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
@@ -648,7 +653,12 @@ final class Plugin
                   'simulationCitiesEnabled:' . ($options['fgpx_simulation_cities_enabled'] === '1' ? 'true' : 'false') . ',' .
                   'simulationWaypointWindowKm:' . \floatval($options['fgpx_simulation_waypoint_window_km']) . ',' .
                   'simulationCityWindowKm:' . \floatval($options['fgpx_simulation_city_window_km']) . ',' .
-                  'mapSelectorDefault:"' . \esc_js((string) ($options['fgpx_map_selector_default'] ?? 'basic')) . '",' .
+                  'mapSelectorDefault:"' . \esc_js((function() use ($options) {
+                      $v = \sanitize_key((string) ($options['fgpx_map_selector_default'] ?? 'satellite'));
+                      if ($v === 'basic' || $v === '') { return 'satellite'; }
+                      if ($v === 'basic_contours') { return 'satellite_contours'; }
+                      return \in_array($v, ['satellite', 'satellite_contours'], true) ? $v : 'satellite';
+                  })()) . '",' .
                   'contoursEnabled:' . (($options['fgpx_contours_enabled'] ?? '1') === '1' ? 'true' : 'false') . ',' .
                   'contoursTilesUrl:"' . \esc_js((string) ($options['fgpx_contours_tiles_url'] ?? '')) . '",' .
                   'contoursSourceLayer:"' . \esc_js((string) ($options['fgpx_contours_source_layer'] ?? 'contour')) . '",' .

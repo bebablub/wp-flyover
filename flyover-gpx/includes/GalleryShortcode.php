@@ -64,7 +64,7 @@ final class GalleryShortcode
     public function render_shortcode(array $atts = []): string
     {
         $options = Options::getAll();
-        $galleryDefaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 12);
+        $galleryDefaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 16);
         if ($galleryDefaultPerPage < 4) {
             $galleryDefaultPerPage = 4;
         }
@@ -229,7 +229,7 @@ final class GalleryShortcode
             return ['item' => null];
         }
 
-        $defaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 12);
+        $defaultPerPage = (int) ($options['fgpx_gallery_per_page'] ?? 16);
         if ($defaultPerPage < 4) {
             $defaultPerPage = 4;
         }
@@ -632,7 +632,7 @@ final class GalleryShortcode
             'defaultSpeed' => (int) $options['fgpx_default_speed'],
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
             'showLabels' => $options['fgpx_show_labels'] !== '0',
-            'photosEnabled' => $options['fgpx_photos_enabled'] === '1',
+            'photosEnabled' => true,
             'photoOrderMode' => (isset($galleryCfg['photoOrderMode']) && \in_array((string) $galleryCfg['photoOrderMode'], ['geo_first', 'time_first'], true)) ? (string) $galleryCfg['photoOrderMode'] : 'geo_first',
             'privacyEnabled' => $options['fgpx_privacy_enabled'] === '1',
             'privacyKm' => (float) $options['fgpx_privacy_km'],
@@ -669,6 +669,7 @@ final class GalleryShortcode
             'prefetchEnabled' => $options['fgpx_prefetch_enabled'] === '1',
             'deferViewport' => false,
             'hostPostId' => $hostPostId,
+            'galleryPreferAjaxFirst' => (($options['fgpx_gallery_ajax_first'] ?? '0') === '1'),
             'gpxDownloadUrl' => '',
             'resolvedApiKey' => (string) ($galleryCfg['resolvedApiKey'] ?? ''),
             'i18n' => [

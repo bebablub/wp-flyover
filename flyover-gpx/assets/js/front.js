@@ -371,22 +371,7 @@
   }
 
   function buildOSMRasterStyle() {
-    return {
-      version: 8,
-      sources: {
-        osm: {
-          type: 'raster',
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '© OpenStreetMap contributors'
-        }
-      },
-      layers: [
-        { id: 'background', type: 'background', paint: { 'background-color': '#f2efe9' } },
-        { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-fade-duration': 100 } }
-      ]
-    };
+    return 'https://api.maptiler.com/maps/base-v4/style.json?key=yuGDmIlURzez57sC1sod';
   }
 
   function buildLayout(container, FGPX) {
@@ -732,6 +717,7 @@
 
     // Determine photo enrichment strategy and build REST URL accordingly
     var hasGalleryStrategy = FGPX && FGPX.galleryPhotoStrategy === 'latest_embed';
+    var preferAjaxFirst = !!(hasGalleryStrategy && FGPX && FGPX.galleryPreferAjaxFirst);
     var restUrlParams = [];
     if (hasGalleryStrategy) {
       restUrlParams.push('strategy=latest_embed');
@@ -952,8 +938,16 @@
       ui.spinner.style.display = 'none';
       startPlayer(el, ui, cachedData, style, styleUrl);
     } else {
-      fetchRest()
-        .catch(function () { return fetchAjax(); })
+      var primaryFetch = preferAjaxFirst ? fetchAjax() : fetchRest();
+      primaryFetch
+        .catch(function (primaryErr) {
+          DBG.warn((preferAjaxFirst ? 'AJAX request failed, trying REST fallback' : 'REST request failed, trying AJAX fallback'), {
+            trackId: trackId,
+            strategy: hasGalleryStrategy ? 'latest_embed' : 'default',
+            message: primaryErr && primaryErr.message ? primaryErr.message : String(primaryErr)
+          });
+          return preferAjaxFirst ? fetchRest() : fetchAjax();
+        })
         .then(function (json) {
           if (!isContainerActive()) return;
           ui.spinner.style.display = 'none';
@@ -1312,13 +1306,13 @@
     // Robust default zoom parsing (accept numbers and numeric strings)
     var defaultZoomSetting = (window.FGPX && isFinite(Number(FGPX.defaultZoom))) ? Number(FGPX.defaultZoom) : 11;
 
-    // Style resolution: inline JSON takes precedence, then remote URL, then OSM fallback
+    // Style resolution: inline JSON takes precedence, then remote URL, then default base style fallback
     // (Backward compat: 'vector' → check URL; 'raster' → use fallback)
     var styleMode = style;
     if (styleMode === 'vector') { styleMode = 'url'; }
     if (styleMode === 'raster') { styleMode = 'default'; }
     var initialStyle = inlineStyle || (styleMode === 'url' && styleUrl ? styleUrl : buildOSMRasterStyle());
-    var selectorModeRaw = String((window.FGPX && FGPX.mapSelectorDefault) || 'basic').toLowerCase();
+    var selectorModeRaw = String((window.FGPX && FGPX.mapSelectorDefault) || 'satellite').toLowerCase();
     var contoursEnabled = !window.FGPX || FGPX.contoursEnabled !== false;
     var contoursTilesUrl = String((window.FGPX && FGPX.contoursTilesUrl) || '');
     var contoursSourceLayer = String((window.FGPX && FGPX.contoursSourceLayer) || 'contour').trim();
@@ -1336,8 +1330,12 @@
     var contoursMinZoom = (window.FGPX && isFinite(Number(FGPX.contoursMinZoom))) ? Number(FGPX.contoursMinZoom) : 9;
     var contoursMaxZoom = (window.FGPX && isFinite(Number(FGPX.contoursMaxZoom))) ? Number(FGPX.contoursMaxZoom) : 16;
     var selectorMode = selectorModeRaw;
-    if (selectorMode !== 'basic' && selectorMode !== 'basic_contours' && selectorMode !== 'satellite') {
-      selectorMode = 'basic';
+    // Back-compat: old value 'basic_contours' maps to 'satellite_contours'
+    if (selectorMode === 'basic_contours') { selectorMode = 'satellite_contours'; }
+    // 'basic' falls back to 'satellite'
+    if (selectorMode === 'basic') { selectorMode = 'satellite'; }
+    if (selectorMode !== 'satellite' && selectorMode !== 'satellite_contours') {
+      selectorMode = 'satellite';
     }
 
     // Prefetch master switch (default true if undefined)
@@ -1372,8 +1370,8 @@
     var resolvedSatelliteTilesUrl = resolveTemplateUrl(satelliteTilesUrl);
     var contoursModeAvailable = contoursEnabled && resolvedContoursTilesUrl !== '';
     var i18nMapMode = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
-    if (!contoursModeAvailable && selectorMode === 'basic_contours') {
-      selectorMode = 'basic';
+    if (!contoursModeAvailable && selectorMode === 'satellite_contours') {
+      selectorMode = 'satellite';
     }
 
     var map = new window.maplibregl.Map({
@@ -1395,12 +1393,13 @@
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
     map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
 
-    var contourSourceId = 'fgpx-contours-' + (el.id || 'fgpx');
+    var contourSourceId = 'fgpx-contours-' + (root.id || 'fgpx');
     var contourLayerId = contourSourceId + '-line';
-    var fallbackSatelliteSourceId = 'fgpx-satellite-' + (el.id || 'fgpx') + '-source';
-    var fallbackSatelliteLayerId = 'fgpx-satellite-' + (el.id || 'fgpx') + '-layer';
+    var fallbackSatelliteSourceId = 'fgpx-satellite-' + (root.id || 'fgpx') + '-source';
+    var fallbackSatelliteLayerId = 'fgpx-satellite-' + (root.id || 'fgpx') + '-layer';
     var mapModeControl = null;
-    var mapModeControlSelect = null;
+    var mapModeControlButton = null;
+    // no menu/options needed — button is now a plain contours toggle
 
     function setLayerVisibilityIfPresent(layerId, visibility) {
       try {
@@ -1499,15 +1498,20 @@
       return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();
     }
 
+    function getMapModeLabel(mode) {
+      if (mode === 'satellite_contours') return i18nMapMode.mapModeSatelliteContours || 'Satellite + Contours';
+      return i18nMapMode.mapModeSatellite || 'Satellite';
+    }
+
     function syncMapModeControl() {
       if (!shouldShowMapModeControl()) {
         if (mapModeControl) {
           try { map.removeControl(mapModeControl); } catch (_) {}
           mapModeControl = null;
-          mapModeControlSelect = null;
+          mapModeControlButton = null;
         }
-        if (selectorMode !== 'basic') {
-          selectorMode = 'basic';
+        if (selectorMode !== 'satellite') {
+          selectorMode = 'satellite';
         }
         return;
       }
@@ -1517,33 +1521,49 @@
         map.addControl(mapModeControl, 'top-right');
       }
 
-      if (mapModeControlSelect) {
-        try { mapModeControlSelect.querySelector('option[value="basic_contours"]').disabled = !contoursModeAvailable; } catch(_) {}
-        try { mapModeControlSelect.querySelector('option[value="satellite"]').disabled = !(hasSatelliteLayer() || !!resolvedSatelliteTilesUrl); } catch(_) {}
-        mapModeControlSelect.value = selectorMode;
+      if (mapModeControlButton) {
+        var contoursOn = (selectorMode === 'satellite_contours');
+        var mapModeCtrlEl = mapModeControlButton.closest('.fgpx-map-mode-ctrl');
+        mapModeControlButton.setAttribute('aria-pressed', contoursOn ? 'true' : 'false');
+        if (contoursOn) {
+          mapModeControlButton.classList.add('fgpx-map-mode-button-active');
+          if (mapModeCtrlEl) {
+            mapModeCtrlEl.classList.add('fgpx-map-mode-ctrl-active');
+          }
+        } else {
+          mapModeControlButton.classList.remove('fgpx-map-mode-button-active');
+          if (mapModeCtrlEl) {
+            mapModeCtrlEl.classList.remove('fgpx-map-mode-ctrl-active');
+          }
+        }
+        mapModeControlButton.setAttribute('title', contoursOn ? (i18nMapMode.mapModeSatelliteContours || 'Satellite + Contours') + ' — click to disable contours' : (i18nMapMode.mapModeSatellite || 'Satellite') + ' — click to enable contours');
       }
     }
 
     function applyMapSelectorMode(mode) {
-      var nextMode = String(mode || 'basic').toLowerCase();
-      if (nextMode !== 'basic' && nextMode !== 'basic_contours' && nextMode !== 'satellite') {
-        nextMode = 'basic';
+      var nextMode = String(mode || 'satellite').toLowerCase();
+      // Back-compat: old stored value 'basic_contours' → 'satellite_contours', 'basic' → 'satellite'
+      if (nextMode === 'basic_contours') { nextMode = 'satellite_contours'; }
+      if (nextMode === 'basic') { nextMode = 'satellite'; }
+      if (nextMode !== 'satellite' && nextMode !== 'satellite_contours') {
+        nextMode = 'satellite';
       }
-      if (!contoursModeAvailable && nextMode === 'basic_contours') {
-        nextMode = 'basic';
-      }
-
-      if (nextMode === 'satellite') {
-        ensureSatelliteLayer();
-        if (!hasSatelliteLayer()) {
-          nextMode = 'basic';
-        }
+      if (!contoursModeAvailable && nextMode === 'satellite_contours') {
+        nextMode = 'satellite';
       }
 
-      setLayerVisibilityIfPresent(satelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');
-      setLayerVisibilityIfPresent(fallbackSatelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');
+      // Both satellite modes need the satellite layer
+      ensureSatelliteLayer();
+      var satAvailable = hasSatelliteLayer();
+      if (!satAvailable) {
+        nextMode = 'satellite'; // best we can do without satellite
+      }
 
-      if (nextMode === 'basic_contours') {
+      var showSat = satAvailable;
+      setLayerVisibilityIfPresent(satelliteLayerId, showSat ? 'visible' : 'none');
+      setLayerVisibilityIfPresent(fallbackSatelliteLayerId, showSat ? 'visible' : 'none');
+
+      if (nextMode === 'satellite_contours') {
         if (ensureContourLayer()) {
           setLayerVisibilityIfPresent(contourLayerId, 'visible');
         }
@@ -1560,34 +1580,51 @@
       this._map = ctrlMap;
       var container = document.createElement('div');
       container.className = 'maplibregl-ctrl maplibregl-ctrl-group fgpx-map-mode-ctrl';
-      var select = document.createElement('select');
-      select.className = 'fgpx-map-mode-select';
-      select.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Map mode');
 
-      function addOption(value, label) {
-        var opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = label;
-        select.appendChild(opt);
+      function stopControlPropagation(ev) {
+        if (!ev) return;
+        ev.stopPropagation();
       }
 
-      addOption('basic', i18nMapMode.mapModeBasic || 'Basic');
-      addOption('basic_contours', i18nMapMode.mapModeContours || 'Basic + Contours');
-      addOption('satellite', i18nMapMode.mapModeSatellite || 'Satellite');
+      var stopEvents = ['mousedown', 'mouseup', 'click', 'dblclick', 'touchstart', 'touchend', 'pointerdown', 'pointerup'];
+      for (var sei = 0; sei < stopEvents.length; sei++) {
+        container.addEventListener(stopEvents[sei], stopControlPropagation);
+      }
 
-      select.value = selectorMode;
-      select.addEventListener('change', function() {
-        applyMapSelectorMode(select.value);
+      var toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'fgpx-map-mode-button';
+      var contoursOn = (selectorMode === 'satellite_contours');
+      toggleBtn.setAttribute('aria-pressed', contoursOn ? 'true' : 'false');
+      toggleBtn.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Toggle contours');
+      if (contoursOn) { toggleBtn.classList.add('fgpx-map-mode-button-active'); }
+
+      var icon = document.createElement('span');
+      icon.className = 'fgpx-map-mode-button-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = 'C';
+      toggleBtn.appendChild(icon);
+
+      toggleBtn.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Toggle between satellite and satellite_contours
+        var next = (selectorMode === 'satellite_contours') ? 'satellite' : 'satellite_contours';
+        applyMapSelectorMode(next);
       });
-      container.appendChild(select);
-      mapModeControlSelect = select;
+
+      container.appendChild(toggleBtn);
+
+      mapModeControlButton = toggleBtn;
       this._container = container;
+      syncMapModeControl();
       return container;
     };
     MapModeControl.prototype.onRemove = function() {
       if (this._container && this._container.parentNode) {
         this._container.parentNode.removeChild(this._container);
       }
+      mapModeControlButton = null;
       this._map = undefined;
     };
     // Do NOT call syncMapModeControl() here — the style hasn't loaded yet, so hasSatelliteLayer()
@@ -3009,7 +3046,7 @@
       var cachedMediaGridDOM = null; // Cached grid DOM and empty state for re-use on tab switch
       var cachedMediaGridPage = -1; // Cached page index to avoid reusing stale page content
       var mediaGridPage = 0; // Current page for pagination (0-indexed)
-      var mediaGridPageSize = 12; // Items per page (3x4 grid on desktop)
+      var mediaGridPageSize = Math.max(4, Math.min(48, Number(window.FGPX && window.FGPX.galleryPerPage) || 16)); // Items per page
       var mediaRotationLeadKey = '';
       var mediaRotationTimer = null;
       var mediaAnimationHint = null;
@@ -5547,40 +5584,19 @@
       overlayCaption.style.cssText = 'position:absolute;right:12px;bottom:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 12px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
       overlay.appendChild(overlayCaption);
       var overlaySource = document.createElement('div');
-      overlaySource.style.cssText = 'position:absolute;right:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
+      overlaySource.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:50%;pointer-events:none;display:none';
       overlay.appendChild(overlaySource);
       var overlayTime = document.createElement('div');
-      overlayTime.style.cssText = 'position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
+      overlayTime.style.cssText = 'position:absolute;left:12px;bottom:10px;color:#fff;background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:55%;pointer-events:none;display:none';
       overlay.appendChild(overlayTime);
-      var overlayPrev = document.createElement('button');
-      overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';
-      overlayPrev.type = 'button';
-      overlayPrev.textContent = '‹';
-      overlayPrev.style.cssText = 'display:none;position:absolute;left:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,0.35);background:rgba(0,0,0,0.45);color:#fff;font-size:28px;line-height:1;cursor:pointer;z-index:2';
-      overlay.appendChild(overlayPrev);
-      var overlayNext = document.createElement('button');
-      overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';
-      overlayNext.type = 'button';
-      overlayNext.textContent = '›';
-      overlayNext.style.cssText = 'display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,0.35);background:rgba(0,0,0,0.45);color:#fff;font-size:28px;line-height:1;cursor:pointer;z-index:2';
-      overlay.appendChild(overlayNext);
-      var overlayCounter = document.createElement('div');
-      overlayCounter.className = 'fgpx-photo-overlay-counter';
-      overlayCounter.style.cssText = 'position:absolute;left:12px;bottom:12px;color:#fff;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:4px;font:500 11px system-ui,Segoe UI,Roboto,Arial,sans-serif;display:none';
-      overlay.appendChild(overlayCounter);
+      var overlayClose = document.createElement('button');
+      overlayClose.className = 'fgpx-photo-overlay-close';
+      overlayClose.type = 'button';
+      overlayClose.textContent = '×';
+      overlayClose.style.cssText = 'position:absolute;top:12px;right:14px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.45);background:rgba(0,0,0,0.55);color:#fff;font-size:24px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center';
+      overlay.appendChild(overlayClose);
       ui.mapEl.appendChild(overlay);
       function updateOverlayViewerControls() {
-        var activeMediaItems = getDisplayedMediaItems();
-        var viewerVisible = mediaViewerActive && Array.isArray(activeMediaItems) && activeMediaItems.length > 0;
-        overlayPrev.style.display = viewerVisible ? 'block' : 'none';
-        overlayNext.style.display = viewerVisible ? 'block' : 'none';
-        overlayCounter.style.display = viewerVisible ? 'block' : 'none';
-        if (!viewerVisible) return;
-        overlayPrev.disabled = mediaViewerIndex <= 0;
-        overlayNext.disabled = mediaViewerIndex >= (activeMediaItems.length - 1);
-        overlayPrev.style.opacity = overlayPrev.disabled ? '0.4' : '1';
-        overlayNext.style.opacity = overlayNext.disabled ? '0.4' : '1';
-        overlayCounter.textContent = String(mediaViewerIndex + 1) + ' / ' + String(activeMediaItems.length);
       }
       function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
@@ -5833,14 +5849,15 @@
         }
       }
       
-      // Click anywhere on overlay to close
-      overlay.addEventListener('click', function(){ 
+      // Click anywhere on overlay backdrop to close (but not the close button itself)
+      overlay.addEventListener('click', function(e){ 
+        // Don't handle if clicking on child controls
+        if (e.target !== overlay && e.target !== overlayImg) return;
         hideOverlay().then(function() { 
           overlayActive = false; 
           currentDisplayedPhoto = null; 
           mediaViewerActive = false;
           mediaViewerIndex = -1;
-          // Resume playback if still recording
           if (isRecording && !playing) {
             setPlaying(true);
             scheduleRaf();
@@ -5852,39 +5869,24 @@
           mediaViewerWasPlaying = false;
         }); 
       });
-      overlayPrev.addEventListener('click', function(e) {
+      overlayClose.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        if (!mediaViewerActive) return;
-        if (mediaViewerIndex <= 0) return;
-        openMediaViewerAt(mediaViewerIndex - 1);
-      });
-      overlayNext.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var activeMediaItems = getDisplayedMediaItems();
-        if (!mediaViewerActive) return;
-        if (mediaViewerIndex >= activeMediaItems.length - 1) return;
-        openMediaViewerAt(mediaViewerIndex + 1);
+        hideOverlay().then(function() {
+          overlayActive = false;
+          currentDisplayedPhoto = null;
+          mediaViewerActive = false;
+          mediaViewerIndex = -1;
+          if (mediaViewerWasPlaying && !playing) {
+            setPlaying(true);
+            scheduleRaf();
+          }
+          mediaViewerWasPlaying = false;
+        });
       });
       // ESC to close
       var onOverlayKeydown = function(e){
         if (!document.contains(root)) return;
-        var activeMediaItems = getDisplayedMediaItems();
-        if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowRight' || e.code === 'ArrowRight')) {
-          if (mediaViewerIndex < activeMediaItems.length - 1) {
-            e.preventDefault();
-            openMediaViewerAt(mediaViewerIndex + 1);
-          }
-          return;
-        }
-        if (overlay.style.display !== 'none' && mediaViewerActive && (e.key === 'ArrowLeft' || e.code === 'ArrowLeft')) {
-          if (mediaViewerIndex > 0) {
-            e.preventDefault();
-            openMediaViewerAt(mediaViewerIndex - 1);
-          }
-          return;
-        }
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
             overlayActive = false; 

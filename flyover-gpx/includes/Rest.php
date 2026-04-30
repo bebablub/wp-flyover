@@ -1372,6 +1372,51 @@ final class Rest
     }
 
     /**
+     * Heuristic check whether a post likely contains photos usable for enrichment.
+     *
+     * @param int $postId
+     * @param string $content
+     */
+    private function post_has_photo_candidates(int $postId, string $content): bool
+    {
+        if ($postId <= 0) {
+            return false;
+        }
+
+        if ($content !== '') {
+            if (stripos($content, 'wp-image-') !== false) {
+                return true;
+            }
+            if (preg_match('/<img[^>]+src="[^\"]+\.(?:jpe?g|png|webp)(?:\?[^\"]*)?"/i', $content) === 1) {
+                return true;
+            }
+            if (preg_match('/<a[^>]+href="[^\"]+\.(?:jpe?g|png|webp)(?:\?[^\"]*)?"/i', $content) === 1) {
+                return true;
+            }
+        }
+
+        if (function_exists('get_attached_media')) {
+            $attached = \get_attached_media('image', $postId);
+            if (\is_array($attached) && !empty($attached)) {
+                return true;
+            }
+        }
+
+        if (function_exists('get_post_galleries')) {
+            $galleries = \get_post_galleries($postId, false);
+            if (\is_array($galleries)) {
+                foreach ($galleries as $gal) {
+                    if (!empty($gal['ids'])) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Find the latest published post that embeds a specific track.
      * Mirrors Admin class method for consistent behavior in gallery photo enrichment.
      *
@@ -1407,6 +1452,8 @@ final class Rest
             return 0;
         }
 
+        $firstMatchingPostId = 0;
+
         foreach ($rows as $row) {
             $postId = isset($row->ID) ? (int) $row->ID : 0;
             if ($postId <= 0) {
@@ -1420,11 +1467,16 @@ final class Rest
 
             $ids = $this->extract_track_ids_from_content($content);
             if (\in_array($trackId, $ids, true)) {
-                return $postId;
+                if ($firstMatchingPostId === 0) {
+                    $firstMatchingPostId = $postId;
+                }
+                if ($this->post_has_photo_candidates($postId, $content)) {
+                    return $postId;
+                }
             }
         }
 
-        return 0;
+        return $firstMatchingPostId;
     }
 }
 

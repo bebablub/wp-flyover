@@ -281,6 +281,16 @@ describe('gallery.js', () => {
     expect(loadMore.hidden).toBe(true);
   });
 
+  test('uses per_page config alias when perPage is missing', () => {
+    delete window.FGPXGallery.perPage;
+    window.FGPXGallery.per_page = 16;
+
+    loadGallery();
+
+    const cards = document.querySelectorAll('.fgpx-gallery-card');
+    expect(cards.length).toBe(15);
+  });
+
   test('reveals cards on first render and only animates newly added cards on load more', () => {
     loadGallery();
 
@@ -437,6 +447,24 @@ describe('gallery.js', () => {
     // Verify global strategy key was not promoted to top-level config
     expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
     expect(window.FGPX.gpxDownloadUrl).toBeUndefined();
+  });
+
+  test('gallery player config overrides null ajaxUrl to keep fallback available', () => {
+    window.FGPX.ajaxUrl = null;
+    window.FGPXGallery.playerConfig = Object.assign({}, window.FGPXGallery.playerConfig || {}, {
+      ajaxUrl: '/wp-admin/admin-ajax.php',
+      restUrl: '/wp-json/fgpx/v1',
+      nonce: 'nonce-value',
+    });
+
+    loadGallery();
+
+    const cards = document.querySelectorAll('.fgpx-gallery-card');
+    cards[0].click();
+
+    expect(window.FGPX.ajaxUrl).toBe('/wp-admin/admin-ajax.php');
+    expect(window.FGPX.restUrl).toBe('/wp-json/fgpx/v1');
+    expect(window.FGPX.nonce).toBe('nonce-value');
   });
 
   test('gallery player applies simulation waypoint/city window settings from player config', () => {
