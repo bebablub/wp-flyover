@@ -122,7 +122,7 @@ final class OptionsTest extends TestCase
     {
         // get_option stub returns $default → Options returns definition defaults
         $this->assertSame('default', Options::get('fgpx_default_style'));
-        $this->assertSame('basic', Options::get('fgpx_map_selector_default'));
+        $this->assertSame('satellite', Options::get('fgpx_map_selector_default'));
         $this->assertSame('1', Options::get('fgpx_contours_enabled'));
         $this->assertSame('https://api.maptiler.com/tiles/contours-v2/{z}/{x}/{y}.pbf?key={{API_KEY}}', Options::get('fgpx_contours_tiles_url'));
         $this->assertSame('contour', Options::get('fgpx_contours_source_layer'));

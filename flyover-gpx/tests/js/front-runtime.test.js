@@ -338,7 +338,7 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('dynamic progress segments are inserted before marker layer', () => {
-    expect(FRONT_SRC).toContain("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')");
+    expect(FRONT_SRC.includes("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')")).toBe(true);
   });
 
   test('gallery player strategy param is passed to REST and AJAX URLs', async () => {
@@ -397,32 +397,32 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('cache key builder includes strategy token for differentiation', () => {
-    expect(FRONT_SRC).toContain("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';");
-    expect(FRONT_SRC).toContain("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;");
+    expect(FRONT_SRC.includes("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';")).toBe(true);
+    expect(FRONT_SRC.includes("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;")).toBe(true);
   });
 
   test('fetch pipeline uses timeout/abort helper with configurable timeout', () => {
-    expect(FRONT_SRC).toContain('var fetchTimeoutMs = Math.max(3000');
-    expect(FRONT_SRC).toContain('function fetchJsonWithTimeout(url, options, label) {');
-    expect(FRONT_SRC).toContain("if (err && err.name === 'AbortError') {");
-    expect(FRONT_SRC).toContain("' timeout after '");
-    expect(FRONT_SRC).toContain('return r.text().then(function(raw) {');
-    expect(FRONT_SRC).toContain("payload && typeof payload.message === 'string'");
+    expect(FRONT_SRC.includes('var fetchTimeoutMs = Math.max(3000')).toBe(true);
+    expect(FRONT_SRC.includes('function fetchJsonWithTimeout(url, options, label) {')).toBe(true);
+    expect(FRONT_SRC.includes("if (err && err.name === 'AbortError') {")).toBe(true);
+    expect(FRONT_SRC.includes("' timeout after '")).toBe(true);
+    expect(FRONT_SRC.includes('return r.text().then(function(raw) {')).toBe(true);
+    expect(FRONT_SRC.includes("payload && typeof payload.message === 'string'")).toBe(true);
   });
 
   test('initContainer guards UI updates when container is disconnected', () => {
-    expect(FRONT_SRC).toContain('function isContainerActive() {');
-    expect(FRONT_SRC).toContain('if (!isContainerActive()) return;');
+    expect(FRONT_SRC.includes('function isContainerActive() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (!isContainerActive()) return;')).toBe(true);
   });
 
   test('animation scheduling guards detached roots and cancels RAF when paused', () => {
-    expect(FRONT_SRC).toContain('if (!playing && rafId) {');
-    expect(FRONT_SRC).toContain('window.cancelAnimationFrame(rafId);');
-    expect(FRONT_SRC).toContain('if (!document.contains(root)) return;');
-    expect(FRONT_SRC).toContain('registerTeardown(function() { window.removeEventListener(\'keydown\', onPlayerKeydown); });');
-    expect(FRONT_SRC).toContain('registerTeardown(function() { window.removeEventListener(\'keydown\', onOverlayKeydown); });');
-    expect(FRONT_SRC).toContain('destroyRuntime();');
-    expect(FRONT_SRC).toContain('if (!document.contains(root)) {');
+    expect(FRONT_SRC.includes('if (!playing && rafId) {')).toBe(true);
+    expect(FRONT_SRC.includes('window.cancelAnimationFrame(rafId);')).toBe(true);
+    expect(FRONT_SRC.includes('if (!document.contains(root)) return;')).toBe(true);
+    expect(FRONT_SRC.includes('registerTeardown(function() { window.removeEventListener(\'keydown\', onPlayerKeydown); });')).toBe(true);
+    expect(FRONT_SRC.includes('registerTeardown(function() { window.removeEventListener(\'keydown\', onOverlayKeydown); });')).toBe(true);
+    expect(FRONT_SRC.includes('destroyRuntime();')).toBe(true);
+    expect(FRONT_SRC.includes('if (!document.contains(root)) {')).toBe(true);
   });
 
   test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
@@ -473,489 +473,486 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('video recorder session ID generation uses crypto-backed helper', () => {
-    expect(FRONT_SRC).toContain('function createSessionIdSuffix(length)');
-    expect(FRONT_SRC).toContain("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);");
-    expect(FRONT_SRC).toContain('cryptoObj.getRandomValues(bytes);');
-    expect(FRONT_SRC).not.toContain("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);");
+    expect(FRONT_SRC.includes('function createSessionIdSuffix(length)')).toBe(true);
+    expect(FRONT_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);")).toBe(true);
+    expect(FRONT_SRC.includes('cryptoObj.getRandomValues(bytes);')).toBe(true);
+    expect(FRONT_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);")).toBe(false);
   });
 
   test('weathergrade lookup supports backend time_unix with timestamp fallback', () => {
-    expect(FRONT_SRC).toContain('var tsEpoch = parseEpochSeconds(p.time_unix);');
-    expect(FRONT_SRC).toContain('if (!isFinite(tsEpoch)) tsEpoch = parseEpochSeconds(p.timestamp);');
+    expect(FRONT_SRC.includes('var tsEpoch = parseEpochSeconds(p.time_unix);')).toBe(true);
+    expect(FRONT_SRC.includes('if (!isFinite(tsEpoch)) tsEpoch = parseEpochSeconds(p.timestamp);')).toBe(true);
   });
 
   test('weathergrade tab is guarded when weather data is unavailable', () => {
-    expect(FRONT_SRC).toContain("if (tabType === 'weathergrade' && !weatherGradeAvailable)");
-    expect(FRONT_SRC).toContain("ui.tabs.tabWeatherGrade.style.display = 'none';");
+    expect(FRONT_SRC.includes("if (tabType === 'weathergrade' && !weatherGradeAvailable)")).toBe(true);
+    expect(FRONT_SRC.includes("ui.tabs.tabWeatherGrade.style.display = 'none';")).toBe(true);
   });
 
   test('weathergrade uses snowfall signal for snow visuals', () => {
-    expect(FRONT_SRC).toContain('snowfall_cm: lerp(lp.snowfall_cm, hp.snowfall_cm),');
-    expect(FRONT_SRC).toContain('var snowVal = Number(cond.snowfall_cm);');
+    expect(FRONT_SRC.includes('snowfall_cm: lerp(lp.snowfall_cm, hp.snowfall_cm),')).toBe(true);
+    expect(FRONT_SRC.includes('var snowVal = Number(cond.snowfall_cm);')).toBe(true);
   });
 
   test('weather cinema throttling is scoped per instance', () => {
-    expect(FRONT_SRC).toContain('var lastUpdate = Number(cinemaEl._lastUpdate || 0);');
-    expect(FRONT_SRC).toContain('cinemaEl._lastUpdate = now;');
-    expect(FRONT_SRC).not.toContain('var _weatherCinemaLastUpdate = 0;');
+    expect(FRONT_SRC.includes('var lastUpdate = Number(cinemaEl._lastUpdate || 0);')).toBe(true);
+    expect(FRONT_SRC.includes('cinemaEl._lastUpdate = now;')).toBe(true);
+    expect(FRONT_SRC.includes('var _weatherCinemaLastUpdate = 0;')).toBe(false);
   });
 
   test('weather timestamp parser rejects implausible epoch ranges', () => {
-    expect(FRONT_SRC).toContain('if (numericEpoch > 0 && numericEpoch < 4102444800) return numericEpoch;');
-    expect(FRONT_SRC).toContain('if (parsedEpoch > 0 && parsedEpoch < 4102444800) return parsedEpoch;');
+    expect(FRONT_SRC.includes('if (numericEpoch > 0 && numericEpoch < 4102444800) return numericEpoch;')).toBe(true);
+    expect(FRONT_SRC.includes('if (parsedEpoch > 0 && parsedEpoch < 4102444800) return parsedEpoch;')).toBe(true);
   });
 
   test('weather legend includes accessibility labels', () => {
-    expect(FRONT_SRC).toContain("legend.setAttribute('role', 'group');");
-    expect(FRONT_SRC).toContain("span.setAttribute('aria-label', item.aria);");
-    expect(FRONT_SRC).toContain("span.setAttribute('aria-live', 'polite');");
+    expect(FRONT_SRC.includes("legend.setAttribute('role', 'group');")).toBe(true);
+    expect(FRONT_SRC.includes("span.setAttribute('aria-label', item.aria);")).toBe(true);
+    expect(FRONT_SRC.includes("span.setAttribute('aria-live', 'polite');")).toBe(true);
   });
 
   test('weather cinema icon groups expose tooltips describing icon meaning', () => {
-    expect(FRONT_SRC).toContain("var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};");
-    expect(FRONT_SRC).toContain("var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';");
-    expect(FRONT_SRC).toContain("var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';");
-    expect(FRONT_SRC).toContain("celestial.setAttribute('data-fgpx-tooltip', dayTooltip);");
-    expect(FRONT_SRC).toContain("conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);");
-    expect(FRONT_SRC).toContain('bindWeatherFloatingTooltip(celestial);');
-    expect(FRONT_SRC).toContain('bindWeatherFloatingTooltip(conditionIcons);');
-    expect(FRONT_SRC).toContain("function showWeatherFloatingTooltip(targetEl, text, clientX, clientY)");
-    expect(FRONT_SRC).toContain("activeConditionLabels.push(simI18N.simCondFog || 'Fog');");
-    expect(FRONT_SRC).toContain("var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'title', ''); // Keep title empty to prevent native tooltip");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'title', ''); // Keep title empty to prevent native tooltip");
-    expect(FRONT_SRC).toContain("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);");
+    expect(FRONT_SRC.includes("var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};")).toBe(true);
+    expect(FRONT_SRC.includes("var dayTooltip = i18n.simCelestialDayAria || 'Daytime indicator (sun)';")).toBe(true);
+    expect(FRONT_SRC.includes("var conditionIconsTooltip = i18n.simConditionIconsAria || 'Weather condition icons: fog, clouds, rain, snow, wind';")).toBe(true);
+    expect(FRONT_SRC.includes("celestial.setAttribute('data-fgpx-tooltip', dayTooltip);")).toBe(true);
+    expect(FRONT_SRC.includes("conditionIcons.setAttribute('data-fgpx-tooltip', conditionIconsTooltip);")).toBe(true);
+    expect(FRONT_SRC.includes('bindWeatherFloatingTooltip(celestial);')).toBe(true);
+    expect(FRONT_SRC.includes('bindWeatherFloatingTooltip(conditionIcons);')).toBe(true);
+    expect(FRONT_SRC.includes("function showWeatherFloatingTooltip(targetEl, text, clientX, clientY)")).toBe(true);
+    expect(FRONT_SRC.includes("activeConditionLabels.push(simI18N.simCondFog || 'Fog');")).toBe(true);
+    expect(FRONT_SRC.includes("var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';")).toBe(true);
+    expect(FRONT_SRC.includes("setAttrIfChanged(conditionIcons, 'title', ''); // Keep title empty to prevent native tooltip")).toBe(true);
+    expect(FRONT_SRC.includes("setAttrIfChanged(conditionIcons, 'data-fgpx-tooltip', conditionTooltip);")).toBe(true);
+    expect(FRONT_SRC.includes("setAttrIfChanged(celestial, 'title', ''); // Keep title empty to prevent native tooltip")).toBe(true);
+    expect(FRONT_SRC.includes("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);")).toBe(true);
   });
 
   test('chart tabs use instance-scoped switch handler (no global dependency)', () => {
-    expect(FRONT_SRC).toContain('var switchChartTab = function(tabType) {');
-    expect(FRONT_SRC).toContain("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });");
-    expect(FRONT_SRC).not.toContain("ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });");
+    expect(FRONT_SRC.includes('var switchChartTab = function(tabType) {')).toBe(true);
+    expect(FRONT_SRC.includes("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });")).toBe(true);
+    expect(FRONT_SRC.includes("ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });")).toBe(false);
   });
 
   test('media tab listener in startPlayer is guarded by FGPX.photosEnabled (not inverted)', () => {
-    expect(FRONT_SRC).toContain("if (FGPX.photosEnabled) {");
-    expect(FRONT_SRC).toContain("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
+    expect(FRONT_SRC.includes("if (FGPX.photosEnabled) {")).toBe(true);
+    expect(FRONT_SRC.includes("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });")).toBe(true);
     const guardedIdx = FRONT_SRC.indexOf("if (FGPX.photosEnabled) {");
     const listenerIdx = FRONT_SRC.indexOf("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
     expect(listenerIdx).toBeGreaterThan(guardedIdx);
-    expect(FRONT_SRC).not.toContain("if (!FGPX.photosEnabled) {\n        ui.tabs.tabMedia.addEventListener");
+    expect(FRONT_SRC.includes("if (!FGPX.photosEnabled) {\n        ui.tabs.tabMedia.addEventListener")).toBe(false);
   });
 
   test('media tab and gallery rendering hooks are present', () => {
-    expect(FRONT_SRC).toContain("tabMedia = createEl('button', 'fgpx-chart-tab');");
-    expect(FRONT_SRC).toContain("tabMedia.textContent = 'Media';");
-    expect(FRONT_SRC).toContain('var mediaPanel = createEl(\'div\', \'fgpx-media-panel\');');
-    expect(FRONT_SRC).toContain('function buildMediaItems() {');
-    expect(FRONT_SRC).toContain('function renderMediaGrid() {');
-    expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
+    expect(FRONT_SRC.includes("tabMedia = createEl('button', 'fgpx-chart-tab');")).toBe(true);
+    expect(FRONT_SRC.includes("tabMedia.textContent = 'Media';")).toBe(true);
+    expect(FRONT_SRC.includes('var mediaPanel = createEl(\'div\', \'fgpx-media-panel\');')).toBe(true);
+    expect(FRONT_SRC.includes('function buildMediaItems() {')).toBe(true);
+    expect(FRONT_SRC.includes('function renderMediaGrid() {')).toBe(true);
+    expect(FRONT_SRC.includes('mediaItems = trackLinked.concat(offTrack);')).toBe(true);
   });
 
   test('overlay has close button and no prev/next nav', () => {
-    expect(FRONT_SRC).toContain("overlayClose.className = 'fgpx-photo-overlay-close';");
-    expect(FRONT_SRC).toContain('function updateOverlayViewerControls() {');
-    expect(FRONT_SRC).not.toContain("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';");
-    expect(FRONT_SRC).not.toContain("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';");
-    expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex + 1);');
-    expect(FRONT_SRC).toContain('openMediaViewerAt(mediaViewerIndex - 1);');
+    expect(FRONT_SRC.includes("overlayClose.className = 'fgpx-photo-overlay-close';")).toBe(true);
+    expect(FRONT_SRC.includes('function updateOverlayViewerControls() {')).toBe(true);
+    expect(FRONT_SRC.includes("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';")).toBe(false);
+    expect(FRONT_SRC.includes("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';")).toBe(false);
+    expect(FRONT_SRC.includes('openMediaViewerAt(mediaViewerIndex + 1);')).toBe(false);
+    expect(FRONT_SRC.includes('openMediaViewerAt(mediaViewerIndex - 1);')).toBe(false);
   });
 
   test('weathergrade container is initialized at startPlayer scope and reused safely', () => {
-    expect(FRONT_SRC).toContain("var container = root.querySelector('.fgpx-container');");
-    expect(FRONT_SRC).toContain('var cinemaRoot = container || root;');
-    expect(FRONT_SRC).toContain("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
-    expect(FRONT_SRC).toContain('var _cinemaEl = cinemaRoot._cachedCinema;');
-    expect(FRONT_SRC).toContain("_cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
+    expect(FRONT_SRC.includes("var container = root.querySelector('.fgpx-container');")).toBe(true);
+    expect(FRONT_SRC.includes('var cinemaRoot = container || root;')).toBe(true);
+    expect(FRONT_SRC.includes("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');")).toBe(true);
+    expect(FRONT_SRC.includes('var _cinemaEl = cinemaRoot._cachedCinema;')).toBe(true);
+    expect(FRONT_SRC.includes("_cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');")).toBe(true);
   });
 
   test('weathergrade ground profile is current-anchored and not a static triangle', () => {
-    expect(FRONT_SRC).toContain('var bikeX = 200;');
-    expect(FRONT_SRC).toContain('for (var gx = 0; gx <= 400; gx += 25) {');
-    expect(FRONT_SRC).toContain("var shapeHeight = (envelope * maxPeak) + elevAdj + (rel * 1.6 * tilt);");
-    expect(FRONT_SRC).toContain('shapeHeight = Math.max(0, Math.min(baseY, shapeHeight));');
-    expect(FRONT_SRC).not.toContain("gradePath.setAttribute('d', 'M0,40 L0,' + Math.round(left) + ' L200,20 L400,' + Math.round(right) + ' L400,40 Z');");
+    expect(FRONT_SRC.includes('var bikeX = 200;')).toBe(true);
+    expect(FRONT_SRC.includes('for (var gx = 0; gx <= 400; gx += 25) {')).toBe(true);
+    expect(FRONT_SRC.includes("var shapeHeight = (envelope * maxPeak) + elevAdj + (rel * 1.6 * tilt);")).toBe(true);
+    expect(FRONT_SRC.includes('shapeHeight = Math.max(0, Math.min(baseY, shapeHeight));')).toBe(true);
+    expect(FRONT_SRC.includes("gradePath.setAttribute('d', 'M0,40 L0,' + Math.round(left) + ' L200,20 L400,' + Math.round(right) + ' L400,40 Z');")).toBe(false);
   });
 
   test('weathergrade bicycle icon is mirrored toward timeline direction', () => {
-    expect(FRONT_SRC).toContain("bikeIcon.style.transform = 'scaleX(-1)';");
+    expect(FRONT_SRC.includes("bikeIcon.style.transform = 'scaleX(-1)';")).toBe(true);
   });
 
   test('weathergrade bicycle bottom offset is dynamically aligned to terrain', () => {
-    expect(FRONT_SRC).toContain('var bikeSurfaceY = baseY;');
-    expect(FRONT_SRC).toContain('var bikeLift = Math.max(0, baseY - bikeSurfaceY);');
-    expect(FRONT_SRC).toContain('var wheelContactCalibration = -4;');
-    expect(FRONT_SRC).toContain('var cinemaFloorOffset = cinemaEl._floorOffsetPx;');
-    expect(FRONT_SRC).toContain("bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';");
+    expect(FRONT_SRC.includes('var bikeSurfaceY = baseY;')).toBe(true);
+    expect(FRONT_SRC.includes('var bikeLift = Math.max(0, baseY - bikeSurfaceY);')).toBe(true);
+    expect(FRONT_SRC.includes('var wheelContactCalibration = -4;')).toBe(true);
+    expect(FRONT_SRC.includes('var cinemaFloorOffset = cinemaEl._floorOffsetPx;')).toBe(true);
+    expect(FRONT_SRC.includes("bikeEl.style.bottom = String(Math.max(0, Math.round(cinemaFloorOffset + bikeLift + wheelContactCalibration))) + 'px';")).toBe(true);
   });
 
   test('weathergrade bicycle rotation follows terrain tangent with clamp and smoothing', () => {
-    expect(FRONT_SRC).toContain('var bikeSlopeDeg = 0;');
-    expect(FRONT_SRC).toContain('bikeSlopeDeg = Math.atan2(pRight.yRaw - pLeft.yRaw, tangentDx) * 180 / Math.PI;');
-    expect(FRONT_SRC).toContain('var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));');
-    expect(FRONT_SRC).toContain('var smoothedBikeAngle = (prevBikeAngle * 0.82) + (targetBikeAngle * 0.18);');
-    expect(FRONT_SRC).toContain("bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';");
+    expect(FRONT_SRC.includes('var bikeSlopeDeg = 0;')).toBe(true);
+    expect(FRONT_SRC.includes('bikeSlopeDeg = Math.atan2(pRight.yRaw - pLeft.yRaw, tangentDx) * 180 / Math.PI;')).toBe(true);
+    expect(FRONT_SRC.includes('var targetBikeAngle = Math.max(-14, Math.min(14, bikeSlopeDeg));')).toBe(true);
+    expect(FRONT_SRC.includes('var smoothedBikeAngle = (prevBikeAngle * 0.82) + (targetBikeAngle * 0.18);')).toBe(true);
+    expect(FRONT_SRC.includes("bikeEl.style.transform = 'translateX(-50%) rotate(' + smoothedBikeAngle.toFixed(2) + 'deg)';")).toBe(true);
   });
 
   test('setPlaying directly toggles weather cinema paused class', () => {
-    expect(FRONT_SRC).toContain("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');");
-    expect(FRONT_SRC).toContain("if (playing) cinemaEl.classList.remove('is-paused');");
-    expect(FRONT_SRC).toContain("else cinemaEl.classList.add('is-paused');");
+    expect(FRONT_SRC.includes("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');")).toBe(true);
+    expect(FRONT_SRC.includes("if (playing) cinemaEl.classList.remove('is-paused');")).toBe(true);
+    expect(FRONT_SRC.includes("else cinemaEl.classList.add('is-paused');")).toBe(true);
   });
 
   test('weathergrade seek and tab switch force immediate cinema refresh', () => {
-    expect(FRONT_SRC).toContain('function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate)');
-    expect(FRONT_SRC).toContain('if (!forceUpdate && now - lastUpdate < 100) return;');
-    expect(FRONT_SRC).toContain("updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);");
-    expect(FRONT_SRC).toContain("updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);");
+    expect(FRONT_SRC.includes('function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate)')).toBe(true);
+    expect(FRONT_SRC.includes('if (!forceUpdate && now - lastUpdate < 100) return;')).toBe(true);
+    expect(FRONT_SRC.includes("updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);")).toBe(true);
+    expect(FRONT_SRC.includes("updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);")).toBe(true);
   });
 
   test('weather cinema caches day/night ordering and memoizes expensive updates', () => {
-    expect(FRONT_SRC).toContain('var dayNightPeriodsSorted = null;');
-    expect(FRONT_SRC).toContain('dayNightPeriodsSorted = dayNightPeriods.slice().sort(function(a, b) { return a.timeOffset - b.timeOffset; });');
-    expect(FRONT_SRC).toContain('var sortedPeriods = (dayNightPeriodsSorted && dayNightPeriodsSorted.length > 0) ? dayNightPeriodsSorted : dayNightPeriods;');
-    expect(FRONT_SRC).toContain('var trLo = 0;');
-    expect(FRONT_SRC).toContain('cinema._legendEls = {');
-    expect(FRONT_SRC).toContain('function setStyleIfChanged(el, key, value) {');
-    expect(FRONT_SRC).toContain('function setTextIfChanged(el, value) {');
-    expect(FRONT_SRC).toContain('if (cinemaEl._nightCache && cinemaEl._nightCache.key === nightCacheKey) {');
-    expect(FRONT_SRC).toContain('cinemaEl._nightCache = { key: nightCacheKey, value: night };');
+    expect(FRONT_SRC.includes('var dayNightPeriodsSorted = null;')).toBe(true);
+    expect(FRONT_SRC.includes('dayNightPeriodsSorted = dayNightPeriods.slice().sort(function(a, b) { return a.timeOffset - b.timeOffset; });')).toBe(true);
+    expect(FRONT_SRC.includes('var sortedPeriods = (dayNightPeriodsSorted && dayNightPeriodsSorted.length > 0) ? dayNightPeriodsSorted : dayNightPeriods;')).toBe(true);
+    expect(FRONT_SRC.includes('var trLo = 0;')).toBe(true);
+    expect(FRONT_SRC.includes('cinema._legendEls = {')).toBe(true);
+    expect(FRONT_SRC.includes('function setStyleIfChanged(el, key, value) {')).toBe(true);
+    expect(FRONT_SRC.includes('function setTextIfChanged(el, value) {')).toBe(true);
+    expect(FRONT_SRC.includes('if (cinemaEl._nightCache && cinemaEl._nightCache.key === nightCacheKey) {')).toBe(true);
+    expect(FRONT_SRC.includes('cinemaEl._nightCache = { key: nightCacheKey, value: night };')).toBe(true);
   });
 
   test('RAF loop uses single-scheduling guard to prevent duplicate animation loops', () => {
-    expect(FRONT_SRC).toContain('var rafId = null;');
-    expect(FRONT_SRC).toContain('function scheduleRaf() {');
-    expect(FRONT_SRC).toContain('if (!rafId) {');
-    expect(FRONT_SRC).toContain('rafId = window.requestAnimationFrame(raf);');
-    expect(FRONT_SRC).toContain('rafId = null;');
+    expect(FRONT_SRC.includes('var rafId = null;')).toBe(true);
+    expect(FRONT_SRC.includes('function scheduleRaf() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (!rafId) {')).toBe(true);
+    expect(FRONT_SRC.includes('rafId = window.requestAnimationFrame(raf);')).toBe(true);
+    expect(FRONT_SRC.includes('rafId = null;')).toBe(true);
     // No naked requestAnimationFrame(raf) outside scheduleRaf
     const rafCalls = (FRONT_SRC.match(/window\.requestAnimationFrame\(raf\)/g) || []).length;
     expect(rafCalls).toBe(1); // only inside scheduleRaf itself
   });
 
   test('progressive route geometry updates are throttled to ~12fps', () => {
-    expect(FRONT_SRC).toContain('var progressLineCooldown = 0;');
-    expect(FRONT_SRC).toContain('progressLineCooldown >= 0.083');
-    expect(FRONT_SRC).not.toContain('window.__fgpxLineCooldown >= 0.025');
+    expect(FRONT_SRC.includes('var progressLineCooldown = 0;')).toBe(true);
+    expect(FRONT_SRC.includes('progressLineCooldown >= 0.083')).toBe(true);
+    expect(FRONT_SRC.includes('window.__fgpxLineCooldown >= 0.025')).toBe(false);
   });
 
   test('day-night and progressive route state are scoped per player instance', () => {
-    expect(FRONT_SRC).toContain('var dayNightOverlayState = null;');
-    expect(FRONT_SRC).toContain('var progressSegments = [];');
-    expect(FRONT_SRC).not.toContain('window.__fgpxLastDayNightState');
-    expect(FRONT_SRC).not.toContain('window.__fgpxProgressSegments');
+    expect(FRONT_SRC.includes('var dayNightOverlayState = null;')).toBe(true);
+    expect(FRONT_SRC.includes('var progressSegments = [];')).toBe(true);
+    expect(FRONT_SRC.includes('window.__fgpxLastDayNightState')).toBe(false);
+    expect(FRONT_SRC.includes('window.__fgpxProgressSegments')).toBe(false);
   });
 
   test('chart no-data rendering and reset cleanup stay within the current player root', () => {
-    expect(FRONT_SRC).toContain("var chartWrap = root.querySelector('.fgpx-chart-wrap');");
-    expect(FRONT_SRC).toContain('function cleanupProgressiveSegments() {');
-    expect(FRONT_SRC).toContain('cleanupProgressiveSegments();');
+    expect(FRONT_SRC.includes("var chartWrap = root.querySelector('.fgpx-chart-wrap');")).toBe(true);
+    expect(FRONT_SRC.includes('function cleanupProgressiveSegments() {')).toBe(true);
+    expect(FRONT_SRC.includes('cleanupProgressiveSegments();')).toBe(true);
   });
 
   test('weather cinema element is cached on container to avoid per-RAF querySelector', () => {
-    expect(FRONT_SRC).toContain('cinemaRoot._cachedCinema');
+    expect(FRONT_SRC.includes('cinemaRoot._cachedCinema')).toBe(true);
   });
 
   test('phase3 overlay profile supports reduced detail while weather tab is playing', () => {
-    expect(FRONT_SRC).toContain("var weatherOverlayPerfMode = String((window.FGPX && FGPX.weatherOverlayPerfMode) || 'full').toLowerCase();");
-    expect(FRONT_SRC).toContain('var weatherHeatmapConsolidated = toBoolOption(window.FGPX && FGPX.weatherHeatmapConsolidated, false);');
-    expect(FRONT_SRC).toContain("var windSatelliteLayersEnabled = weatherOverlayPerfMode !== 'performance';");
-    expect(FRONT_SRC).toContain('var weatherTextLayersSupported = null;');
-    expect(FRONT_SRC).toContain("var weatherOverlayProfileKey = '';");
-    expect(FRONT_SRC).toContain('function applyWeatherOverlayProfile(force) {');
-    expect(FRONT_SRC).toContain("var isReduced = (weatherOverlayPerfMode === 'performance') || (weatherOverlayPerfMode === 'auto' && playing && currentChartTab === 'weathergrade');");
-    expect(FRONT_SRC).toContain("var profileKey = [baseWeatherVisibility, fullWeatherVisibility, tempBase, tempTextVisibility, windBase, windTextVisibility, circleWindVisibility].join('|');");
-    expect(FRONT_SRC).toContain("if (!force && weatherOverlayReduced === isReduced && weatherOverlayProfileKey === profileKey) {");
-    expect(FRONT_SRC).toContain('weatherOverlayProfileKey = profileKey;');
-    expect(FRONT_SRC).toContain("if (weatherHeatmapConsolidated) {");
-    expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent('fgpx-weather-heatmap', baseWeatherVisibility);");
-    expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent('fgpx-weather-heatmap-rain', baseWeatherVisibility);");
-    expect(FRONT_SRC).toContain("if (!weatherHeatmapConsolidated) {");
-    expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent('fgpx-weather-heatmap-snow', fullWeatherVisibility);");
-    expect(FRONT_SRC).toContain('if (tempTextVisibility === \'visible\') {');
-    expect(FRONT_SRC).toContain('ensureTemperatureTextLayer();');
-    expect(FRONT_SRC).toContain('if (windTextVisibility === \'visible\') {');
-    expect(FRONT_SRC).toContain('ensureWindTextLayer();');
+    expect(FRONT_SRC.includes("var weatherOverlayPerfMode = String((window.FGPX && FGPX.weatherOverlayPerfMode) || 'full').toLowerCase();")).toBe(true);
+    expect(FRONT_SRC.includes('var weatherHeatmapConsolidated = toBoolOption(window.FGPX && FGPX.weatherHeatmapConsolidated, false);')).toBe(true);
+    expect(FRONT_SRC.includes("var windSatelliteLayersEnabled = weatherOverlayPerfMode !== 'performance';")).toBe(true);
+    expect(FRONT_SRC.includes('var weatherTextLayersSupported = null;')).toBe(true);
+    expect(FRONT_SRC.includes("var weatherOverlayProfileKey = '';")).toBe(true);
+    expect(FRONT_SRC.includes('function applyWeatherOverlayProfile(force) {')).toBe(true);
+    expect(FRONT_SRC.includes("var isReduced = (weatherOverlayPerfMode === 'performance') || (weatherOverlayPerfMode === 'auto' && playing && currentChartTab === 'weathergrade');")).toBe(true);
+    expect(FRONT_SRC.includes("var profileKey = [baseWeatherVisibility, fullWeatherVisibility, tempBase, tempTextVisibility, windBase, windTextVisibility, circleWindVisibility].join('|');")).toBe(true);
+    expect(FRONT_SRC.includes("if (!force && weatherOverlayReduced === isReduced && weatherOverlayProfileKey === profileKey) {")).toBe(true);
+    expect(FRONT_SRC.includes('weatherOverlayProfileKey = profileKey;')).toBe(true);
+    expect(FRONT_SRC.includes("if (weatherHeatmapConsolidated) {")).toBe(true);
+    expect(FRONT_SRC.includes("setLayerVisibilityIfPresent('fgpx-weather-heatmap', baseWeatherVisibility);")).toBe(true);
+    expect(FRONT_SRC.includes("setLayerVisibilityIfPresent('fgpx-weather-heatmap-rain', baseWeatherVisibility);")).toBe(true);
+    expect(FRONT_SRC.includes("if (!weatherHeatmapConsolidated) {")).toBe(true);
+    expect(FRONT_SRC.includes("setLayerVisibilityIfPresent('fgpx-weather-heatmap-snow', fullWeatherVisibility);")).toBe(true);
+    expect(FRONT_SRC.includes('if (tempTextVisibility === \'visible\') {')).toBe(true);
+    expect(FRONT_SRC.includes('ensureTemperatureTextLayer();')).toBe(true);
+    expect(FRONT_SRC.includes('if (windTextVisibility === \'visible\') {')).toBe(true);
+    expect(FRONT_SRC.includes('ensureWindTextLayer();')).toBe(true);
   });
 
   test('phase3 skips wind satellite layer creation in performance mode', () => {
-    expect(FRONT_SRC).toContain('if (windSatelliteLayersEnabled) {');
-    expect(FRONT_SRC).toContain("DBG.log('Wind satellite layers skipped in performance mode');");
-    expect(FRONT_SRC).toContain("DBG.log('Wind satellite layers deferred until needed');");
+    expect(FRONT_SRC.includes('if (windSatelliteLayersEnabled) {')).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Wind satellite layers skipped in performance mode');")).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Wind satellite layers deferred until needed');")).toBe(true);
   });
 
   test('phase3 can build a consolidated weather heatmap layer behind feature flag', () => {
-    expect(FRONT_SRC).toContain('if (weatherHeatmapConsolidated) {');
-    expect(FRONT_SRC).toContain("id: 'fgpx-weather-heatmap'");
-    expect(FRONT_SRC).toContain("DBG.log('Using consolidated weather heatmap layer (phase3)');");
+    expect(FRONT_SRC.includes('if (weatherHeatmapConsolidated) {')).toBe(true);
+    expect(FRONT_SRC.includes("id: 'fgpx-weather-heatmap'")).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Using consolidated weather heatmap layer (phase3)');")).toBe(true);
   });
 
   test('phase3 overlay profile is re-applied on playback and tab transitions', () => {
-    expect(FRONT_SRC).toContain('try { applyWeatherOverlayProfile(false); } catch (_) {}');
-    expect(FRONT_SRC).toContain('currentChartTab = tabType;');
-    expect(FRONT_SRC).toContain('try { applyWeatherOverlayProfile(true); } catch (_) {}');
+    expect(FRONT_SRC.includes('try { applyWeatherOverlayProfile(false); } catch (_) {}')).toBe(true);
+    expect(FRONT_SRC.includes('currentChartTab = tabType;')).toBe(true);
+    expect(FRONT_SRC.includes('try { applyWeatherOverlayProfile(true); } catch (_) {}')).toBe(true);
   });
 
   test('phase3 defers temperature and wind text layer creation until needed', () => {
-    expect(FRONT_SRC).toContain('function refreshWeatherTextLayerSupport(logResult) {');
-    expect(FRONT_SRC).toContain('if (weatherTextLayersSupported === true) return true;');
-    expect(FRONT_SRC).toContain('return weatherTextLayersSupported === true;');
-    expect(FRONT_SRC).toContain('weatherTextLayersSupported = hasGlyphs;');
-    expect(FRONT_SRC).toContain('function ensureTemperatureTextLayer() {');
-    expect(FRONT_SRC).toContain('if (!refreshWeatherTextLayerSupport(false)) return;');
-    expect(FRONT_SRC).toContain('if (map.getLayer(\'fgpx-temperature-text\')) return;');
-    expect(FRONT_SRC).toContain('function ensureWindTextLayer() {');
-    expect(FRONT_SRC).toContain('if (!refreshWeatherTextLayerSupport(false)) return;');
-    expect(FRONT_SRC).toContain('if (map.getLayer(\'fgpx-wind-text\')) return;');
-    expect(FRONT_SRC).toContain("DBG.log('Temperature text layer deferred until needed');");
-    expect(FRONT_SRC).toContain("DBG.log('Wind text layer deferred until needed');");
+    expect(FRONT_SRC.includes('function refreshWeatherTextLayerSupport(logResult) {')).toBe(true);
+    expect(FRONT_SRC.includes('if (weatherTextLayersSupported === true) return true;')).toBe(true);
+    expect(FRONT_SRC.includes('return weatherTextLayersSupported === true;')).toBe(true);
+    expect(FRONT_SRC.includes('weatherTextLayersSupported = hasGlyphs;')).toBe(true);
+    expect(FRONT_SRC.includes('function ensureTemperatureTextLayer() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (!refreshWeatherTextLayerSupport(false)) return;')).toBe(true);
+    expect(FRONT_SRC.includes('if (map.getLayer(\'fgpx-temperature-text\')) return;')).toBe(true);
+    expect(FRONT_SRC.includes('function ensureWindTextLayer() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (!refreshWeatherTextLayerSupport(false)) return;')).toBe(true);
+    expect(FRONT_SRC.includes('if (map.getLayer(\'fgpx-wind-text\')) return;')).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Temperature text layer deferred until needed');")).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Wind text layer deferred until needed');")).toBe(true);
   });
 
   test('map mode control degrades safely when API placeholders are unresolved', () => {
-    expect(FRONT_SRC).toContain('function resolveTemplateUrl(url) {');
-    expect(FRONT_SRC).toContain("if (raw.indexOf('{{API_KEY}}') !== -1) {");
-    expect(FRONT_SRC).toContain("if (!resolvedApiKey) return '';" );
-    expect(FRONT_SRC).toContain('var resolvedContoursTilesUrl = resolveTemplateUrl(contoursTilesUrl);');
-    expect(FRONT_SRC).toContain('var resolvedSatelliteTilesUrl = resolveTemplateUrl(satelliteTilesUrl);');
-    expect(FRONT_SRC).toContain("var contoursModeAvailable = contoursEnabled && resolvedContoursTilesUrl !== '';" );
+    expect(FRONT_SRC.includes('function resolveTemplateUrl(url) {')).toBe(true);
+    expect(FRONT_SRC.includes("if (raw.indexOf('{{API_KEY}}') !== -1) {")).toBe(true);
+    expect(FRONT_SRC.includes("if (!resolvedApiKey) return '';" )).toBe(true);
+    expect(FRONT_SRC.includes('var resolvedContoursTilesUrl = resolveTemplateUrl(contoursTilesUrl);')).toBe(true);
+    expect(FRONT_SRC.includes('var resolvedSatelliteTilesUrl = resolveTemplateUrl(satelliteTilesUrl);')).toBe(true);
+    expect(FRONT_SRC.includes("var contoursModeAvailable = contoursEnabled && resolvedContoursTilesUrl !== '';" )).toBe(true);
   });
 
   test('map mode control is hidden when only basic mode is available', () => {
-    expect(FRONT_SRC).toContain('function shouldShowMapModeControl() {');
-    expect(FRONT_SRC).toContain('return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();');
-    expect(FRONT_SRC).toContain('function syncMapModeControl() {');
-    expect(FRONT_SRC).toContain('if (!shouldShowMapModeControl()) {');
-    expect(FRONT_SRC).toContain("if (selectorMode !== 'basic') {");
+    expect(FRONT_SRC.includes('function shouldShowMapModeControl() {')).toBe(true);
+    expect(FRONT_SRC.includes('return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();')).toBe(true);
+    expect(FRONT_SRC.includes('function syncMapModeControl() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (!shouldShowMapModeControl()) {')).toBe(true);
+    expect(FRONT_SRC.includes("if (selectorMode !== 'satellite') {")).toBe(true);
   });
 
   test('map mode control uses configurable contour source-layer and localized labels', () => {
-    expect(FRONT_SRC).toContain("var contoursSourceLayer = String((window.FGPX && FGPX.contoursSourceLayer) || 'contour').trim();");
-    expect(FRONT_SRC).toContain("'source-layer': contoursSourceLayer,");
-    expect(FRONT_SRC).toContain("var i18nMapMode = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};");
-    expect(FRONT_SRC).toContain("select.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Map mode');");
-    expect(FRONT_SRC).toContain("addOption('basic', i18nMapMode.mapModeBasic || 'Basic');");
-    expect(FRONT_SRC).toContain("addOption('basic_contours', i18nMapMode.mapModeContours || 'Basic + Contours');");
-    expect(FRONT_SRC).toContain("addOption('satellite', i18nMapMode.mapModeSatellite || 'Satellite');");
+    expect(FRONT_SRC.includes("var contoursSourceLayer = String((window.FGPX && FGPX.contoursSourceLayer) || 'contour').trim();")).toBe(true);
+    expect(FRONT_SRC.includes("'source-layer': contoursSourceLayer,")).toBe(true);
+    expect(FRONT_SRC.includes("var i18nMapMode = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};")).toBe(true);
+    expect(FRONT_SRC.includes("toggleBtn.setAttribute('aria-label', i18nMapMode.mapModeLabel || 'Toggle contours');")).toBe(true);
   });
 
   test('satellite mode uses configurable style layer id before fallback layer', () => {
-    expect(FRONT_SRC).toContain("var satelliteLayerId = String((window.FGPX && FGPX.satelliteLayerId) || 'satellite').trim();");
-    expect(FRONT_SRC).toContain('return !!map.getLayer(satelliteLayerId);');
-    expect(FRONT_SRC).toContain("setLayerVisibilityIfPresent(satelliteLayerId, nextMode === 'satellite' ? 'visible' : 'none');");
+    expect(FRONT_SRC.includes("var satelliteLayerId = String((window.FGPX && FGPX.satelliteLayerId) || 'satellite').trim();")).toBe(true);
+    expect(FRONT_SRC.includes('return !!map.getLayer(satelliteLayerId);')).toBe(true);
+    expect(FRONT_SRC.includes("setLayerVisibilityIfPresent(satelliteLayerId, showSat ? 'visible' : 'none');")).toBe(true);
   });
 
   test('phase3 normalizes WP boolean-like option values safely', () => {
-    expect(FRONT_SRC).toContain('function toBoolOption(value, fallback) {');
-    expect(FRONT_SRC).toContain('var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);');
-    expect(FRONT_SRC).toContain('var debugWeatherDataEnabled = toBoolOption(window.FGPX && FGPX.debugWeatherData, false);');
-    expect(FRONT_SRC).toContain('var effectiveWeatherEnabled = weatherEnabled || debugWeatherDataEnabled;');
-    expect(FRONT_SRC).toContain('var weatherVisible = toBoolOption(window.FGPX && FGPX.weatherVisibleByDefault, false);');
+    expect(FRONT_SRC.includes('function toBoolOption(value, fallback) {')).toBe(true);
+    expect(FRONT_SRC.includes('var weatherEnabled = toBoolOption(window.FGPX && FGPX.weatherEnabled, false);')).toBe(true);
+    expect(FRONT_SRC.includes('var debugWeatherDataEnabled = toBoolOption(window.FGPX && FGPX.debugWeatherData, false);')).toBe(true);
+    expect(FRONT_SRC.includes('var effectiveWeatherEnabled = weatherEnabled || debugWeatherDataEnabled;')).toBe(true);
+    expect(FRONT_SRC.includes('var weatherVisible = toBoolOption(window.FGPX && FGPX.weatherVisibleByDefault, false);')).toBe(true);
   });
 
   test('simulation tab and photo marker live in the weather cinema instead of the map overlay', () => {
-    expect(FRONT_SRC).toContain("tabWeatherGrade.textContent = (I18N.simulationTab || 'Simulation');");
-    expect(FRONT_SRC).toContain("photoMarker.className = 'fgpx-weather-photo-marker';");
-    expect(FRONT_SRC).toContain("photoMarkerLabel.className = 'fgpx-weather-photo-marker-label';");
-    expect(FRONT_SRC).not.toContain('overlay.appendChild(overlayRuler);');
+    expect(FRONT_SRC.includes("tabWeatherGrade.textContent = (I18N.simulationTab || 'Simulation');")).toBe(true);
+    expect(FRONT_SRC.includes("photoMarker.className = 'fgpx-weather-photo-marker';")).toBe(true);
+    expect(FRONT_SRC.includes("photoMarkerLabel.className = 'fgpx-weather-photo-marker-label';")).toBe(true);
+    expect(FRONT_SRC.includes('overlay.appendChild(overlayRuler);')).toBe(false);
   });
 
   test('phase3 lazily creates wind satellite layers only when full-detail visibility is needed', () => {
-    expect(FRONT_SRC).toContain('function ensureWindSatelliteLayers() {');
-    expect(FRONT_SRC).toContain('if (windCircleLayerIds.length > 0) return;');
-    expect(FRONT_SRC).toContain('if (circleWindVisibility === \'visible\') {');
-    expect(FRONT_SRC).toContain('ensureWindSatelliteLayers();');
-    expect(FRONT_SRC).toContain("DBG.log('Wind satellite layers created lazily', { count: windCircleLayerIds.length });");
+    expect(FRONT_SRC.includes('function ensureWindSatelliteLayers() {')).toBe(true);
+    expect(FRONT_SRC.includes('if (windCircleLayerIds.length > 0) return;')).toBe(true);
+    expect(FRONT_SRC.includes('if (circleWindVisibility === \'visible\') {')).toBe(true);
+    expect(FRONT_SRC.includes('ensureWindSatelliteLayers();')).toBe(true);
+    expect(FRONT_SRC.includes("DBG.log('Wind satellite layers created lazily', { count: windCircleLayerIds.length });")).toBe(true);
   });
 
   test('simulation city precompute uses fast nearest-index helper and geodesic distance cutoff', () => {
-    expect(FRONT_SRC).toContain('function nearestCoordIndexFast(pointLonLat, coords) {');
-    expect(FRONT_SRC).toContain('var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);');
-    expect(FRONT_SRC).toContain('var trackDistanceMeters = haversineMeters([nearestCoord[0], nearestCoord[1]], [featLon, featLat]);');
-    expect(FRONT_SRC).toContain('if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 2000) { skippedType++; continue; }');
+    expect(FRONT_SRC.includes('function nearestCoordIndexFast(pointLonLat, coords) {')).toBe(true);
+    expect(FRONT_SRC.includes('var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);')).toBe(true);
+    expect(FRONT_SRC.includes('var trackDistanceMeters = haversineMeters([nearestCoord[0], nearestCoord[1]], [featLon, featLat]);')).toBe(true);
+    expect(FRONT_SRC.includes('if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 2000) { skippedType++; continue; }')).toBe(true);
   });
 
   test('simulation city layer cache is invalidated on style data events', () => {
-    expect(FRONT_SRC).toContain("map.on('styledata', function() {");
-    expect(FRONT_SRC).toContain('_placeLayers = null;');
-    expect(FRONT_SRC).toContain('weatherTextLayersSupported = null;');
-    expect(FRONT_SRC).toContain("weatherOverlayProfileKey = '';");
+    expect(FRONT_SRC.includes("map.on('styledata', function() {")).toBe(true);
+    expect(FRONT_SRC.includes('_placeLayers = null;')).toBe(true);
+    expect(FRONT_SRC.includes('weatherTextLayersSupported = null;')).toBe(true);
+    expect(FRONT_SRC.includes("weatherOverlayProfileKey = '';")).toBe(true);
   });
 
   test('simulation shows no-waypoints note when track has none', () => {
-    expect(FRONT_SRC).toContain("poiEmptyEl2.className = 'fgpx-weather-poi-empty';");
-    expect(FRONT_SRC).toContain("poiEmptyEl2.textContent = 'No GPX waypoints in this track';");
+    expect(FRONT_SRC.includes("poiEmptyEl2.className = 'fgpx-weather-poi-empty';")).toBe(true);
+    expect(FRONT_SRC.includes("poiEmptyEl2.textContent = 'No GPX waypoints in this track';")).toBe(true);
   });
 
   test('simulation runtime no longer ships the temporary debug weather path', () => {
-    expect(FRONT_SRC).not.toContain('debugWeatherSimEnabled');
-    expect(FRONT_SRC).not.toContain('DEBUG SIMULATION');
-    expect(FRONT_SRC).not.toContain('cinemaEl._debugWeatherSim');
+    expect(FRONT_SRC.includes('debugWeatherSimEnabled')).toBe(false);
+    expect(FRONT_SRC.includes('DEBUG SIMULATION')).toBe(false);
+    expect(FRONT_SRC.includes('cinemaEl._debugWeatherSim')).toBe(false);
   });
 
   // Media tab memoization & functional tests
   test('media grid memoization: cache invalidation on photo data change', () => {
-    expect(FRONT_SRC).toContain('var mediaGridRendered = false;');
-    expect(FRONT_SRC).toContain('var cachedMediaGridDOM = null;');
-    expect(FRONT_SRC).toContain('function invalidateMediaGridCache(preservePage) {');
-    expect(FRONT_SRC).toContain('mediaGridRendered = false;');
-    expect(FRONT_SRC).toContain('cachedMediaGridDOM = null;');
-    expect(FRONT_SRC).toContain('invalidateMediaGridCache(true);');
+    expect(FRONT_SRC.includes('var mediaGridRendered = false;')).toBe(true);
+    expect(FRONT_SRC.includes('var cachedMediaGridDOM = null;')).toBe(true);
+    expect(FRONT_SRC.includes('function invalidateMediaGridCache(preservePage) {')).toBe(true);
+    expect(FRONT_SRC.includes('mediaGridRendered = false;')).toBe(true);
+    expect(FRONT_SRC.includes('cachedMediaGridDOM = null;')).toBe(true);
+    expect(FRONT_SRC.includes('invalidateMediaGridCache(true);')).toBe(true);
   });
 
   test('media grid rendering: memoizes DOM after first render', () => {
-    expect(FRONT_SRC).toContain('var allowMediaGridCache = !photoQueueRotationEnabled;');
-    expect(FRONT_SRC).toContain('if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {');
-    expect(FRONT_SRC).toContain('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));');
-    expect(FRONT_SRC).toContain('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');');
-    expect(FRONT_SRC).toContain('cachedMediaGridPage = mediaGridPage;');
-    expect(FRONT_SRC).toContain('mediaGridRendered = true;');
-    expect(FRONT_SRC).not.toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
-    expect(FRONT_SRC).toContain('document.createDocumentFragment();');
-    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });');
-    expect(FRONT_SRC).toContain('cachedMediaGridDOM = frag;');
+    expect(FRONT_SRC.includes('var allowMediaGridCache = !photoQueueRotationEnabled;')).toBe(true);
+    expect(FRONT_SRC.includes('if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {')).toBe(true);
+    expect(FRONT_SRC.includes('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));')).toBe(true);
+    expect(FRONT_SRC.includes('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');')).toBe(true);
+    expect(FRONT_SRC.includes('cachedMediaGridPage = mediaGridPage;')).toBe(true);
+    expect(FRONT_SRC.includes('mediaGridRendered = true;')).toBe(true);
+    expect(FRONT_SRC.includes('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);')).toBe(false);
+    expect(FRONT_SRC.includes('document.createDocumentFragment();')).toBe(true);
+    expect(FRONT_SRC.includes('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });')).toBe(true);
+    expect(FRONT_SRC.includes('cachedMediaGridDOM = frag;')).toBe(true);
   });
 
   test('media grid cache stores DocumentFragment of children to prevent nested panel on cache restore', () => {
-    expect(FRONT_SRC).not.toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
+    expect(FRONT_SRC.includes('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);')).toBe(false);
     const fragCount = (FRONT_SRC.match(/document\.createDocumentFragment\(\)/g) || []).length;
     expect(fragCount).toBeGreaterThanOrEqual(2);
-    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });');
-    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { fragEmpty.appendChild(cn.cloneNode(true)); });');
+    expect(FRONT_SRC.includes('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });')).toBe(true);
+    expect(FRONT_SRC.includes('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { fragEmpty.appendChild(cn.cloneNode(true)); });')).toBe(true);
   });
 
   test('media queue rotation recomputes displayed order from playback state', () => {
-    expect(FRONT_SRC).toContain("var photoQueueRotationEnabled = !!(FGPX && (FGPX.photoQueueRotationEnabled === true || FGPX.photoQueueRotationEnabled === '1'));");
-    expect(FRONT_SRC).toContain('function buildRotatedMediaItems() {');
-    expect(FRONT_SRC).toContain('function syncMediaDisplayOrder(force) {');
-    expect(FRONT_SRC).toContain('var mediaDisplayItems = [];');
-    expect(FRONT_SRC).toContain('syncMediaDisplayOrder(false);');
-    expect(FRONT_SRC).toContain('syncMediaDisplayOrder(true);');
-    expect(FRONT_SRC).toContain('tOffset = timeOffsets[Math.max(0, lo2s)] || 0;');
+    expect(FRONT_SRC.includes("var photoQueueRotationEnabled = !!(FGPX && (FGPX.photoQueueRotationEnabled === true || FGPX.photoQueueRotationEnabled === '1'));")).toBe(true);
+    expect(FRONT_SRC.includes('function buildRotatedMediaItems() {')).toBe(true);
+    expect(FRONT_SRC.includes('function syncMediaDisplayOrder(force) {')).toBe(true);
+    expect(FRONT_SRC.includes('var mediaDisplayItems = [];')).toBe(true);
+    expect(FRONT_SRC.includes('syncMediaDisplayOrder(false);')).toBe(true);
+    expect(FRONT_SRC.includes('syncMediaDisplayOrder(true);')).toBe(true);
+    expect(FRONT_SRC.includes('tOffset = timeOffsets[Math.max(0, lo2s)] || 0;')).toBe(true);
   });
 
   test('media queue rotation preserves current page during runtime reorder', () => {
-    expect(FRONT_SRC).toContain('invalidateMediaGridCache(true);');
-    expect(FRONT_SRC).toContain('if (!preservePage) {');
-    expect(FRONT_SRC).toContain('if (mediaGridPage >= totalPages) mediaGridPage = totalPages - 1;');
+    expect(FRONT_SRC.includes('invalidateMediaGridCache(true);')).toBe(true);
+    expect(FRONT_SRC.includes('if (!preservePage) {')).toBe(true);
+    expect(FRONT_SRC.includes('if (mediaGridPage >= totalPages) mediaGridPage = totalPages - 1;')).toBe(true);
   });
 
   test('media queue rotation styles define exit and handoff states', () => {
-    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-exiting {');
-    expect(FRONT_CSS_SRC).toContain('@keyframes fgpx-media-card-exit {');
-    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-entering {');
-    expect(FRONT_CSS_SRC).toContain('.fgpx .fgpx-media-card.fgpx-media-card-tail-entering {');
+    expect(FRONT_CSS_SRC.includes('.fgpx .fgpx-media-card.fgpx-media-card-exiting {')).toBe(true);
+    expect(FRONT_CSS_SRC.includes('@keyframes fgpx-media-card-exit {')).toBe(true);
+    expect(FRONT_CSS_SRC.includes('.fgpx .fgpx-media-card.fgpx-media-card-entering {')).toBe(true);
+    expect(FRONT_CSS_SRC.includes('.fgpx .fgpx-media-card.fgpx-media-card-tail-entering {')).toBe(true);
   });
 
   test('media grid empty state: renders with semantic role and ARIA label', () => {
-    expect(FRONT_SRC).toContain('.setAttribute(\'role\', \'status\');');
-    expect(FRONT_SRC).toContain('.setAttribute(\'aria-label\', \'Media gallery empty\');');
-    expect(FRONT_SRC).toContain('empty.className = \'fgpx-media-empty\';');
-    expect(FRONT_SRC).toContain('No photos available for this track.');
+    expect(FRONT_SRC.includes('.setAttribute(\'role\', \'status\');')).toBe(true);
+    expect(FRONT_SRC.includes('.setAttribute(\'aria-label\', \'Media gallery empty\');')).toBe(true);
+    expect(FRONT_SRC.includes('empty.className = \'fgpx-media-empty\';')).toBe(true);
+    expect(FRONT_SRC.includes('No photos available for this track.')).toBe(true);
   });
 
   test('media grid card ordering: GPS-linked photos before off-track', () => {
-    expect(FRONT_SRC).toContain('var trackLinked = [];');
-    expect(FRONT_SRC).toContain('var offTrack = [];');
-    expect(FRONT_SRC).toContain('if (item.isGpsLinked) trackLinked.push(item);');
-    expect(FRONT_SRC).toContain('else offTrack.push(item);');
-    expect(FRONT_SRC).toContain('mediaItems = trackLinked.concat(offTrack);');
+    expect(FRONT_SRC.includes('var trackLinked = [];')).toBe(true);
+    expect(FRONT_SRC.includes('var offTrack = [];')).toBe(true);
+    expect(FRONT_SRC.includes('if (item.isGpsLinked) trackLinked.push(item);')).toBe(true);
+    expect(FRONT_SRC.includes('else offTrack.push(item);')).toBe(true);
+    expect(FRONT_SRC.includes('mediaItems = trackLinked.concat(offTrack);')).toBe(true);
   });
 
   test('photo ordering mode: supports geo_first and time_first', () => {
-    expect(FRONT_SRC).toContain("var photoOrderMode = (window.FGPX && typeof FGPX.photoOrderMode === 'string') ? String(FGPX.photoOrderMode) : 'geo_first';");
-    expect(FRONT_SRC).toContain("if (photoOrderMode !== 'time_first' && photoOrderMode !== 'geo_first') { photoOrderMode = 'geo_first'; }");
-    expect(FRONT_SRC).toContain("if (photoOrderMode === 'time_first') {");
+    expect(FRONT_SRC.includes("var photoOrderMode = (window.FGPX && typeof FGPX.photoOrderMode === 'string') ? String(FGPX.photoOrderMode) : 'geo_first';")).toBe(true);
+    expect(FRONT_SRC.includes("if (photoOrderMode !== 'time_first' && photoOrderMode !== 'geo_first') { photoOrderMode = 'geo_first'; }")).toBe(true);
+    expect(FRONT_SRC.includes("if (photoOrderMode === 'time_first') {")).toBe(true);
   });
 
   test('photo ordering mode: time_first sorts by timestamp and falls back by id', () => {
-    expect(FRONT_SRC).toContain('var ta = (typeof a._timestampMs === \'number\' && isFinite(a._timestampMs)) ? a._timestampMs : Infinity;');
-    expect(FRONT_SRC).toContain('if (ta !== tb) return ta - tb;');
-    expect(FRONT_SRC).toContain('var ida = (typeof a.id === \'number\') ? a.id : Infinity;');
-    expect(FRONT_SRC).toContain('return ida - idb;');
+    expect(FRONT_SRC.includes('var ta = (typeof a._timestampMs === \'number\' && isFinite(a._timestampMs)) ? a._timestampMs : Infinity;')).toBe(true);
+    expect(FRONT_SRC.includes('if (ta !== tb) return ta - tb;')).toBe(true);
+    expect(FRONT_SRC.includes('var ida = (typeof a.id === \'number\') ? a.id : Infinity;')).toBe(true);
+    expect(FRONT_SRC.includes('return ida - idb;')).toBe(true);
   });
 
   test('media grid ordering mode: time_first preserves prepared photo sequence', () => {
-    expect(FRONT_SRC).toContain("mediaItems = (photoOrderMode === 'time_first')");
-    expect(FRONT_SRC).toContain(': trackLinked.concat(offTrack);');
+    expect(FRONT_SRC.includes("mediaItems = (photoOrderMode === 'time_first')")).toBe(true);
+    expect(FRONT_SRC.includes(': trackLinked.concat(offTrack);')).toBe(true);
   });
 
   test('media card accessibility: aria-labels are 1-based indices', () => {
     // Cards should say "Open photo 1", "Open photo 2", not "0" or "1"
-    expect(FRONT_SRC).toContain('\'Open photo \' + String(index + 1)');
-    expect(FRONT_SRC).not.toContain('\'Open photo \' + String(index)');
+    expect(FRONT_SRC.includes('\'Open photo \' + String(index + 1)')).toBe(true);
+    expect(FRONT_SRC.includes('\'Open photo \' + String(index)')).toBe(false);
   });
 
   test('media card image: includes alt text fallback to title', () => {
-    expect(FRONT_SRC).toContain('img.alt = item.title || \'Photo\';');
+    expect(FRONT_SRC.includes('img.alt = item.title || \'Photo\';')).toBe(true);
   });
 
   test('media card click handler: invokes openMediaViewerAt with correct index', () => {
-    expect(FRONT_SRC).toContain('card.addEventListener(\'click\', function() {');
-    expect(FRONT_SRC).toContain('openMediaViewerAt(index);');
+    expect(FRONT_SRC.includes('card.addEventListener(\'click\', function() {')).toBe(true);
+    expect(FRONT_SRC.includes('openMediaViewerAt(index);')).toBe(true);
   });
 
   test('media grid metadata display: shows route distance and timestamp when available', () => {
-    expect(FRONT_SRC).toContain('if (item.routeKm) {');
-    expect(FRONT_SRC).toContain('km.textContent = item.routeKm;');
-    expect(FRONT_SRC).toContain('if (item.timeLabel) {');
-    expect(FRONT_SRC).toContain('time.textContent = item.timeLabel;');
+    expect(FRONT_SRC.includes('if (item.routeKm) {')).toBe(true);
+    expect(FRONT_SRC.includes('km.textContent = item.routeKm;')).toBe(true);
+    expect(FRONT_SRC.includes('if (item.timeLabel) {')).toBe(true);
+    expect(FRONT_SRC.includes('time.textContent = item.timeLabel;')).toBe(true);
   });
 
   test('media grid rebuilds on cloned nodes: re-attaches click listeners', () => {
-    expect(FRONT_SRC).toContain('for (var ci = 0; ci < clonedCards.length; ci++) {');
-    expect(FRONT_SRC).toContain('clonedCards[idx].addEventListener(\'click\', function() {');
-    expect(FRONT_SRC).toContain('openMediaViewerAt(startIdx + idx);');
+    expect(FRONT_SRC.includes('for (var ci = 0; ci < clonedCards.length; ci++) {')).toBe(true);
+    expect(FRONT_SRC.includes('clonedCards[idx].addEventListener(\'click\', function() {')).toBe(true);
+    expect(FRONT_SRC.includes('openMediaViewerAt(startIdx + idx);')).toBe(true);
   });
 
   test('media grid applies strict privacy window filter for derivable photos only', () => {
-    expect(FRONT_SRC).toContain('if (privacyEnabled) {');
-    expect(FRONT_SRC).toContain('if (routeDistMeters == null) { continue; }');
-    expect(FRONT_SRC).toContain('if (routeDistMeters < privacyStartD || routeDistMeters > privacyEndD) { continue; }');
+    expect(FRONT_SRC.includes('if (privacyEnabled) {')).toBe(true);
+    expect(FRONT_SRC.includes('if (routeDistMeters == null) { continue; }')).toBe(true);
+    expect(FRONT_SRC.includes('if (routeDistMeters < privacyStartD || routeDistMeters > privacyEndD) { continue; }')).toBe(true);
   });
 
   test('media grid pagination: divides items into configured page size', () => {
-    expect(FRONT_SRC).toContain('var mediaGridPageSize = Math.max(4, Math.min(48, Number(window.FGPX && window.FGPX.galleryPerPage) || 16));');
-    expect(FRONT_SRC).toContain('var mediaGridPage = 0;');
-    expect(FRONT_SRC).toContain('var totalPages = Math.ceil(totalItems / mediaGridPageSize);');
-    expect(FRONT_SRC).toContain('var startIdx = mediaGridPage * mediaGridPageSize;');
+    expect(FRONT_SRC.includes('var mediaGridPageSize = Math.max(4, Math.min(48, Number(window.FGPX && window.FGPX.galleryPerPage) || 16));')).toBe(true);
+    expect(FRONT_SRC.includes('var mediaGridPage = 0;')).toBe(true);
+    expect(FRONT_SRC.includes('var totalPages = Math.ceil(totalItems / mediaGridPageSize);')).toBe(true);
+    expect(FRONT_SRC.includes('var startIdx = mediaGridPage * mediaGridPageSize;')).toBe(true);
   });
 
   test('media grid pagination: shows prev/next buttons and page info', () => {
-    expect(FRONT_SRC).toContain('pagination.className = \'fgpx-media-pagination\';');
-    expect(FRONT_SRC).toContain('prevBtn.className = \'fgpx-media-page-prev\';');
-    expect(FRONT_SRC).toContain('nextBtn.className = \'fgpx-media-page-next\';');
-    expect(FRONT_SRC).toContain('pageInfo.textContent = \'Page \' + (mediaGridPage + 1) + \' of \' + totalPages;');
+    expect(FRONT_SRC.includes('pagination.className = \'fgpx-media-pagination\';')).toBe(true);
+    expect(FRONT_SRC.includes('prevBtn.className = \'fgpx-media-page-prev\';')).toBe(true);
+    expect(FRONT_SRC.includes('nextBtn.className = \'fgpx-media-page-next\';')).toBe(true);
+    expect(FRONT_SRC.includes('pageInfo.textContent = \'Page \' + (mediaGridPage + 1) + \' of \' + totalPages;')).toBe(true);
   });
 
   test('media grid pagination: disables prev button on first page', () => {
-    expect(FRONT_SRC).toContain('prevBtn.disabled = (mediaGridPage === 0);');
+    expect(FRONT_SRC.includes('prevBtn.disabled = (mediaGridPage === 0);')).toBe(true);
   });
 
   test('media grid pagination: disables next button on last page', () => {
-    expect(FRONT_SRC).toContain('nextBtn.disabled = (mediaGridPage >= totalPages - 1);');
+    expect(FRONT_SRC.includes('nextBtn.disabled = (mediaGridPage >= totalPages - 1);')).toBe(true);
   });
 
   test('media tab hidden when photosEnabled is false', () => {
-    expect(FRONT_SRC).toContain('if (FGPX.photosEnabled) {');
-    expect(FRONT_SRC).toContain('chartTabs.appendChild(tabMedia);');
+    expect(FRONT_SRC.includes('if (FGPX.photosEnabled) {')).toBe(true);
+    expect(FRONT_SRC.includes('chartTabs.appendChild(tabMedia);')).toBe(true);
   });
 
   test('route arrows: spacing uses named heuristic with bounded percent denominator', () => {
-    expect(FRONT_SRC).toContain('var arrowSpacingReferencePx = 550;');
-    expect(FRONT_SRC).toContain('var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));');
-    expect(FRONT_SRC).toContain('if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }');
-    expect(FRONT_SRC).toContain('if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }');
+    expect(FRONT_SRC.includes('var arrowSpacingReferencePx = 550;')).toBe(true);
+    expect(FRONT_SRC.includes('var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));')).toBe(true);
+    expect(FRONT_SRC.includes('if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }')).toBe(true);
+    expect(FRONT_SRC.includes('if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }')).toBe(true);
   });
 
   test('route arrows: derives stroke color from theme mode and validates canvas context', () => {
-    expect(FRONT_SRC).toContain("var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';");
-    expect(FRONT_SRC).toContain("var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';");
-    expect(FRONT_SRC).toContain("if (!actx) { throw new Error('Route arrow canvas context unavailable'); }");
-    expect(FRONT_SRC).toContain('actx.strokeStyle = arrowStrokeColor;');
+    expect(FRONT_SRC.includes("var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';")).toBe(true);
+    expect(FRONT_SRC.includes("var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';")).toBe(true);
+    expect(FRONT_SRC.includes("if (!actx) { throw new Error('Route arrow canvas context unavailable'); }")).toBe(true);
+    expect(FRONT_SRC.includes('actx.strokeStyle = arrowStrokeColor;')).toBe(true);
   });
 
   test('route arrows: logs warning instead of failing silently', () => {
-    expect(FRONT_SRC).toContain("} catch(e) { DBG.warn('Route arrow rendering skipped', e); }");
+    expect(FRONT_SRC.includes("} catch(e) { DBG.warn('Route arrow rendering skipped', e); }")).toBe(true);
   });
 
   test('instance config is preserved into startPlayer media rendering', async () => {

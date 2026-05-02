@@ -620,7 +620,7 @@
       if (!isFinite(n) || n <= 0) {
         return null;
       }
-      return Math.max(4, Math.min(48, n | 0));
+      return Math.max(1, Math.min(48, n | 0));
     }
 
     var resolvedPerPage = resolvePerPageValue();
