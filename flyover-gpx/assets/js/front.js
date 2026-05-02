@@ -697,6 +697,14 @@
     el.setAttribute('data-fgpx-initialized', '1');
     var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
     var FGPX = Object.assign({}, window.FGPX, instCfg);
+    el.__fgpxConfig = FGPX;
+    if (DBG.isEnabled()) {
+      console.log('[FGPX] initContainer', {
+        id: el.id,
+        instCfg: instCfg,
+        mergedFGPX: FGPX
+      });
+    }
     applyTheme(el, FGPX);
 
     var trackId = el.getAttribute('data-track-id');
@@ -728,6 +736,16 @@
     var ajaxUrl = (window.FGPX && FGPX.ajaxUrl) ? String(window.FGPX.ajaxUrl) : null;
     var fetchTimeoutMs = Math.max(3000, (window.FGPX && isFinite(Number(FGPX.fetchTimeoutMs)) ? Number(FGPX.fetchTimeoutMs) : 15000));
 
+    if (DBG.isEnabled()) {
+      console.log('[FGPX] initContainer starting fetch', { 
+        trackId: trackId,
+        preferAjaxFirst: preferAjaxFirst,
+        restUrl: restUrl,
+        ajaxUrl: ajaxUrl,
+        hasGalleryStrategy: hasGalleryStrategy
+      });
+    }
+
     function isContainerActive() {
       return !!(el && el.isConnected && document.contains(el));
     }
@@ -753,7 +771,13 @@
         var data = JSON.parse(cached);
         // Check if cache is still valid (24 hours)
         if (data.timestamp && (Date.now() - data.timestamp) < 86400000) {
-          DBG.log('Using cached track data', { cacheKey: cacheKey, age: Date.now() - data.timestamp });
+          if (DBG.isEnabled()) {
+            console.log('[FGPX] Using cached track data', { 
+              cacheKey: cacheKey, 
+              age: Date.now() - data.timestamp,
+              photoCount: (data.payload && data.payload.photos) ? data.payload.photos.length : 0
+            });
+          }
           return data.payload;
         } else {
           // Remove expired cache
@@ -936,7 +960,7 @@
     if (cachedData) {
       if (!isContainerActive()) return;
       ui.spinner.style.display = 'none';
-      startPlayer(el, ui, cachedData, style, styleUrl);
+      startPlayer(el, ui, cachedData, style, styleUrl, FGPX);
     } else {
       var primaryFetch = preferAjaxFirst ? fetchAjax() : fetchRest();
       primaryFetch
@@ -950,10 +974,18 @@
         })
         .then(function (json) {
           if (!isContainerActive()) return;
+          if (DBG.isEnabled()) {
+            console.log('[FGPX] Data received', { 
+              source: 'network', 
+              photoCount: (json && json.photos) ? json.photos.length : 0,
+              photos: (json && json.photos) ? json.photos.map(function(p) { return { title: p.title, lat: p.lat, lon: p.lon, timestamp: p.timestamp }; }) : [],
+              json: json 
+            });
+          }
           ui.spinner.style.display = 'none';
           // Cache the data for future use
           setCachedData(json);
-          startPlayer(el, ui, json, style, styleUrl);
+          startPlayer(el, ui, json, style, styleUrl, FGPX);
         })
         .catch(function (err) {
           if (!isContainerActive()) return;
@@ -964,7 +996,17 @@
     }
   }
 
-  function startPlayer(root, ui, payload, style, styleUrl) {
+  function startPlayer(root, ui, payload, style, styleUrl, FGPX) {
+    FGPX = FGPX || root.__fgpxConfig || window.FGPX || {};
+    if (DBG.isEnabled()) {
+      console.log('[FGPX] startPlayer starting', { 
+        globalFGPXExists: !!window.FGPX,
+        localFGPXExists: typeof FGPX !== 'undefined'
+      });
+      if (typeof FGPX !== 'undefined') {
+        console.log('[FGPX] local FGPX', FGPX);
+      }
+    }
     var trackId = root.getAttribute('data-track-id');
     DBG.log('Starting player for track', { 
       trackId: trackId,
@@ -3207,6 +3249,15 @@
       });
 
       function buildMediaItems() {
+        if (DBG.isEnabled()) {
+          console.log('[FGPX] buildMediaItems starting', {
+            photosEnabled: FGPX.photosEnabled,
+            photosCount: photos.length,
+            privacyEnabled: privacyEnabled,
+            privacyStartD: privacyStartD,
+            privacyEndD: privacyEndD
+          });
+        }
         // Only build media items if photos are enabled and available
         if (!FGPX.photosEnabled) {
           mediaItems = [];
@@ -3315,6 +3366,13 @@
         mediaItems = trackLinked.concat(offTrack);
         mediaItems = (photoOrderMode === 'time_first') ? orderedItems : trackLinked.concat(offTrack);
         mediaDisplayItems = mediaItems.slice();
+        if (DBG.isEnabled()) {
+          console.log('[FGPX] buildMediaItems complete', {
+            mediaItems: mediaItems.length,
+            trackLinked: trackLinked.length,
+            offTrack: offTrack.length
+          });
+        }
         mediaRotationLeadKey = mediaDisplayItems.length > 0 ? getMediaItemKey(mediaDisplayItems[0], 0) : '';
         syncMediaDisplayOrder(true);
       }
@@ -3350,6 +3408,13 @@
       function renderMediaGrid() {
         if (!ui.mediaPanel) return;
         var activeMediaItems = getDisplayedMediaItems();
+        if (DBG.isEnabled()) {
+          console.log('[FGPX] renderMediaGrid', {
+            activeMediaItems: activeMediaItems.length,
+            photoQueueRotationEnabled: photoQueueRotationEnabled,
+            mediaGridPage: mediaGridPage
+          });
+        }
         var allowMediaGridCache = !photoQueueRotationEnabled;
         // If grid already rendered, reuse cached DOM instead of rebuilding
         if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {
@@ -3385,7 +3450,9 @@
             : 'No photos available for this track.';
           ui.mediaPanel.appendChild(empty);
           if (allowMediaGridCache) {
-            cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+            var fragEmpty = document.createDocumentFragment();
+            Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { fragEmpty.appendChild(cn.cloneNode(true)); });
+            cachedMediaGridDOM = fragEmpty;
             cachedMediaGridPage = mediaGridPage;
             mediaGridRendered = true;
           }
@@ -3493,7 +3560,9 @@
         
         // Cache the rendered media panel for the active page.
         if (allowMediaGridCache) {
-          cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);
+          var frag = document.createDocumentFragment();
+          Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });
+          cachedMediaGridDOM = frag;
           cachedMediaGridPage = mediaGridPage;
           mediaGridRendered = true;
         } else {
@@ -6424,7 +6493,9 @@
       ui.tabs.tabWindRose.addEventListener('click', function() { switchChartTab('windrose'); });
       ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
       ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
-      ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
+      if (FGPX.photosEnabled) {
+        ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
+      }
       root.__fgpxTabsReady = true;
       if (container) {
         container.__fgpxTabsReady = true;

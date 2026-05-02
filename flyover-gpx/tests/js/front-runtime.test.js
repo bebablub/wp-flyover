@@ -531,8 +531,16 @@ describe('front.js runtime minimal regressions', () => {
   test('chart tabs use instance-scoped switch handler (no global dependency)', () => {
     expect(FRONT_SRC).toContain('var switchChartTab = function(tabType) {');
     expect(FRONT_SRC).toContain("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });");
-    expect(FRONT_SRC).toContain("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
     expect(FRONT_SRC).not.toContain("ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });");
+  });
+
+  test('media tab listener in startPlayer is guarded by FGPX.photosEnabled (not inverted)', () => {
+    expect(FRONT_SRC).toContain("if (FGPX.photosEnabled) {");
+    expect(FRONT_SRC).toContain("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
+    const guardedIdx = FRONT_SRC.indexOf("if (FGPX.photosEnabled) {");
+    const listenerIdx = FRONT_SRC.indexOf("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
+    expect(listenerIdx).toBeGreaterThan(guardedIdx);
+    expect(FRONT_SRC).not.toContain("if (!FGPX.photosEnabled) {\n        ui.tabs.tabMedia.addEventListener");
   });
 
   test('media tab and gallery rendering hooks are present', () => {
@@ -799,9 +807,20 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC).toContain('if (allowMediaGridCache && mediaGridRendered && cachedMediaGridDOM !== null && cachedMediaGridPage === mediaGridPage) {');
     expect(FRONT_SRC).toContain('ui.mediaPanel.appendChild(cachedMediaGridDOM.cloneNode(true));');
     expect(FRONT_SRC).toContain('var clonedCards = ui.mediaPanel.querySelectorAll(\'.fgpx-media-card\');');
-    expect(FRONT_SRC).toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
     expect(FRONT_SRC).toContain('cachedMediaGridPage = mediaGridPage;');
     expect(FRONT_SRC).toContain('mediaGridRendered = true;');
+    expect(FRONT_SRC).not.toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
+    expect(FRONT_SRC).toContain('document.createDocumentFragment();');
+    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });');
+    expect(FRONT_SRC).toContain('cachedMediaGridDOM = frag;');
+  });
+
+  test('media grid cache stores DocumentFragment of children to prevent nested panel on cache restore', () => {
+    expect(FRONT_SRC).not.toContain('cachedMediaGridDOM = ui.mediaPanel.cloneNode(true);');
+    const fragCount = (FRONT_SRC.match(/document\.createDocumentFragment\(\)/g) || []).length;
+    expect(fragCount).toBeGreaterThanOrEqual(2);
+    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { frag.appendChild(cn.cloneNode(true)); });');
+    expect(FRONT_SRC).toContain('Array.prototype.forEach.call(ui.mediaPanel.childNodes, function(cn) { fragEmpty.appendChild(cn.cloneNode(true)); });');
   });
 
   test('media queue rotation recomputes displayed order from playback state', () => {
@@ -937,6 +956,70 @@ describe('front.js runtime minimal regressions', () => {
 
   test('route arrows: logs warning instead of failing silently', () => {
     expect(FRONT_SRC).toContain("} catch(e) { DBG.warn('Route arrow rendering skipped', e); }");
+  });
+
+  test('instance config is preserved into startPlayer media rendering', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [[16, 48, 100], [16.04, 48.04, 110]],
+          properties: {
+            timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:10:00Z'],
+            cumulativeDistance: [0, 4000],
+            heartRates: [],
+            cadences: [],
+            temperatures: [],
+            powers: [],
+            windSpeeds: [],
+            windDirections: [],
+            windImpacts: [],
+          },
+        },
+        bounds: [16, 48, 16.04, 48.04],
+        stats: {},
+        photos: [
+          {
+            id: 1,
+            title: 'Gallery-only photo',
+            lat: 48,
+            lon: 16,
+            timestamp: '2026-01-01T00:00:10Z',
+            thumbUrl: 'https://example.test/start-thumb.jpg',
+            fullUrl: 'https://example.test/start.jpg',
+          },
+        ],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      ajaxUrl: null,
+      photosEnabled: false,
+      weatherEnabled: false,
+      instances: {
+        'fgpx-app': {
+          photosEnabled: true,
+        },
+      },
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    await openMediaTab('#fgpx-app');
+
+    const panelText = String(document.querySelector('#fgpx-app .fgpx-media-panel')?.textContent || '');
+    expect(panelText).toContain('Gallery-only photo');
   });
 
   test('runtime privacy mode hides media items without derivable route distance', async () => {

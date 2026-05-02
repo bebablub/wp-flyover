@@ -41,6 +41,12 @@
 
   function applyPlayerConfig(cfg) {
     var playerConfig = cfg.playerConfig || {};
+    if (window.FGPX && window.FGPX.debugEnabled) {
+      console.log('[FGPX Gallery] applyPlayerConfig - BEFORE', { 
+        globalPhotosEnabled: window.FGPX.photosEnabled,
+        playerConfig: playerConfig 
+      });
+    }
     var forceOverrideKeys = {
       restUrl: true,
       restBase: true,
@@ -65,6 +71,12 @@
     }
     if (playerConfig.photoOrderMode !== undefined) {
       window.FGPX.photoOrderMode = playerConfig.photoOrderMode;
+    }
+    if (window.FGPX && window.FGPX.debugEnabled) {
+      console.log('[FGPX Gallery] applyPlayerConfig - AFTER', { 
+        globalPhotosEnabled: window.FGPX.photosEnabled,
+        globalPhotoOrderMode: window.FGPX.photoOrderMode
+      });
     }
   }
 
@@ -401,6 +413,9 @@
   }
 
   function requestGalleryPayload(cfg, params) {
+    if (window.FGPX && window.FGPX.debugEnabled) {
+      console.log('[FGPX Gallery] requestGalleryPayload starting', { params: params });
+    }
     var urls = [];
     if (cfg.endpointUrl) {
       urls.push(buildUrl(cfg.endpointUrl, params));
@@ -414,7 +429,23 @@
       if (index >= urls.length) {
         return Promise.reject(new Error('No gallery endpoint available.'));
       }
-      return fetchJson(urls[index]).catch(function () {
+      if (window.FGPX && window.FGPX.debugEnabled) {
+        console.log('[FGPX Gallery] Trying endpoint', { index: index, url: urls[index], isAjax: urls[index].indexOf('admin-ajax.php') !== -1 });
+      }
+      return fetchJson(urls[index]).then(function(json) {
+        if (window.FGPX && window.FGPX.debugEnabled) {
+          console.log('[FGPX Gallery] Endpoint success', { 
+            index: index, 
+            url: urls[index], 
+            isAjax: urls[index].indexOf('admin-ajax.php') !== -1,
+            payload: json 
+          });
+        }
+        return json;
+      }).catch(function (err) {
+        if (window.FGPX && window.FGPX.debugEnabled) {
+          console.warn('[FGPX Gallery] Endpoint failed', { index: index, url: urls[index], error: err });
+        }
         return tryUrl(index + 1);
       });
     }
@@ -478,6 +509,9 @@
   }
 
   function mountPlayer(root, track, cfg) {
+    if (window.FGPX && window.FGPX.debugEnabled) {
+      console.log('[FGPX Gallery] mountPlayer', { track: track, cfg: cfg });
+    }
     var panel = qs('.fgpx-gallery-player-panel', root);
     var title = qs('.fgpx-gallery-player-title', root);
     var mount = qs('.fgpx-gallery-player-mount', root);
@@ -514,6 +548,13 @@
         galleryPhotoStrategy: 'latest_embed',
         gpxDownloadUrl: track.gpxDownloadUrl || ''
       });
+
+      if (window.FGPX && window.FGPX.debugEnabled) {
+        console.log('[FGPX Gallery] renderPlayer - instance config', {
+          playerId: playerId,
+          config: window.FGPX.instances[playerId]
+        });
+      }
 
       var playerEl = qs('#' + playerId, root);
       if (playerEl && window.FGPX && typeof window.FGPX.initContainer === 'function') {
@@ -594,6 +635,15 @@
     var viewButtons = qsa('.fgpx-gallery-view-btn', root);
 
     var serverMode = !Array.isArray(cfg.tracks) && !!(cfg.endpointUrl || (cfg.ajaxUrl && cfg.ajaxAction));
+    if (window.FGPX && window.FGPX.debugEnabled) {
+      console.log('[FGPX Gallery] initGallery source check', { 
+        serverMode: serverMode, 
+        hasLocalizedTracks: Array.isArray(cfg.tracks),
+        localizedTrackCount: Array.isArray(cfg.tracks) ? cfg.tracks.length : 0,
+        endpointUrl: cfg.endpointUrl,
+        ajaxUrl: cfg.ajaxUrl
+      });
+    }
     var viewMode = 'grid';
     var visibleCount = resolvedPerPage || 16;
     var searchTerm = '';
@@ -832,6 +882,9 @@
       var card = closestByClass(ev.target, 'fgpx-gallery-card');
       if (card) {
         var id = Number(card.getAttribute('data-track-id'));
+        if (window.FGPX && window.FGPX.debugEnabled) {
+          console.log('[FGPX Gallery] Card clicked', { id: id });
+        }
         var track = findTrackById(tracks, id);
         if (track) {
           activeTrackId = id;

@@ -947,6 +947,8 @@
 
 .fgpx .fgpx-media-panel {
   min-height: 180px;
+  max-height: 320px;
+  overflow-y: auto;
   display: none;
   padding: 12px;
   background: #fafbfc;
