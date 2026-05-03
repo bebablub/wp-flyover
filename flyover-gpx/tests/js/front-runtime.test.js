@@ -368,7 +368,7 @@ describe('front.js runtime minimal regressions', () => {
     expect(calledUrls[1]).toContain('strategy=latest_embed');
   });
 
-  test('gallery can use AJAX-first mode when configured', async () => {
+  test('can use AJAX-first mode when configured globally', async () => {
     document.body.innerHTML =
       '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
@@ -380,7 +380,7 @@ describe('front.js runtime minimal regressions', () => {
     window.FGPX = baseFGPX({
       ajaxUrl: 'http://example.com/wp-admin/admin-ajax.php',
       instances: {
-        'fgpx-app': { galleryPhotoStrategy: 'latest_embed', galleryPreferAjaxFirst: true },
+        'fgpx-app': { galleryPhotoStrategy: 'latest_embed', preferAjaxFirst: true },
       },
     });
 

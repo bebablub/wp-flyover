@@ -416,14 +416,20 @@
     if (window.FGPX && window.FGPX.debugEnabled) {
       console.log('[FGPX Gallery] requestGalleryPayload starting', { params: params });
     }
-    var urls = [];
+    var preferAjax = !!(
+      (cfg.playerConfig && cfg.playerConfig.preferAjaxFirst) ||
+      (window.FGPX && window.FGPX.preferAjaxFirst)
+    );
+    var restUrls = [];
+    var ajaxUrls = [];
     if (cfg.endpointUrl) {
-      urls.push(buildUrl(cfg.endpointUrl, params));
+      restUrls.push(buildUrl(cfg.endpointUrl, params));
     }
     if (cfg.ajaxUrl && cfg.ajaxAction) {
       var ajaxParams = Object.assign({}, params, { action: cfg.ajaxAction });
-      urls.push(buildUrl(cfg.ajaxUrl, ajaxParams));
+      ajaxUrls.push(buildUrl(cfg.ajaxUrl, ajaxParams));
     }
+    var urls = preferAjax ? ajaxUrls.concat(restUrls) : restUrls.concat(ajaxUrls);
 
     function tryUrl(index) {
       if (index >= urls.length) {

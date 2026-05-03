@@ -97,7 +97,7 @@ final class OptionsTest extends TestCase
             'gallery_default_sort'     => ['fgpx_gallery_default_sort'],
             'gallery_show_view_toggle' => ['fgpx_gallery_show_view_toggle'],
             'gallery_show_search'      => ['fgpx_gallery_show_search'],
-            'gallery_ajax_first'       => ['fgpx_gallery_ajax_first'],
+            'ajax_first'               => ['fgpx_ajax_first'],
             'weather_enabled'          => ['fgpx_weather_enabled'],
             'daynight_enabled'         => ['fgpx_daynight_enabled'],
             'elevation_coloring'       => ['fgpx_elevation_coloring'],
@@ -155,7 +155,7 @@ final class OptionsTest extends TestCase
         $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_view_toggle'));
         $this->assertSame('1',      Options::get('fgpx_gallery_show_search'));
-        $this->assertSame('0',      Options::get('fgpx_gallery_ajax_first'));
+        $this->assertSame('0',      Options::get('fgpx_ajax_first'));
         // Theme defaults
         $this->assertSame('system', Options::get('fgpx_theme_mode'));
         $this->assertSame('22:00',  Options::get('fgpx_theme_auto_dark_start'));

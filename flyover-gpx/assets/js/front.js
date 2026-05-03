@@ -725,7 +725,7 @@
 
     // Determine photo enrichment strategy and build REST URL accordingly
     var hasGalleryStrategy = FGPX && FGPX.galleryPhotoStrategy === 'latest_embed';
-    var preferAjaxFirst = !!(hasGalleryStrategy && FGPX && FGPX.galleryPreferAjaxFirst);
+    var preferAjaxFirst = !!(FGPX && FGPX.preferAjaxFirst);
     var restUrlParams = [];
     if (hasGalleryStrategy) {
       restUrlParams.push('strategy=latest_embed');

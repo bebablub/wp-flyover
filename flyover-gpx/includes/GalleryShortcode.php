@@ -669,7 +669,7 @@ final class GalleryShortcode
             'prefetchEnabled' => $options['fgpx_prefetch_enabled'] === '1',
             'deferViewport' => false,
             'hostPostId' => $hostPostId,
-            'galleryPreferAjaxFirst' => (($options['fgpx_gallery_ajax_first'] ?? '0') === '1'),
+            'preferAjaxFirst' => (($options['fgpx_ajax_first'] ?? '0') === '1'),
             'gpxDownloadUrl' => '',
             'resolvedApiKey' => (string) ($galleryCfg['resolvedApiKey'] ?? ''),
             'i18n' => [

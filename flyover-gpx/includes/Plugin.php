@@ -453,6 +453,7 @@ final class Plugin
             'elevationColoring' => $elevationColoringEnabledFinal,
             'backendSimplify' => $options['fgpx_backend_simplify_enabled'] === '1',
             'backendSimplifyTarget' => (int) $options['fgpx_backend_simplify_target'],
+            'preferAjaxFirst' => ($options['fgpx_ajax_first'] ?? '0') === '1',
             'themeMode' => $options['fgpx_theme_mode'],
             'themeAutoDarkStart' => $options['fgpx_theme_auto_dark_start'],
             'themeAutoDarkEnd' => $options['fgpx_theme_auto_dark_end'],

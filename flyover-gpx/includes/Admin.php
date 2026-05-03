@@ -390,7 +390,7 @@ final class Admin
 		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
 		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
-		$galleryAjaxFirst = (string) ($options['fgpx_gallery_ajax_first'] ?? '0');
+		$ajaxFirst = (string) ($options['fgpx_ajax_first'] ?? '0');
 		$galleryAutoSpeedEnabled = $options['fgpx_gallery_auto_speed_enabled'];
 		$galleryAutoSpeedThresholdKm = $options['fgpx_gallery_auto_speed_threshold_km'];
 		$galleryAutoSpeedValue = $options['fgpx_gallery_auto_speed_value'];
@@ -575,9 +575,7 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_gallery_show_search">' . \esc_html__('Show gallery search by default', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gallery_show_search" name="fgpx_gallery_show_search" value="1"' . ($galleryShowSearch === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show search input when shortcode does not define show_search.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_gallery_ajax_first">' . \esc_html__('Gallery player: AJAX-first track loading', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_gallery_ajax_first" name="fgpx_gallery_ajax_first" value="1"' . ($galleryAjaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before REST for gallery player track payloads (recommended when /wp-json is blocked by firewall).', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
+
 		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_enabled">' . \esc_html__('Auto-speed by distance', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_gallery_auto_speed_enabled" name="fgpx_gallery_auto_speed_enabled" value="1"' . ($galleryAutoSpeedEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Override playback speed in gallery based on track distance.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
@@ -951,6 +949,9 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_asset_fallbacks_enabled">' . \esc_html__('Asset fallbacks', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_asset_fallbacks_enabled" name="fgpx_asset_fallbacks_enabled" value="1"' . ($options['fgpx_asset_fallbacks_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Enable automatic fallback to alternative CDNs if primary assets fail to load', 'flyover-gpx') . '</label>';
 		echo '<p class="description">' . \esc_html__('Improves reliability by automatically switching to backup CDNs when primary assets are unavailable.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_ajax_first">' . \esc_html__('Prefer admin-ajax.php over REST API', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_ajax_first" name="fgpx_ajax_first" value="1"' . ($ajaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before /wp-json for all track data requests (recommended when the REST API is blocked by a firewall or security plugin).', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
 
@@ -2357,7 +2358,7 @@ final class Admin
 		\update_option('fgpx_gallery_default_sort', $galleryDefaultSort, true);
 		\update_option('fgpx_gallery_show_view_toggle', $this->getValidBool('fgpx_gallery_show_view_toggle') ? '1' : '0', true);
 		\update_option('fgpx_gallery_show_search', $this->getValidBool('fgpx_gallery_show_search') ? '1' : '0', true);
-		\update_option('fgpx_gallery_ajax_first', $this->getValidBool('fgpx_gallery_ajax_first') ? '1' : '0', true);
+		\update_option('fgpx_ajax_first', $this->getValidBool('fgpx_ajax_first') ? '1' : '0', true);
 		\update_option('fgpx_gallery_auto_speed_enabled', $this->getValidBool('fgpx_gallery_auto_speed_enabled') ? '1' : '0', true);
 		$galleryAutoSpeedThresholdKm = $this->getValidInt('fgpx_gallery_auto_speed_threshold_km', 200, 1, 99999);
 		\update_option('fgpx_gallery_auto_speed_threshold_km', (string) $galleryAutoSpeedThresholdKm, true);
