@@ -174,6 +174,31 @@ SunCalc.getTimes = function (date, lat, lng) {
 };
 
 
+// moon calculations, based on http://aa.quae.nl/en/reken/hemelpositie.html formulas
+
+function moonCoords(d) {
+    var L = rad * (218.316 + 13.176396 * d),
+        M = rad * (134.963 + 13.064993 * d),
+        F = rad * (93.272 + 13.229350 * d),
+        l  = L + rad * 6.289 * sin(M),
+        b  = rad * 5.128 * sin(F),
+        dt = 385001 - 20905 * cos(M);
+    return { ra: rightAscension(l, b), dec: declination(l, b), dist: dt };
+}
+
+SunCalc.getMoonPosition = function (date, lat, lng) {
+    var lw  = rad * -lng,
+        phi = rad * lat,
+        d   = toDays(date),
+        c   = moonCoords(d),
+        H   = siderealTime(d, lw) - c.ra,
+        h   = altitude(H, phi, c.dec),
+        pa  = atan(sin(H), tan(phi) * cos(c.dec) - sin(c.dec) * cos(H));
+    h = h + astroRefraction(h);
+    return { azimuth: azimuth(H, phi, c.dec), altitude: h, distance: c.dist, parallacticAngle: pa };
+};
+
+
 // export as AMD module / Node module / browser variable
 if (typeof exports === 'object' && typeof module !== 'undefined') module.exports = SunCalc;
 else if (typeof define === 'function' && define.amd) define(SunCalc);

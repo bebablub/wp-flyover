@@ -2502,6 +2502,9 @@
         heartRate: null,
         cadence: null,
         temperature: null,
+        sunAltitude: null,
+        moonAltitude: null,
+        sunMoonAltitude: null,
         power: null,
         powerZones: null,
         windSpeed: null,
@@ -2582,6 +2585,33 @@
           case 'windDirection':
             // Wind direction data is processed differently (for polar chart)
             chartDataCache.windDirection = Array.isArray(windDirections) ? windDirections : [];
+            break;
+
+          case 'sunMoonAltitude':
+            var sunAlts = [], moonAlts = [];
+            if (typeof window.SunCalc !== 'undefined' && typeof window.SunCalc.getMoonPosition === 'function'
+                && Array.isArray(timestamps) && timestamps.length === coords.length) {
+              for (var smi = 0; smi < xVals.length; smi++) {
+                var smTs = timestamps[smi];
+                var smCoord = coords[smi];
+                if (smTs && smCoord && isFinite(smCoord[0]) && isFinite(smCoord[1])) {
+                  var smDate = new Date(smTs);
+                  if (!isNaN(smDate.getTime())) {
+                    var smLat = smCoord[1], smLon = smCoord[0];
+                    var sunPos  = window.SunCalc.getPosition(smDate, smLat, smLon);
+                    var moonPos = window.SunCalc.getMoonPosition(smDate, smLat, smLon);
+                    sunAlts.push({ x: xVals[smi], y: Math.round(sunPos.altitude * (180 / Math.PI) * 10) / 10 });
+                    moonAlts.push({ x: xVals[smi], y: Math.round(moonPos.altitude * (180 / Math.PI) * 10) / 10 });
+                    continue;
+                  }
+                }
+                sunAlts.push(null);
+                moonAlts.push(null);
+              }
+            }
+            chartDataCache.sunAltitude  = sunAlts.filter(function(p) { return p !== null; });
+            chartDataCache.moonAltitude = moonAlts.filter(function(p) { return p !== null; });
+            chartDataCache.sunMoonAltitude = chartDataCache.sunAltitude;
             break;
         }
         
@@ -6252,6 +6282,8 @@
       var heartRatePoints = null;
       var cadencePoints = null;
       var temperaturePoints = null;
+      var sunAltitudePoints = null;
+      var moonAltitudePoints = null;
       var powerPoints = null;
       var windSpeedPoints = null;
       var windImpactPoints = null;
@@ -6270,8 +6302,13 @@
               cadence: cadencePoints || getChartData('cadence')
             };
           case 'temperature':
+            if (!sunAltitudePoints) {
+              getChartData('sunMoonAltitude');
+            }
             return {
-              temperature: temperaturePoints || getChartData('temperature')
+              temperature:  temperaturePoints  || getChartData('temperature'),
+              sunAltitude:  sunAltitudePoints  || chartDataCache.sunAltitude  || [],
+              moonAltitude: moonAltitudePoints || chartDataCache.moonAltitude || []
             };
           case 'power':
             return {
@@ -7220,6 +7257,8 @@
           { cls: 'fgpx-legend-elevation', label: (i18n.simElevation || 'Elevation') + ': -- m', aria: i18n.simElevationAria || 'Current elevation in meters' },
           { cls: 'fgpx-legend-temp', label: (i18n.simTemp || 'Temp') + ': -- \u00B0C', aria: i18n.simTempAria || 'Current temperature in degrees Celsius' },
           { cls: 'fgpx-legend-wind', label: (i18n.simWind || 'Wind') + ': -- km/h', aria: i18n.simWindAria || 'Current wind speed in kilometers per hour' },
+          { cls: 'fgpx-legend-sun', label: (i18n.simSun || 'Sun') + ': --\u00B0', aria: i18n.simSunAria || 'Current sun altitude in degrees' },
+          { cls: 'fgpx-legend-moon', label: (i18n.simMoon || 'Moon') + ': --\u00B0', aria: i18n.simMoonAria || 'Current moon altitude in degrees' },
           { cls: 'fgpx-legend-conditions', label: '', aria: i18n.simConditionsAria || 'Current weather conditions summary' }
         ].forEach(function(item) {
           var span = document.createElement('span');
@@ -7269,6 +7308,8 @@
           elevation: legend.querySelector('.fgpx-legend-elevation'),
           temp: legend.querySelector('.fgpx-legend-temp'),
           wind: legend.querySelector('.fgpx-legend-wind'),
+          sun: legend.querySelector('.fgpx-legend-sun'),
+          moon: legend.querySelector('.fgpx-legend-moon'),
           conditions: legend.querySelector('.fgpx-legend-conditions')
         };
         cinema._weatherLookup = buildWeatherLookup(payloadData);
@@ -7865,6 +7906,8 @@
           if (!legendEls.elevation) legendEls.elevation = legend.querySelector('.fgpx-legend-elevation');
           if (!legendEls.temp) legendEls.temp = legend.querySelector('.fgpx-legend-temp');
           if (!legendEls.wind) legendEls.wind = legend.querySelector('.fgpx-legend-wind');
+          if (!legendEls.sun) legendEls.sun = legend.querySelector('.fgpx-legend-sun');
+          if (!legendEls.moon) legendEls.moon = legend.querySelector('.fgpx-legend-moon');
           if (!legendEls.conditions) legendEls.conditions = legend.querySelector('.fgpx-legend-conditions');
           cinemaEl._legendEls = legendEls;
 
@@ -7874,6 +7917,42 @@
           setTextIfChanged(legendEls.elevation, (simI18N.simElevation || 'Elevation') + ': ' + Math.round(elevationAtNow) + ' m');
           setTextIfChanged(legendEls.temp, (simI18N.simTemp || 'Temp') + ': ' + (Number(cond.temperature_c) || 0).toFixed(1) + ' \u00B0C');
           setTextIfChanged(legendEls.wind, (simI18N.simWind || 'Wind') + ': ' + Math.round(Number(cond.wind_speed_kmh) || 0) + ' km/h');
+
+          // Sun and Moon altitudes
+          if (legendEls.sun || legendEls.moon) {
+            var curSunAlt = null, curMoonAlt = null;
+            if (window.SunCalc && Array.isArray(coords) && isFinite(ci)) {
+              var c = coords[ci];
+              if (c && isFinite(c[0]) && isFinite(c[1])) {
+                var pEpoch = parseEpochSeconds(timestamps[ci]);
+                if (!isFinite(pEpoch)) {
+                  var bEpoch = NaN;
+                  for (var tbi = 0; tbi < timestamps.length; tbi++) {
+                    bEpoch = parseEpochSeconds(timestamps[tbi]);
+                    if (isFinite(bEpoch)) break;
+                  }
+                  if (isFinite(bEpoch)) pEpoch = bEpoch + (Number(currentTimeSec) || 0);
+                }
+                if (isFinite(pEpoch)) {
+                  var d = new Date(pEpoch * 1000);
+                  try {
+                    var sPos = window.SunCalc.getPosition(d, c[1], c[0]);
+                    if (sPos && typeof sPos.altitude === 'number') {
+                      curSunAlt = sPos.altitude * 180 / Math.PI;
+                    }
+                    if (typeof window.SunCalc.getMoonPosition === 'function') {
+                      var mPos = window.SunCalc.getMoonPosition(d, c[1], c[0]);
+                      if (mPos && typeof mPos.altitude === 'number') {
+                        curMoonAlt = mPos.altitude * 180 / Math.PI;
+                      }
+                    }
+                  } catch (_) {}
+                }
+              }
+            }
+            if (legendEls.sun) setTextIfChanged(legendEls.sun, (simI18N.simSun || 'Sun') + ': ' + (curSunAlt !== null ? curSunAlt.toFixed(1) + '\u00B0' : '--'));
+            if (legendEls.moon) setTextIfChanged(legendEls.moon, (simI18N.simMoon || 'Moon') + ': ' + (curMoonAlt !== null ? curMoonAlt.toFixed(1) + '\u00B0' : '--'));
+          }
 
           var condParts = [];
           if (night) condParts.push('\uD83C\uDF19 Night');
@@ -7898,6 +7977,8 @@
         if (chartData.heartRate) heartRatePoints = chartData.heartRate;
         if (chartData.cadence) cadencePoints = chartData.cadence;
         if (chartData.temperature) temperaturePoints = chartData.temperature;
+        if (chartData.sunAltitude)  sunAltitudePoints  = chartData.sunAltitude;
+        if (chartData.moonAltitude) moonAltitudePoints = chartData.moonAltitude;
         if (chartData.power) powerPoints = chartData.power;
         if (chartData.windSpeed) windSpeedPoints = chartData.windSpeed;
         if (chartData.windImpact) windImpactPoints = chartData.windImpact;
@@ -7911,6 +7992,8 @@
           heartRatePoints: heartRatePoints ? heartRatePoints.length : 0,
           cadencePoints: cadencePoints ? cadencePoints.length : 0,
           temperaturePoints: temperaturePoints ? temperaturePoints.length : 0,
+          sunAltitudePoints: sunAltitudePoints ? sunAltitudePoints.length : 0,
+          moonAltitudePoints: moonAltitudePoints ? moonAltitudePoints.length : 0,
           elevationPoints: points ? points.length : 0,
           speedPoints: speedPoints ? speedPoints.length : 0,
           windSpeedPoints: windSpeedPoints ? windSpeedPoints.length : 0,
@@ -8017,6 +8100,20 @@
                 pointBackgroundColor: '#111', 
                 yAxisID: 'y' 
               };
+            } else if (sunAltitudePoints && sunAltitudePoints.length > 0) {
+              positionDataset = { 
+                label: 'Position', 
+                data: [{ x: xVals[0], y: sunAltitudePoints[0] ? sunAltitudePoints[0].y : 0 }], 
+                pointRadius: 5, 
+                pointHoverRadius: 5, 
+                pointBorderWidth: 2, 
+                pointBorderColor: '#fff', 
+                borderWidth: 0, 
+                showLine: false, 
+                backgroundColor: '#111', 
+                pointBackgroundColor: '#111', 
+                yAxisID: 'yAlt' 
+              };
             } else {
               positionDataset = { 
                 label: 'Position', 
@@ -8029,7 +8126,7 @@
                 showLine: false, 
                 backgroundColor: '#111', 
                 pointBackgroundColor: '#111', 
-                yAxisID: 'y' 
+                yAxisID: 'yAlt' 
               };
             }
           } else if (tabType === 'power') {
@@ -8160,7 +8257,10 @@
             } else if (tabType === 'temperature') {
               if (temperaturePoints && temperaturePoints.length > 0 && index < temperaturePoints.length) {
                 return temperaturePoints[index] ? temperaturePoints[index].y : 0;
+              } else if (sunAltitudePoints && sunAltitudePoints.length > 0 && index < sunAltitudePoints.length) {
+                return sunAltitudePoints[index] ? sunAltitudePoints[index].y : 0;
               }
+              return 0;
             } else if (tabType === 'power') {
               if (powerPoints && powerPoints.length > 0 && index < powerPoints.length) {
                 return powerPoints[index] ? powerPoints[index].y : 0;
@@ -8332,14 +8432,37 @@
           }
         } else if (tabType === 'temperature') {
           // Temperature tab
-          if (temperaturePoints && temperaturePoints.length > 0) {
+          var hasTemp = temperaturePoints && temperaturePoints.length > 0;
+          var hasSunMoon = typeof window.SunCalc !== 'undefined'
+            && typeof window.SunCalc.getMoonPosition === 'function'
+            && sunAltitudePoints && sunAltitudePoints.length > 0
+            && moonAltitudePoints && moonAltitudePoints.length > 0;
+
+          if (!hasTemp && !hasSunMoon) {
+            return showNoDataMessageLocal('No temperature data available for this track. Sun/moon altitude requires timestamps.');
+          }
+
+          if (hasTemp) {
             datasets.push({ label: 'Temperature (°C)', data: temperaturePoints, borderColor: chartLineColor5, pointRadius: 0, fill: false, tension: 0.2, parsing: false, yAxisID: 'y' });
-            datasets.push(positionDataset);
             scales.y = { title: { display: true, text: 'Temperature (°C)' }, ticks: { precision: 1 } };
           } else {
-            // No temperature data available - show message
-            return showNoDataMessageLocal('No temperature data available for this track.');
+            scales.y = { display: false };
           }
+
+          if (hasSunMoon) {
+            datasets.push({ label: 'Sun Altitude (°)', data: sunAltitudePoints, borderColor: '#f59e0b', borderDash: [4, 2], pointRadius: 0, fill: false, tension: 0.3, parsing: false, yAxisID: 'yAlt' });
+            datasets.push({ label: 'Moon Altitude (°)', data: moonAltitudePoints, borderColor: '#818cf8', borderDash: [4, 2], pointRadius: 0, fill: false, tension: 0.3, parsing: false, yAxisID: 'yAlt' });
+            scales.yAlt = {
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Altitude (°)' },
+              ticks: { precision: 0 },
+              min: -90,
+              max: 90
+            };
+          }
+
+          datasets.push(positionDataset);
         } else if (tabType === 'power') {
           // Power tab
           if (powerPoints && powerPoints.length > 0) {
