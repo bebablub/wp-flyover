@@ -25,6 +25,10 @@ if [ -z "$VERSION" ]; then
 fi
 echo "🔹 Version: $VERSION"
 
+# Ask for optimization
+read -p "❓ Do you want to optimize/minify JavaScript files? (y/N) " OPTIMIZE_JS
+OPTIMIZE_JS=${OPTIMIZE_JS:-n}
+
 # 2. Cleanup old builds
 echo "🧹 Cleaning up..."
 rm -rf "$DIST_DIR"
@@ -66,7 +70,31 @@ rm -f  "$STAGING_DIR/$PLUGIN_NAME/composer.lock"
 # Remove test directories from vendor
 find "$STAGING_DIR/$PLUGIN_NAME/vendor" -type d \( -name "tests" -o -name "test" -o -name "Tests" -o -name "Test" \) -exec rm -rf {} + 2>/dev/null || true
 
-# 6. Create ZIP
+# 6. Optimize JS if requested
+if [[ "$OPTIMIZE_JS" =~ ^[Yy]$ ]]; then
+    echo "⚡ Optimizing assets (minifying and mangling)..."
+    
+    # 6.1 JavaScript
+    JS_FILES=$(find "$STAGING_DIR/$PLUGIN_NAME/assets/js" -name "*.js")
+    for f in $JS_FILES; do
+        echo "  - Minifying JS: $(basename "$f")"
+        npx terser "$f" --compress --mangle -o "$f"
+    done
+
+    # 6.2 CSS (Bonus optimization)
+    # Check if clean-css-cli is available or use a simple regex-based minifier via sed
+    CSS_FILES=$(find "$STAGING_DIR/$PLUGIN_NAME/assets/css" -name "*.css")
+    for f in $CSS_FILES; do
+        echo "  - Minifying CSS: $(basename "$f")"
+        # Simple regex minification: remove comments and extra whitespace
+        sed -i 's/\/\*.*\*\///g' "$f"
+        sed -i ':a;N;$!ba;s/\n/ /g' "$f"
+        sed -i 's/ \+/ /g' "$f"
+        sed -i 's/ :/:/g; s/: /:/g; s/ {/{/g; s/{ /{/g; s/ }/}/g; s/} /}/g; s/ ;/;/g; s/; /;/g' "$f"
+    done
+fi
+
+# 7. Create ZIP
 ZIP_FILE="$DIST_DIR/$PLUGIN_NAME-$VERSION.zip"
 echo "🗜️ Creating ZIP: $ZIP_FILE..."
 
@@ -80,7 +108,7 @@ with zipfile.ZipFile('../$ZIP_FILE', 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.write(path)"
 cd ..
 
-# 7. Cleanup staging
+# 8. Cleanup staging
 rm -rf "$STAGING_DIR"
 
 echo "✅ Done! Package created at $ZIP_FILE"
