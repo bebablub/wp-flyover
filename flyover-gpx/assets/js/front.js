@@ -1905,7 +1905,8 @@
             actx.closePath();
             actx.fill();
             actx.stroke();
-            map.addImage(routeArrowIconId, ac);
+            var imageData = actx.getImageData(0, 0, 20, 20);
+            map.addImage(routeArrowIconId, { width: 20, height: 20, data: imageData.data });
           }
           map.addLayer({
             id: 'fgpx-route-arrows',

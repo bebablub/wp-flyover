@@ -56,3 +56,5 @@ debug.log
 .project
 .settings/
 *.sublime-*
+
+.zencoder

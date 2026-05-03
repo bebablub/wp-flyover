@@ -1089,4 +1089,57 @@ describe('front.js runtime minimal regressions', () => {
     const panelText = String(document.querySelector('#fgpx-app .fgpx-media-panel')?.textContent || '');
     expect(panelText).not.toContain('Unknown offtrack');
   });
+
+  test('route arrows: addImage is called with data object instead of canvas', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+    
+    // Capture addImage calls
+    const addImageSpy = jest.spyOn(window.maplibregl.Map.prototype, 'addImage');
+
+    window.Chart = function ChartStub() { return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() }; };
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        geojson: {
+          coordinates: [[16, 48, 100], [16.04, 48.04, 110]],
+          properties: {
+            timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:10:00Z'],
+            cumulativeDistance: [0, 4000],
+          },
+        },
+        bounds: [16, 48, 16.04, 48.04],
+        stats: {},
+        photos: [],
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      arrowsEnabled: true,
+      arrowsKm: 1,
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    // Find the call for 'fgpx-route-dir-arrow'
+    const routeArrowCall = addImageSpy.mock.calls.find(call => call[0] === 'fgpx-route-dir-arrow');
+    expect(routeArrowCall).toBeDefined();
+    
+    // This is what fails before the fix: it's a canvas, not a plain object with data
+    // In JSDOM, HTMLCanvasElement is available globally.
+    expect(routeArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
+    expect(routeArrowCall[1]).toMatchObject({
+      width: 20,
+      height: 20,
+      data: expect.any(Uint8ClampedArray)
+    });
+  });
 });
