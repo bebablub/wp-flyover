@@ -8019,7 +8019,31 @@
         
         var datasets = [];
         var scales = {
-          x: useTime ? { type: 'linear', bounds: 'data', min: xMin, max: xMax, title: { display: true, text: 'Time' }, ticks: { callback: function(val){ return formatTime(val); } } } : { type: 'linear', bounds: 'data', min: xMin, max: xMax, title: { display: true, text: 'Distance (km)' } }
+          x: useTime ? { 
+            type: 'linear', 
+            bounds: 'data', 
+            min: xMin, 
+            max: xMax, 
+            title: { display: true, text: 'Time' }, 
+            ticks: { 
+              callback: function(val) { 
+                var elapsed = formatTime(val);
+                if (!isNaN(trackStartTimestampMs)) {
+                  var d = new Date(trackStartTimestampMs + val * 1000);
+                  var hh = d.getHours().toString().padStart(2, '0');
+                  var mm = d.getMinutes().toString().padStart(2, '0');
+                  return [elapsed, hh + ':' + mm];
+                }
+                return elapsed;
+              } 
+            } 
+          } : { 
+            type: 'linear', 
+            bounds: 'data', 
+            min: xMin, 
+            max: xMax, 
+            title: { display: true, text: 'Distance (km)' } 
+          }
         };
         
         // Position marker (dynamically assigned based on available data) - Always on top
