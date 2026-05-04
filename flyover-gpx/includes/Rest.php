@@ -332,19 +332,26 @@ final class Rest
      */
     private static function dedupe_photos_by_location(array $photos): array
     {
-        $seen = [];
-        $out = [];
+        $kept = [];
+        $noLocation = [];
         foreach ($photos as $p) {
             $lat = $p['lat'] ?? null;
             $lon = $p['lon'] ?? null;
-            if (\is_numeric($lat) && \is_numeric($lon)) {
-                $key = \sprintf('%.4f,%.4f', \round((float)$lat, 4), \round((float)$lon, 4));
-                if (isset($seen[$key])) { continue; }
-                $seen[$key] = true;
+            if (!\is_numeric($lat) || !\is_numeric($lon)) {
+                $noLocation[] = $p;
+                continue;
             }
-            $out[] = $p;
+            $key = \sprintf('%.4f,%.4f', \round((float)$lat, 4), \round((float)$lon, 4));
+            if (!isset($kept[$key])) {
+                $kept[$key] = $p;
+            } else {
+                // Prioritize keeping the photo with a caption when deduplicating by location
+                if (empty($kept[$key]['caption']) && !empty($p['caption'])) {
+                    $kept[$key] = $p;
+                }
+            }
         }
-        return $out;
+        return array_merge(array_values($kept), $noLocation);
     }
 
     /**
@@ -425,7 +432,7 @@ final class Rest
             return new WP_REST_Response(['message' => 'Forbidden'], 403);
         }
 
-        $modified = (string) $post->post_modified_gmt;
+        $modified = (string) \strtotime((string) $post->post_modified_gmt);
         $simplifyEnabled = (string) \get_option('fgpx_backend_simplify_enabled', '0') === '1';
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
@@ -758,9 +765,9 @@ final class Rest
                 }
                 $photos[] = [
                     'id' => 0,
-                    'title' => '',
-                    'caption' => '',
-                    'description' => '',
+                    'title' => isset($meta['title']) ? (string) $meta['title'] : '',
+                    'caption' => isset($meta['caption']) ? (string) $meta['caption'] : '',
+                    'description' => isset($meta['description']) ? (string) $meta['description'] : '',
                     'lat' => $lat,
                     'lon' => $lon,
                     'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,
@@ -901,7 +908,7 @@ final class Rest
             }
         }
         
-        $modified = (string) $post->post_modified_gmt;
+        $modified = (string) \strtotime((string) $post->post_modified_gmt);
         $simplifyEnabled = (string) \get_option('fgpx_backend_simplify_enabled', '0') === '1';
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
@@ -1169,9 +1176,9 @@ final class Rest
                 }
                 $photos[] = [
                     'id' => 0,
-                    'title' => '',
-                    'caption' => '',
-                    'description' => '',
+                    'title' => isset($meta['title']) ? (string) $meta['title'] : '',
+                    'caption' => isset($meta['caption']) ? (string) $meta['caption'] : '',
+                    'description' => isset($meta['description']) ? (string) $meta['description'] : '',
                     'lat' => $lat,
                     'lon' => $lon,
                     'timestamp' => $createdTs ? gmdate('c', $createdTs) : null,

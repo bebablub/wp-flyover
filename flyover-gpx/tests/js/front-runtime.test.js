@@ -398,7 +398,7 @@ describe('front.js runtime minimal regressions', () => {
 
   test('cache key builder includes strategy token for differentiation', () => {
     expect(FRONT_SRC.includes("var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';")).toBe(true);
-    expect(FRONT_SRC.includes("return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;")).toBe(true);
+    expect(FRONT_SRC.includes("return 'fgpx_cache_v4_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy + '_pcv_' + photoCacheVersion;")).toBe(true);
   });
 
   test('fetch pipeline uses timeout/abort helper with configurable timeout', () => {

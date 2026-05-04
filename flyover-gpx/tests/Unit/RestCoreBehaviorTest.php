@@ -169,10 +169,10 @@ final class RestCoreBehaviorTest extends TestCase
         $method->setAccessible(true);
 
         $photos = [
-            ['id' => 10, 'lat' => 48.123451, 'lon' => 16.987651, 'fullUrl' => 'a.jpg'],
-            ['id' => 11, 'lat' => 48.123452, 'lon' => 16.987652, 'fullUrl' => 'b.jpg'],
-            ['id' => 12, 'lat' => 48.2234, 'lon' => 16.8876, 'fullUrl' => 'c.jpg'],
-            ['id' => 13, 'lat' => null, 'lon' => null, 'fullUrl' => 'd.jpg'],
+            ['id' => 10, 'lat' => 48.123451, 'lon' => 16.987651, 'fullUrl' => 'a.jpg', 'caption' => ''],
+            ['id' => 11, 'lat' => 48.123452, 'lon' => 16.987652, 'fullUrl' => 'b.jpg', 'caption' => ''],
+            ['id' => 12, 'lat' => 48.2234, 'lon' => 16.8876, 'fullUrl' => 'c.jpg', 'caption' => ''],
+            ['id' => 13, 'lat' => null, 'lon' => null, 'fullUrl' => 'd.jpg', 'caption' => ''],
         ];
 
         $result = $method->invoke(null, $photos);
@@ -181,6 +181,29 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertSame(10, $result[0]['id']);
         $this->assertSame(12, $result[1]['id']);
         $this->assertSame(13, $result[2]['id']);
+    }
+
+    public function test_dedupe_photos_by_location_prioritizes_captioned_photos(): void
+    {
+        $method = new ReflectionMethod(Rest::class, 'dedupe_photos_by_location');
+        $method->setAccessible(true);
+
+        $photos = [
+            ['id' => 10, 'lat' => 48.123451, 'lon' => 16.987651, 'caption' => '', 'fullUrl' => 'a.jpg'],
+            ['id' => 11, 'lat' => 48.123452, 'lon' => 16.987652, 'caption' => 'The best view', 'fullUrl' => 'b.jpg'],
+            ['id' => 12, 'lat' => 48.2234, 'lon' => 16.8876, 'caption' => 'Nice spot', 'fullUrl' => 'c.jpg'],
+            ['id' => 13, 'lat' => 48.2234, 'lon' => 16.8876, 'caption' => '', 'fullUrl' => 'd.jpg'],
+        ];
+
+        $result = $method->invoke(null, $photos);
+
+        $this->assertCount(2, $result);
+        // Should keep photo 11 because it has a caption (over photo 10)
+        $this->assertSame(11, $result[0]['id']);
+        $this->assertSame('The best view', $result[0]['caption']);
+        // Should keep photo 12 because it has a caption (over photo 13)
+        $this->assertSame(12, $result[1]['id']);
+        $this->assertSame('Nice spot', $result[1]['caption']);
     }
 
     public function test_compress_coordinates_preserves_shape_with_stable_precision(): void

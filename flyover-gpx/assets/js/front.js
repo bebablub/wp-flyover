@@ -756,7 +756,8 @@
       var simplify = (window.FGPX && FGPX.backendSimplify) ? '1' : '0';
       var target = (window.FGPX && FGPX.backendSimplifyTarget) ? String(FGPX.backendSimplifyTarget) : '1200';
       var strategy = hasGalleryStrategy ? 'latest_embed' : 'default';
-      return 'fgpx_cache_v3_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy;
+      var photoCacheVersion = (window.FGPX && FGPX.photoCacheVersion) ? String(FGPX.photoCacheVersion) : '0';
+      return 'fgpx_cache_v4_' + trackId + '_hp_' + hostPost + '_s_' + simplify + '_t_' + target + '_st_' + strategy + '_pcv_' + photoCacheVersion;
     }
 
     function getCachedData() {

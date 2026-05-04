@@ -504,6 +504,7 @@ final class Plugin
             'gpxDownloadUrl' => $gpxDownloadUrl,
             'gpxDownloadNonce' => $gpxDownloadNonce,
             'resolvedApiKey' => $resolvedApiKey,
+            'photoCacheVersion' => (string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0'),
         ];
 
         $localizeHandle = $lazyViewportEnabled ? 'fgpx-lazy' : 'fgpx-front';
@@ -683,7 +684,8 @@ final class Plugin
                                     'gpxDownloadUrl:"' . \esc_js($gpxDownloadUrl) . '",' .
                                     'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '",' .
                                     'arrowsEnabled:' . ($arrowsEnabledFinal ? 'true' : 'false') . ',' .
-                                    'arrowsKm:' . \floatval($arrowsKmFinal) .
+                                    'arrowsKm:' . \floatval($arrowsKmFinal) . ',' .
+                                    'photoCacheVersion:"' . \esc_js((string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0')) . '"' .
                 '};',
                 'after'
             );

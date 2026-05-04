@@ -1,6 +1,8 @@
 # Composer
 composer.phar
 composer-setup.php
+**/vendor/
+
 
 # IDE specific files
 .idea/

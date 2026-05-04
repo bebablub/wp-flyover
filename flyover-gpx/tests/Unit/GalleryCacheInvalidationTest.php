@@ -24,12 +24,13 @@ final class GalleryCacheInvalidationTest extends TestCase
     public function test_clear_all_track_caches_removes_strategy_specific_transients(): void
     {
         $trackId = 123;
-        $modified = '2026-04-21 10:00:00';
+        $modifiedStr = '2026-04-21 10:00:00';
+        $modified = (string) strtotime($modifiedStr);
         $GLOBALS['fgpx_test_posts'][$trackId] = new \WP_Post([
             'ID' => $trackId,
             'post_type' => 'fgpx_track',
             'post_status' => 'publish',
-            'post_modified_gmt' => $modified,
+            'post_modified_gmt' => $modifiedStr,
         ]);
 
         $defaultKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0_st_default';
@@ -59,13 +60,14 @@ final class GalleryCacheInvalidationTest extends TestCase
     {
         $trackId = 321;
         $embeddingPostId = 900;
-        $modified = '2026-04-21 11:00:00';
+        $modifiedStr = '2026-04-21 11:00:00';
+        $modified = (string) strtotime($modifiedStr);
 
         $GLOBALS['fgpx_test_posts'][$trackId] = new \WP_Post([
             'ID' => $trackId,
             'post_type' => 'fgpx_track',
             'post_status' => 'publish',
-            'post_modified_gmt' => $modified,
+            'post_modified_gmt' => $modifiedStr,
         ]);
 
         $cacheKey = 'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_' . $embeddingPostId . '_simp_0_w_0_wind_0_st_default';
@@ -88,13 +90,14 @@ final class GalleryCacheInvalidationTest extends TestCase
     {
         $trackId = 654;
         $embeddingPostId = 777;
-        $modified = '2026-04-21 12:00:00';
+        $modifiedStr = '2026-04-21 12:00:00';
+        $modified = (string) strtotime($modifiedStr);
 
         $GLOBALS['fgpx_test_posts'][$trackId] = new \WP_Post([
             'ID' => $trackId,
             'post_type' => 'fgpx_track',
             'post_status' => 'publish',
-            'post_modified_gmt' => $modified,
+            'post_modified_gmt' => $modifiedStr,
         ]);
 
         $GLOBALS['fgpx_test_posts'][$embeddingPostId] = new \WP_Post([

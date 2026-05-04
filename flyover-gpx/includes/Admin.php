@@ -1206,7 +1206,7 @@ final class Admin
 		\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
 		// Invalidate any previous cached JSON for this post
 		// Purge new v2 cache key variants
-		$modified = (string) \get_post_field('post_modified_gmt', (int) $postId);
+		$modified = (string) \strtotime((string) \get_post_field('post_modified_gmt', (int) $postId));
 		$cache_key_v2_prefix = 'fgpx_json_v2_' . (int) $postId . '_' . $modified;
 		$cache_key_v3_prefix = 'fgpx_json_v3_' . (int) $postId . '_' . $modified;
 		// Best-effort: delete exact keys used (host_post and simplify component can vary)
@@ -4091,7 +4091,7 @@ final class Admin
 	public function invalidate_cache_on_save(int $postId, \WP_Post $post, bool $update): void
 	{
 		if ($post->post_type !== 'fgpx_track') { return; }
-		$modified = (string) $post->post_modified_gmt;
+		$modified = (string) \strtotime((string) $post->post_modified_gmt);
 		// Delete common v2 cache variants for this post
 		\delete_transient('fgpx_json_v2_' . (int) $postId . '_' . $modified . '_hp_0_simp_0');
 		// Invalidate gallery track list so the new/updated track appears immediately.
@@ -4131,7 +4131,7 @@ final class Admin
 		$post = \get_post($trackId);
 		if (!$post || $post->post_type !== 'fgpx_track') { return; }
 		
-		$modified = (string) $post->post_modified_gmt;
+		$modified = (string) \strtotime((string) $post->post_modified_gmt);
 		
 		// Clear all possible cache variants with all parameter combinations
 		$patterns = [
@@ -4200,6 +4200,7 @@ final class Admin
 		
 		// Also clear any cached key stored in post meta
 		\delete_post_meta($trackId, 'fgpx_cached_key');
+		\update_post_meta($trackId, 'fgpx_photo_cache_version', (string) \time());
 		
 		// Clear old cache formats too
 		\delete_transient('fgpx_track_' . $trackId);
@@ -4225,7 +4226,7 @@ final class Admin
 			return;
 		}
 
-		$modified = (string) $post->post_modified_gmt;
+		$modified = (string) \strtotime((string) $post->post_modified_gmt);
 		$simplifyTargets = [0, 1500];
 		$weatherFlags = [0, 1];
 		$windFlags = [0, 1];
