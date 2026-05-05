@@ -1,3 +1,4 @@
+
 # Flyover GPX
 
 Upload GPX files and render animated flyover maps with MapLibre and an elevation chart in WordPress.
@@ -7,16 +8,16 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 ## Features
 
 - Animated flyover map (MapLibre GL) with smooth camera
-- Elevation-based route coloring – progressive route changes color based on gradient (flat vs steep sections)
-- Direction arrows on route – optional ▶ arrows drawn along the path at configurable intervals (admin setting, default 5 km)
-- Photos on the map (thumbnails + fullscreen on cue) with image overlay support during video recording
+- Elevation-based route coloring and map overlay – progressive route changes color based on gradient (flat vs steep sections)
+- Direction arrows on route – optional arrows drawn along the path at configurable intervals (admin setting, default 5 km)
+- Photos on the map (thumbnails + fullscreen on cue) and in media gallery with image overlay support during video recording
 - Labels for maximum speed and elevation
 - HUD overlays (speed, distance, elevation, heading) – toggleable
 - Multi-weather heatmap overlays with 4 separate colored layers (snow, rain, fog, clouds) using admin-configurable colors
 - Day/Night overlay with configurable colors
 - Weather visualizations: colored heatmaps, temperature circles, and wind arrows with configurable radius
 - Wind analysis: per-point wind speed/direction, wind impact factor chart, wind rose distribution (16 sectors)
-- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Power Zones, Wind Impact, Wind Rose, and All Data
+- Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Power Zones, Wind Impact, Wind Rose, Weather and All Data
 - Simulation tab: compact weather + grade strip with wind arrows, elevation and photo cues.
 - Power fallback model: if GPX has no power stream, backend estimates power and the frontend displays an "Estimated power" indicator
 - Chart area selection & zoom with reset and synchronized map marker filtering (excludes polar charts)
@@ -33,6 +34,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Shortcode to embed anywhere with per-shortcode feature overrides
 - WP-CLI support for batch imports and automation
 - REST API + AJAX fallback with caching (2h weather cache)
+- GMedia Gallery importer and sync
 
 ### Player UX
 
