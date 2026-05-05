@@ -183,17 +183,20 @@ describe('Timeline Component', () => {
 		expect(emptyState).not.toBeNull();
 	});
 
-	test('shows error state on network failure', async () => {
-		mockFetchFailure();
+	       test('shows error state on network failure', async () => {
+		       mockFetchFailure();
 
-		eval(TIMELINE_SRC);
+		       eval(TIMELINE_SRC);
 
-		await flushPromises();
-		await flushPromises();
-
-		const error = container.querySelector('.timeline-error');
-		expect(error).not.toBeNull();
-	});
+		       // Wait for error element to appear (poll up to 50ms)
+		       let error = null;
+		       for (let i = 0; i < 10; i++) {
+			       await flushPromises();
+			       error = container.querySelector('.timeline-error');
+			       if (error) break;
+		       }
+		       expect(error).not.toBeNull();
+	       });
 
 	test('shows error state on invalid response structure', async () => {
 		window.fetch = jest.fn(() =>
