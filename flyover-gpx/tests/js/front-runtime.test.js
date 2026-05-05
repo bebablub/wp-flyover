@@ -962,16 +962,16 @@ describe('front.js runtime minimal regressions', () => {
 
   test('route arrows: spacing uses named heuristic with bounded percent denominator', () => {
     expect(FRONT_SRC.includes('var arrowSpacingReferencePx = 550;')).toBe(true);
-    expect(FRONT_SRC.includes('var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));')).toBe(true);
-    expect(FRONT_SRC.includes('if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }')).toBe(true);
-    expect(FRONT_SRC.includes('if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }')).toBe(true);
+    expect(FRONT_SRC.includes('routeArrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));')).toBe(true);
+    expect(FRONT_SRC.includes('if (routeArrowSpacingPx < 30) { routeArrowSpacingPx = 30; }')).toBe(true);
+    expect(FRONT_SRC.includes('if (routeArrowSpacingPx > 300) { routeArrowSpacingPx = 300; }')).toBe(true);
   });
 
   test('route arrows: derives stroke color from theme mode and validates canvas context', () => {
     expect(FRONT_SRC.includes("var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';")).toBe(true);
     expect(FRONT_SRC.includes("var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';")).toBe(true);
     expect(FRONT_SRC.includes("if (!actx) { throw new Error('Route arrow canvas context unavailable'); }")).toBe(true);
-    expect(FRONT_SRC.includes('actx.strokeStyle = arrowStrokeColor;')).toBe(true);
+    expect(FRONT_SRC.includes('actx.strokeStyle = arrowStrokeColor;') || FRONT_SRC.includes('actx.strokeStyle = strokeColor;')).toBe(true);
   });
 
   test('route arrows: logs warning instead of failing silently', () => {
@@ -1152,12 +1152,9 @@ describe('front.js runtime minimal regressions', () => {
     await flushAsync();
     await flushAsync();
 
-    // Find the call for 'fgpx-route-dir-arrow'
-    const routeArrowCall = addImageSpy.mock.calls.find(call => call[0] === 'fgpx-route-dir-arrow');
+    // Find the call for the route arrow icon (undriven or driven)
+    const routeArrowCall = addImageSpy.mock.calls.find(call => call[0] === 'fgpx-route-dir-arrow-undriven' || call[0] === 'fgpx-route-dir-arrow-driven');
     expect(routeArrowCall).toBeDefined();
-    
-    // This is what fails before the fix: it's a canvas, not a plain object with data
-    // In JSDOM, HTMLCanvasElement is available globally.
     expect(routeArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
     expect(routeArrowCall[1]).toMatchObject({
       width: 20,
