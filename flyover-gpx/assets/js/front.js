@@ -1884,9 +1884,15 @@
       map.addLayer({ id: 'fgpx-route-line', type: 'line', source: 'fgpx-route', paint: { 'line-color': '#cccccc', 'line-width': 2 } });
       applyMapSelectorMode(selectorMode);
 
-      // Direction arrows along the background route
-      // Uses canvas-based icon images so it works on raster (no glyphs) and vector styles alike.
+      // Direction arrows along route:
+      // - Undriven section uses muted color
+      // - Driven section uses active route color
+      // - Bearings are stabilized by using a smoothed source for static route arrows
+      // - Icon is rotated 90deg clockwise so arrow head points in travel direction
       var arrowsEnabled = !!(window.FGPX && FGPX.arrowsEnabled);
+      var routeArrowSpacingPx = 90;
+      var routeArrowUndrivenIconId = 'fgpx-route-dir-arrow-undriven';
+      var routeArrowDrivenIconId = 'fgpx-route-dir-arrow-driven';
       if (arrowsEnabled && totalDistance > 0) {
         try {
           var arrowsKm = parseFloat((FGPX.arrowsKm) || '5');
@@ -1895,22 +1901,23 @@
           // Reference viewport width heuristic used to translate distance-based repeats
           // into readable line symbol spacing across typical embed sizes.
           var arrowSpacingReferencePx = 550;
-          var arrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));
-          if (arrowSpacingPx < 30) { arrowSpacingPx = 30; }
-          if (arrowSpacingPx > 300) { arrowSpacingPx = 300; }
-          var arrowColor = FGPX.chartColor || '#ff5500';
+          routeArrowSpacingPx = Math.round(arrowSpacingReferencePx / Math.max(arrowRepeatPct, 0.01));
+          if (routeArrowSpacingPx < 30) { routeArrowSpacingPx = 30; }
+          if (routeArrowSpacingPx > 300) { routeArrowSpacingPx = 300; }
+
+          var undrivenArrowColor = '#cccccc';
+          var drivenArrowColor = (window.FGPX && FGPX.elevationColorFlat) || (window.FGPX && FGPX.chartColor) || '#ff5500';
           var themeMode = (window.FGPX && typeof FGPX.themeMode === 'string') ? String(FGPX.themeMode) : 'system';
           var arrowStrokeColor = (themeMode === 'bright') ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)';
-          // Build a small canvas triangle pointing up (north = 0°).
-          // MapLibre auto-rotates it to follow the line bearing (icon-rotation-alignment:'auto').
-          var routeArrowIconId = 'fgpx-route-dir-arrow';
-          if (!map.hasImage(routeArrowIconId)) {
+
+          function ensureRouteArrowIcon(iconId, fillColor, strokeColor) {
+            if (map.hasImage(iconId)) return;
             var ac = document.createElement('canvas'); ac.width = 20; ac.height = 20;
             var actx = ac.getContext('2d');
             if (!actx) { throw new Error('Route arrow canvas context unavailable'); }
             actx.clearRect(0, 0, 20, 20);
-            actx.fillStyle = arrowColor;
-            actx.strokeStyle = arrowStrokeColor;
+            actx.fillStyle = fillColor;
+            actx.strokeStyle = strokeColor;
             actx.lineWidth = 1.5;
             actx.beginPath();
             actx.moveTo(10, 1);   // tip
@@ -1921,18 +1928,33 @@
             actx.fill();
             actx.stroke();
             var imageData = actx.getImageData(0, 0, 20, 20);
-            map.addImage(routeArrowIconId, { width: 20, height: 20, data: imageData.data });
+            map.addImage(iconId, { width: 20, height: 20, data: imageData.data });
           }
+
+          ensureRouteArrowIcon(routeArrowUndrivenIconId, undrivenArrowColor, arrowStrokeColor);
+          ensureRouteArrowIcon(routeArrowDrivenIconId, drivenArrowColor, arrowStrokeColor);
+
+          var arrowRouteData = {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: (function() {
+                try { return smoothPolyline(baseCoords, 2); } catch(_) { return baseCoords; }
+              })()
+            }
+          };
+          map.addSource('fgpx-route-arrows-src', { type: 'geojson', data: arrowRouteData, lineMetrics: true });
           map.addLayer({
-            id: 'fgpx-route-arrows',
+            id: 'fgpx-route-arrows-undriven',
             type: 'symbol',
-            source: 'fgpx-route',
+            source: 'fgpx-route-arrows-src',
             layout: {
               'symbol-placement': 'line',
-              'symbol-spacing': arrowSpacingPx,
-              'icon-image': routeArrowIconId,
+              'symbol-spacing': routeArrowSpacingPx,
+              'icon-image': routeArrowUndrivenIconId,
               'icon-size': 0.85,
               'icon-rotation-alignment': 'auto',
+              'icon-rotate': 90,
               'icon-allow-overlap': false,
               'icon-keep-upright': false
             }
@@ -2023,7 +2045,26 @@
       // Foreground progressive route (stable per-frame GeoJSON)
       var progressData = { type: 'Feature', geometry: { type: 'LineString', coordinates: [(privacyEnabled ? positionAtDistance(privacyStartD) : coords[0].slice(0,2))] } };
       map.addSource('fgpx-route-progress', { type: 'geojson', data: progressData });
-      map.addLayer({ id: 'fgpx-route-progress-line', type: 'line', source: 'fgpx-route-progress', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#ff5500', 'line-width': 4, 'line-blur': 0.3 } });
+      map.addLayer({ id: 'fgpx-route-progress-line', type: 'line', source: 'fgpx-route-progress', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ((window.FGPX && FGPX.elevationColorFlat) || (window.FGPX && FGPX.chartColor) || '#ff5500'), 'line-width': 4, 'line-blur': 0.3 } });
+      if (arrowsEnabled && totalDistance > 0) {
+        try {
+          map.addLayer({
+            id: 'fgpx-route-arrows-driven',
+            type: 'symbol',
+            source: 'fgpx-route-progress',
+            layout: {
+              'symbol-placement': 'line',
+              'symbol-spacing': routeArrowSpacingPx,
+              'icon-image': routeArrowDrivenIconId,
+              'icon-size': 0.85,
+              'icon-rotation-alignment': 'auto',
+              'icon-rotate': 90,
+              'icon-allow-overlap': false,
+              'icon-keep-upright': false
+            }
+          });
+        } catch(e) { DBG.warn('Driven route arrows skipped', e); }
+      }
 
       // Create colored arrow icons for different wind speeds and sizes
       function createArrowIcon(color, size) {
@@ -10425,6 +10466,11 @@
             // Create elevation-colored segments or single route
             var segments = createProgressiveSegments(smoothedUpTo, startIdx);
             if (segments && segments.length > 0) {
+              // Keep the progressive source in sync for driven route arrows,
+              // even when the visible line is rendered as elevation-colored segments.
+              progressData.geometry.coordinates = smoothedUpTo;
+              routeProgSrc.setData(progressData);
+
               // Use elevation-colored segments - update existing or create new
               for (var segIdx = 0; segIdx < segments.length; segIdx++) {
                 var segment = segments[segIdx];
