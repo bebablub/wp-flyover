@@ -22,6 +22,24 @@ if (!function_exists('wp_date')) {
     }
 }
 
+if (!function_exists('date_i18n')) {
+    /**
+     * Minimal date_i18n() stub for unit tests. Returns formatted date string.
+     * In real WordPress, this applies locale-specific translations. For tests, just format.
+     * @param string $format
+     * @param int|false $timestamp
+     * @param bool $gmt
+     * @return string
+     */
+    function date_i18n(string $format, $timestamp = false, bool $gmt = false): string
+    {
+        if ($timestamp === false) {
+            $timestamp = time();
+        }
+        return date($format, (int) $timestamp);
+    }
+}
+
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 /**

@@ -271,6 +271,144 @@ final class CLI
 		}
 	}
 
+	/**
+	 * Backfill activity dates for existing tracks from GPX files.
+	 *
+	 * Processes all published fgpx_track posts that don't have fgpx_activity_date_unix
+	 * set, extracts the earliest timestamp from their GPX files, and stores it.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--limit=<number>]
+	 * : Maximum number of tracks to process (default: unlimited).
+	 *
+	 * [--dry-run]
+	 * : Preview changes without saving them.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp fgpx backfill-activity-dates
+	 *     wp fgpx backfill-activity-dates --dry-run
+	 *     wp fgpx backfill-activity-dates --limit=50
+	 *
+	 * @param array<int,string> $args
+	 * @param array<string,mixed> $assoc_args
+	 */
+	public function backfill_activity_dates(array $args, array $assoc_args): void
+	{
+		$dryRun = \WP_CLI\Utils\get_flag_value($assoc_args, 'dry-run', false);
+		$limit = (int) (\WP_CLI\Utils\get_flag_value($assoc_args, 'limit', 0) ?? 0);
+
+		\WP_CLI::line('Backfilling activity dates for tracks without fgpx_activity_date_unix...');
+		if ($dryRun) {
+			\WP_CLI::line('(DRY RUN - no changes will be saved)');
+		}
+
+		// Query tracks without activity date
+		$query = new \WP_Query([
+			'post_type' => 'fgpx_track',
+			'post_status' => 'publish',
+			'posts_per_page' => $limit > 0 ? $limit : -1,
+			'fields' => 'ids',
+			'no_found_rows' => false,
+		]);
+
+		$query_args = [
+			'post_type' => 'fgpx_track',
+			'post_status' => 'publish',
+			'posts_per_page' => $limit > 0 ? $limit : -1,
+			'fields' => 'ids',
+			'meta_query' => [
+				[
+					'key' => 'fgpx_activity_date_unix',
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		];
+
+		if ($limit > 0) {
+			$query_args['posts_per_page'] = $limit;
+		}
+
+		$posts = \get_posts($query_args);
+		$total = count($posts);
+
+		if ($total === 0) {
+			\WP_CLI::success('No tracks to process. All tracks have activity dates set.');
+			return;
+		}
+
+		\WP_CLI::line("Found $total track(s) to process.");
+
+		$progress = \WP_CLI\Utils\make_progress_bar('Processing tracks', $total);
+		$processed = 0;
+		$updated = 0;
+		$errors = [];
+
+		foreach ($posts as $post_id) {
+			$progress->tick();
+			$processed++;
+
+			$filePath = (string) \get_post_meta((int) $post_id, 'fgpx_file_path', true);
+			if ($filePath === '' || !\is_readable($filePath)) {
+				$errors[] = "Track $post_id: GPX file not found or not readable";
+				continue;
+			}
+
+			try {
+				$gpx = new \phpGPX\phpGPX();
+				$file = $gpx->load($filePath);
+			} catch (\Throwable $e) {
+				$errors[] = "Track $post_id: GPX parse error - " . $e->getMessage();
+				continue;
+			}
+
+			// Extract earliest timestamp
+			$minTimestamp = null;
+			foreach ($file->tracks as $track) {
+				foreach ($track->segments as $segment) {
+					foreach ($segment->points as $point) {
+						$time = $point->time ? (int) $point->time->getTimestamp() : null;
+						if ($time !== null) {
+							if ($minTimestamp === null || $time < $minTimestamp) {
+								$minTimestamp = $time;
+							}
+						}
+					}
+				}
+			}
+
+			if ($minTimestamp === null) {
+				// No timestamps found, use post date
+				$minTimestamp = (int) \get_post_time('U', true, (int) $post_id);
+			}
+
+			if (!$dryRun) {
+				\update_post_meta((int) $post_id, 'fgpx_activity_date_unix', $minTimestamp);
+				// Invalidate timeline cache
+				\delete_transient('fgpx_timeline_tracks_v1');
+			}
+
+			$updated++;
+		}
+
+		$progress->finish();
+
+		\WP_CLI::line('');
+		\WP_CLI::success("Backfill complete: $updated/$total tracks updated.");
+
+		if (!empty($errors)) {
+			\WP_CLI::warning('Errors encountered:');
+			foreach ($errors as $error) {
+				\WP_CLI::warning('  - ' . $error);
+			}
+		}
+
+		if ($dryRun) {
+			\WP_CLI::line('(No changes were saved due to --dry-run flag)');
+		}
+	}
+
 	/** Copy uploaded file into uploads/flyover-gpx */
 	private static function copyToUploadsDir(string $absPath): string
 	{

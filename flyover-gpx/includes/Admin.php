@@ -1230,6 +1230,11 @@ final class Admin
 		// Get geojson array for processing
 		$geojsonArray = $parse['geojson'];
 		
+		// Determine activity date: prefer GPX timestamp (earliest point), fallback to post creation date
+		// This ensures tracks are sorted chronologically by when the activity occurred, not when it was uploaded
+		$postDateGmt = (int) \strtotime((string) \get_post_field('post_date_gmt', $postId));
+		$activityDate = (int) ($parse['activity_date_unix'] ?? $postDateGmt);
+		
 		// Store initial meta (without wind data yet) using bulk update for better performance
 		$initialMeta = [
 			'fgpx_file_path' => $filePath,
@@ -1241,6 +1246,8 @@ final class Admin
 			'fgpx_moving_time_s' => (float) ($parse['stats']['moving_time_s'] ?? 0),
 			'fgpx_elevation_gain_m' => (float) ($parse['stats']['elevation_gain_m'] ?? 0),
 			'fgpx_max_speed_m_s' => (float) ($parse['stats']['max_speed_m_s'] ?? 0),
+			// Activity date (earliest GPX timestamp or post date) for timeline sorting
+			'fgpx_activity_date_unix' => $activityDate,
 		];
 		DatabaseOptimizer::bulkUpdatePostMeta($postId, $initialMeta);
 
@@ -3491,6 +3498,7 @@ final class Admin
 		$maxSpeedMs = 0.0;
 		$prev = null;
 		$rawElevations = [];
+		$minActivityTimestamp = null; // Track earliest timestamp for activity date
 
 		$minLat = 90.0; $minLon = 180.0; $maxLat = -90.0; $maxLon = -180.0;
 
@@ -3554,6 +3562,13 @@ final class Admin
 					$pointsCount++;
 					$prev = ['lat' => $lat, 'lon' => $lon, 'ele' => $eleNullable, 'time' => $time];
 					$rawElevations[] = $eleNullable;
+
+					// Track earliest timestamp for activity date
+					if ($time !== null) {
+						if ($minActivityTimestamp === null || $time < $minActivityTimestamp) {
+							$minActivityTimestamp = $time;
+						}
+					}
 				}
 			}
 		}
@@ -3697,6 +3712,7 @@ final class Admin
 			'bounds' => $bounds,
 			'points_count' => $pointsCount,
 			'waypoints' => $waypoints,
+			'activity_date_unix' => $minActivityTimestamp ?? time(), // Earliest timestamp, fallback to current time
 		];
 	}
 
@@ -4210,8 +4226,9 @@ final class Admin
 		$modified = (string) \strtotime((string) $post->post_modified_gmt);
 		// Delete common v2 cache variants for this post
 		\delete_transient('fgpx_json_v2_' . (int) $postId . '_' . $modified . '_hp_0_simp_0');
-		// Invalidate gallery track list so the new/updated track appears immediately.
+		// Invalidate all track-related caches so the new/updated track appears immediately.
 		\FGpx\GalleryShortcode::invalidate_tracks_cache();
+		\delete_transient('fgpx_timeline_tracks_v1'); // Invalidate timeline cache on post save
 		\FGpx\Statistics::invalidate_cache();
 	}
 
@@ -4237,12 +4254,15 @@ final class Admin
 			'fgpx_preview_generated_at',
 			'fgpx_preview_mode',
 			'fgpx_preview_custom_attachment_id',
+			'fgpx_activity_date_unix', // Invalidate timeline cache on activity date changes
 		];
 		if ((int) $objectId <= 0 || !\in_array($metaKey, $trackedKeys, true)) { return; }
 		
 		$post = \get_post((int) $objectId);
 		if (!$post || $post->post_type !== 'fgpx_track') { return; }
 		
+		// Invalidate timeline cache in addition to other track caches
+		\delete_transient('fgpx_timeline_tracks_v1');
 		self::clear_all_track_caches((int) $objectId);
 	}
 
