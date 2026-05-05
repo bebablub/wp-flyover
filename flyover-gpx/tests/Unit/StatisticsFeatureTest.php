@@ -143,7 +143,7 @@ final class StatisticsFeatureTest extends TestCase
         $inline = $GLOBALS['fgpx_test_inline_scripts']['fgpx-stats'][0]['data'] ?? '';
         $this->assertIsString($inline);
         $this->assertStringContainsString('window.FGPXStatsInstances', $inline);
-        $this->assertStringContainsString('wp-json/fgpx/v1/stats/aggregate', $inline);
+        $this->assertStringContainsString('wp-json\/fgpx\/v1\/stats\/aggregate', $inline);
         $this->assertStringContainsString('chartDistanceByMonth', $inline);
         $this->assertStringContainsString('chartTracksByMonth', $inline);
         $this->assertStringContainsString('noHeatmapData', $inline);
