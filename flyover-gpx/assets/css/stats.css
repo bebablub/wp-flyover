@@ -1,4 +1,12 @@
 .fgpx-stats-root {
+  --fgpx-stats-chart-distance: #25ceff;
+  --fgpx-stats-chart-tracks: #ff7a3d;
+  --fgpx-stats-chart-elevation: #8b5cf6;
+  --fgpx-stats-chart-speed: #14b8a6;
+  --fgpx-stats-chart-histogram: #6366f1;
+  --fgpx-stats-chart-weekday: #0ea5e9;
+  --fgpx-stats-chart-hour: #f59e0b;
+  --fgpx-stats-chart-line-fill: rgba(37, 206, 255, 0.18);
   border: 1px solid #d1d5db;
   border-radius: 10px;
   background: linear-gradient(160deg, #f8fafc 0%, #f1f5f9 100%);
@@ -61,17 +69,31 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.fgpx-stats-chart-card {
+  height: 260px;
+  max-height: 260px;
+  overflow: hidden;
 }
 
 .fgpx-stats-chart-title {
   margin: 0 0 8px;
   font-size: 0.95rem;
   color: #1e293b;
+  flex-shrink: 0;
+  height: auto;
 }
 
 .fgpx-stats-chart-canvas {
   width: 100%;
+  max-width: 100%;
   height: 220px;
+  max-height: 220px;
+  display: block;
+  overflow: hidden;
 }
 
 .fgpx-stats-map {

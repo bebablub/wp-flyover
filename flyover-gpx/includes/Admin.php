@@ -1080,6 +1080,28 @@ final class Admin
 	}
 
 	/**
+	 * Canonical chart keys shown on the admin statistics dashboard.
+	 *
+	 * @return array<int,string>
+	 */
+	private function get_statistics_chart_keys(): array
+	{
+		return [
+			'distance_by_month',
+			'tracks_by_year',
+			'tracks_by_month',
+			'distance_by_year',
+			'elevation_by_month',
+			'elevation_by_year',
+			'avg_speed_by_month',
+			'avg_speed_by_year',
+			'track_length_histogram',
+			'weekday_distribution',
+			'hour_distribution',
+		];
+	}
+
+	/**
 	 * Handle upload form submission: validate, store, parse, and create track post.
 	 */
 	public function handle_upload_form(): void
@@ -3349,6 +3371,7 @@ final class Admin
 	if ($screen->id === 'fgpx_track_page_fgpx-statistics') {
 		$statistics = new Statistics();
 		$statistics->enqueue_assets();
+		$chartKeys = $this->get_statistics_chart_keys();
 
 		\wp_localize_script('fgpx-stats', 'FGPXStatsAdmin', [
 			'rootId' => 'fgpx-stats-admin-root',
@@ -3356,9 +3379,9 @@ final class Admin
 			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
 			'ajaxAction' => 'fgpx_stats',
 			'maxPoints' => 15000,
-			'showCharts' => true,
+			'charts' => $chartKeys,
 			'showHeatmap' => true,
-			'mapStyle' => 'https://demotiles.maplibre.org/style.json',
+			'mapStyle' => '',
 			'strings' => [
 				'loading' => \esc_html__('Loading statistics...', 'flyover-gpx'),
 				'failed' => \esc_html__('Could not load statistics.', 'flyover-gpx'),
@@ -3374,7 +3397,26 @@ final class Admin
 				'chartDistanceByMonth' => \esc_html__('Distance by Month', 'flyover-gpx'),
 				'chartTracksByMonth' => \esc_html__('Tracks by Month', 'flyover-gpx'),
 				'chartTracksByYear' => \esc_html__('Tracks by Year', 'flyover-gpx'),
+				'chartDistanceByYear' => \esc_html__('Distance by Year', 'flyover-gpx'),
+				'chartElevationByMonth' => \esc_html__('Elevation by Month', 'flyover-gpx'),
+				'chartElevationByYear' => \esc_html__('Elevation by Year', 'flyover-gpx'),
+				'chartAvgSpeedByMonth' => \esc_html__('Average Speed by Month', 'flyover-gpx'),
+				'chartAvgSpeedByYear' => \esc_html__('Average Speed by Year', 'flyover-gpx'),
+				'chartTrackLengthHistogram' => \esc_html__('Track Length Distribution', 'flyover-gpx'),
+				'chartWeekdayDistribution' => \esc_html__('Weekday Distribution', 'flyover-gpx'),
+				'chartHourDistribution' => \esc_html__('Hour Distribution', 'flyover-gpx'),
 				'chartDistanceKm' => \esc_html__('Distance (km)', 'flyover-gpx'),
+				'chartElevationM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
+				'chartAvgSpeedKmh' => \esc_html__('Average speed (km/h)', 'flyover-gpx'),
+				'chartTracksCount' => \esc_html__('Track count', 'flyover-gpx'),
+				'chartLengthBuckets' => \esc_html__('Distance buckets', 'flyover-gpx'),
+				'weekdaySun' => \esc_html__('Sun', 'flyover-gpx'),
+				'weekdayMon' => \esc_html__('Mon', 'flyover-gpx'),
+				'weekdayTue' => \esc_html__('Tue', 'flyover-gpx'),
+				'weekdayWed' => \esc_html__('Wed', 'flyover-gpx'),
+				'weekdayThu' => \esc_html__('Thu', 'flyover-gpx'),
+				'weekdayFri' => \esc_html__('Fri', 'flyover-gpx'),
+				'weekdaySat' => \esc_html__('Sat', 'flyover-gpx'),
 				'chartTracks' => \esc_html__('Tracks', 'flyover-gpx'),
 				'heatmapTitle' => \esc_html__('All Tracks Heatmap', 'flyover-gpx'),
 				'noTracks' => \esc_html__('No published tracks yet.', 'flyover-gpx'),

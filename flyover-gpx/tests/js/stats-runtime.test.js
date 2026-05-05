@@ -64,7 +64,7 @@ describe('stats.js runtime', () => {
     window.fetch = undefined;
   });
 
-  test('monthly chart includes tracks-per-month dataset', async () => {
+  test('tracks_by_month chart renders tracks-per-month dataset', async () => {
     document.body.innerHTML = '<div id="fgpx-stats-admin-root"></div>';
 
     const sourceIds = [];
@@ -109,6 +109,7 @@ describe('stats.js runtime', () => {
       endpointUrl: 'https://example.test/wp-json/fgpx/v1/stats/aggregate',
       ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
       ajaxAction: 'fgpx_stats',
+      charts: ['tracks_by_month'],
       strings: {
         chartTracksByMonth: 'Tracks by Month',
       },
@@ -118,11 +119,68 @@ describe('stats.js runtime', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(chartCalls.length).toBeGreaterThan(0);
-    const monthlyChart = chartCalls[0];
-    expect(monthlyChart.data.datasets.length).toBe(2);
-    expect(monthlyChart.data.datasets[1].label).toBe('Tracks by Month');
-    expect(monthlyChart.data.datasets[1].data).toEqual([1, 2]);
+    expect(chartCalls.length).toBe(1);
+    const tracksByMonthChart = chartCalls[0];
+    expect(tracksByMonthChart.data.datasets.length).toBe(1);
+    expect(tracksByMonthChart.data.datasets[0].label).toBe('Track count');
+    expect(tracksByMonthChart.data.datasets[0].data).toEqual([1, 2]);
+  });
+
+  test('legacy chart aliases monthly/yearly still render canonical charts', async () => {
+    document.body.innerHTML = '<div id="fgpx-stats-admin-root"></div>';
+
+    const sourceIds = [];
+    installMapLibreMock(sourceIds);
+
+    const chartCalls = [];
+    window.Chart = function ChartStub(_ctx, cfg) {
+      chartCalls.push(cfg);
+    };
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        summary: {
+          totalTracks: 2,
+          totalDistanceM: 8000,
+          avgDistanceM: 4000,
+          maxDistanceM: 5000,
+          totalElevationGainM: 300,
+          avgElevationGainM: 150,
+          maxElevationGainM: 220,
+          avgSpeedKmh: 24,
+          maxSpeedKmh: 41,
+        },
+        trends: {
+          monthly: [
+            { period: '2025-01', trackCount: 1, distanceM: 3000, durationS: 500 },
+            { period: '2025-02', trackCount: 2, distanceM: 5000, durationS: 700 },
+          ],
+          yearly: [
+            { period: '2025', trackCount: 2, distanceM: 8000, durationS: 1200 },
+          ],
+        },
+        heatmap: { points: [] },
+      }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPXStatsAdmin = {
+      rootId: 'fgpx-stats-admin-root',
+      endpointUrl: 'https://example.test/wp-json/fgpx/v1/stats/aggregate',
+      ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
+      ajaxAction: 'fgpx_stats',
+      charts: ['monthly', 'yearly'],
+    };
+
+    loadStatsScript();
+    await flushAsync();
+    await flushAsync();
+
+    expect(chartCalls.length).toBe(2);
+    expect(chartCalls[0].type).toBe('bar');
+    expect(chartCalls[1].type).toBe('bar');
   });
 
   test('renders extended KPI set and localized labels', async () => {
