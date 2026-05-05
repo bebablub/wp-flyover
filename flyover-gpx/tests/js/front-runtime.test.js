@@ -489,6 +489,30 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC.includes("ui.tabs.tabWeatherGrade.style.display = 'none';")).toBe(true);
   });
 
+  test('weather overview availability reuses lookup compatibility path', () => {
+    expect(FRONT_SRC.includes("weatherGradeAvailable = simulationEnabled && buildWeatherLookup({ weather: weatherData }).length > 0;")).toBe(true);
+  });
+
+  test('weather overview does not bind duplicate direct tab listeners in startPlayer', () => {
+    expect(FRONT_SRC.includes("ui.tabs.tabWeatherOverview.addEventListener('click', function() { switchChartTab('weatheroverview'); });")).toBe(false);
+  });
+
+  test('weather overview playhead falls back to progress for non-timestamp tracks', () => {
+    expect(FRONT_SRC.includes("if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead) {")).toBe(true);
+    expect(FRONT_SRC.includes("? Math.max(0, Math.min(1, tOffset / totalDuration))")).toBe(true);
+    expect(FRONT_SRC.includes(": Math.max(0, Math.min(1, progress));")).toBe(true);
+  });
+
+  test('weather overview tooltip and night legend are localized and keyboard accessible', () => {
+    expect(FRONT_SRC.includes("var nightLabel = (i18n && i18n.weatherOverviewNightSegment) || 'Nighttime segment';")).toBe(true);
+    expect(FRONT_SRC.includes("emojiSpan.setAttribute('tabindex', '0');")).toBe(true);
+    expect(FRONT_SRC.includes("emojiSpan.setAttribute('data-fgpx-tooltip', tooltipParts.join(' | '));")).toBe(true);
+    expect(FRONT_SRC.includes('bindWeatherFloatingTooltip(emojiSpan);')).toBe(true);
+    expect(FRONT_SRC.includes("node.setAttribute('tabindex', '0');")).toBe(true);
+    expect(FRONT_SRC.includes("node.setAttribute('data-fgpx-tooltip', item.label);")).toBe(true);
+    expect(FRONT_SRC.includes('bindWeatherFloatingTooltip(node);')).toBe(true);
+  });
+
   test('weathergrade uses snowfall signal for snow visuals', () => {
     expect(FRONT_SRC.includes('snowfall_cm: lerp(lp.snowfall_cm, hp.snowfall_cm),')).toBe(true);
     expect(FRONT_SRC.includes('var snowVal = Number(cond.snowfall_cm);')).toBe(true);

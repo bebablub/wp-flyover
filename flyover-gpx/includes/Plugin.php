@@ -504,6 +504,7 @@ final class Plugin
                 'weatherOverviewTemp'          => \esc_html__('Temp', 'flyover-gpx'),
                 'weatherOverviewRain'          => \esc_html__('Rain', 'flyover-gpx'),
                 'weatherOverviewWind'          => \esc_html__('Wind', 'flyover-gpx'),
+                'weatherOverviewNightSegment'  => \esc_html__('Nighttime segment', 'flyover-gpx'),
                 'weatherOverviewClear'         => \esc_html__('Clear / Sunny', 'flyover-gpx'),
                 'weatherOverviewRainCond'      => \esc_html__('Rain', 'flyover-gpx'),
                 'weatherOverviewDrizzleCond'   => \esc_html__('Drizzle', 'flyover-gpx'),

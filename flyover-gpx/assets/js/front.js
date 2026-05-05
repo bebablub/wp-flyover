@@ -600,6 +600,8 @@
     var mediaPanel = createEl('div', 'fgpx-media-panel');
     var weatherOverviewPanel = createEl('div', 'fgpx-weather-overview-panel');
     var weatherOverviewPlayhead = createEl('div', 'fgpx-weather-overview-playhead');
+    var weatherOverviewLegend = createEl('div', 'fgpx-weather-legend fgpx-weather-overview-legend');
+    weatherOverviewLegend.style.display = 'none';
     weatherOverviewPanel.appendChild(weatherOverviewPlayhead);
     statsChart.appendChild(stats);
     statsChart.appendChild(chartTabs);
@@ -607,6 +609,7 @@
     statsChart.appendChild(chartWrap);
     statsChart.appendChild(mediaPanel);
     statsChart.appendChild(weatherOverviewPanel);
+    statsChart.appendChild(weatherOverviewLegend);
 
     container.appendChild(spinner);
     container.appendChild(error);
@@ -625,7 +628,8 @@
       chartLegend: chartLegend,
       mediaPanel: mediaPanel,
       weatherOverviewPanel: weatherOverviewPanel,
-      weatherOverviewPlayhead: weatherOverviewPlayhead
+      weatherOverviewPlayhead: weatherOverviewPlayhead,
+      weatherOverviewLegend: weatherOverviewLegend
     };
   }
 
@@ -2495,7 +2499,7 @@
       }
       // ========== END DEBUG WEATHER DATA ==========
 
-      weatherGradeAvailable = simulationEnabled && !!(weatherData && weatherData.features && Array.isArray(weatherData.features) && weatherData.features.length > 0);
+      weatherGradeAvailable = simulationEnabled && buildWeatherLookup({ weather: weatherData }).length > 0;
       
       // Extract biometric data after simulation (so we get simulated data if it was generated)
       var heartRates = Array.isArray(props.heartRates) ? props.heartRates : null; // bpm
@@ -6415,6 +6419,7 @@
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
           if (cinemaEl) cinemaEl.style.display = 'none';
           if (ui.weatherOverviewPanel) ui.weatherOverviewPanel.style.display = 'none';
+          if (ui.weatherOverviewLegend) ui.weatherOverviewLegend.style.display = 'none';
           if (ui.mediaPanel) {
             if ((!Array.isArray(mediaItems) || mediaItems.length === 0) && FGPX.photosEnabled && Array.isArray(photos) && photos.length > 0) {
               buildMediaItems();
@@ -6433,20 +6438,37 @@
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
           if (cinemaEl) cinemaEl.style.display = 'none';
           if (ui.weatherOverviewPanel) {
-            if (!ui.weatherOverviewPanel.getAttribute('data-rendered')) {
+            var hasOverviewCards = ui.weatherOverviewPanel.querySelectorAll('.fgpx-weather-overview-card').length > 0;
+            if (!ui.weatherOverviewPanel.getAttribute('data-rendered') || !hasOverviewCards) {
               try {
-                var wLookup = buildWeatherLookup(payload);
+                var wLookup = buildWeatherLookup({ weather: weatherData });
                 var slices = buildWeatherOverviewSlices(wLookup, totalDuration || 0);
-                renderWeatherOverviewPanel(ui.weatherOverviewPanel, slices, I18N);
-                ui.weatherOverviewPanel.setAttribute('data-rendered', '1');
-              } catch (_) {}
+                var weatherOverviewI18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
+                var renderedCount = renderWeatherOverviewPanel(ui.weatherOverviewPanel, slices, weatherOverviewI18n);
+                renderWeatherOverviewLegend(ui.weatherOverviewLegend, weatherOverviewI18n);
+                if (renderedCount > 0) {
+                  ui.weatherOverviewPanel.setAttribute('data-rendered', '1');
+                } else {
+                  ui.weatherOverviewPanel.removeAttribute('data-rendered');
+                  DBG.warn('Weather overview rendered zero cards', {
+                    lookupCount: (wLookup && wLookup.length) || 0,
+                    sliceCount: (slices && slices.length) || 0,
+                    totalDuration: totalDuration || 0
+                  });
+                }
+              } catch (weatherOverviewErr) {
+                ui.weatherOverviewPanel.removeAttribute('data-rendered');
+                DBG.warn('Weather overview render failed', weatherOverviewErr);
+              }
             }
             ui.weatherOverviewPanel.style.display = 'flex';
+            if (ui.weatherOverviewLegend) ui.weatherOverviewLegend.style.display = 'flex';
           }
           try { applyWeatherOverlayProfile(true); } catch (_) {}
           return;
         } else {
           if (ui.weatherOverviewPanel) ui.weatherOverviewPanel.style.display = 'none';
+          if (ui.weatherOverviewLegend) ui.weatherOverviewLegend.style.display = 'none';
         }
         if (weather) {
           // Hide chart canvas
@@ -6557,19 +6579,6 @@
       }
       if (!weatherGradeAvailable && ui.tabs.tabWeatherOverview) {
         ui.tabs.tabWeatherOverview.style.display = 'none';
-      }
-      ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });
-      ui.tabs.tabBiometrics.addEventListener('click', function() { switchChartTab('biometrics'); });
-      ui.tabs.tabTemperature.addEventListener('click', function() { switchChartTab('temperature'); });
-      ui.tabs.tabPower.addEventListener('click', function() { switchChartTab('power'); });
-      ui.tabs.tabPowerZones.addEventListener('click', function() { switchChartTab('powerzones'); });
-      ui.tabs.tabWindImpact.addEventListener('click', function() { switchChartTab('windimpact'); });
-      ui.tabs.tabWindRose.addEventListener('click', function() { switchChartTab('windrose'); });
-      ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
-      ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
-      ui.tabs.tabWeatherOverview.addEventListener('click', function() { switchChartTab('weatheroverview'); });
-      if (FGPX.photosEnabled) {
-        ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
       }
       root.__fgpxTabsReady = true;
       if (container) {
@@ -6772,8 +6781,17 @@
       }
 
       function buildWeatherLookup(payloadData) {
-        if (!payloadData || !payloadData.weather || !Array.isArray(payloadData.weather.features)) return [];
-        var features = payloadData.weather.features;
+        if (!payloadData || !payloadData.weather) return [];
+        var weather = payloadData.weather;
+        var features = [];
+        if (Array.isArray(weather.features)) {
+          features = weather.features;
+        } else if (Array.isArray(weather)) {
+          features = weather;
+        } else if (weather && typeof weather === 'object' && Array.isArray(weather.points)) {
+          features = weather.points;
+        }
+        if (!features.length) return [];
         var trackStartEpoch = NaN;
         if (timestamps && timestamps.length) {
           for (var tsi = 0; tsi < timestamps.length; tsi++) {
@@ -6784,13 +6802,23 @@
         var items = [];
         for (var i = 0; i < features.length; i++) {
           var feat = features[i];
-          if (!feat || !feat.properties) continue;
-          var p = feat.properties;
+          if (!feat) continue;
+          var p = feat.properties || feat;
           var tsEpoch = parseEpochSeconds(p.time_unix);
           if (!isFinite(tsEpoch)) tsEpoch = parseEpochSeconds(p.timestamp);
-          if (!isFinite(tsEpoch) || tsEpoch <= 0) continue;
-          if (!isFinite(trackStartEpoch)) continue;
-          items.push({ timeOffset: tsEpoch - trackStartEpoch, props: p });
+          var offsetSec = NaN;
+          if (isFinite(tsEpoch) && tsEpoch > 0 && isFinite(trackStartEpoch)) {
+            offsetSec = tsEpoch - trackStartEpoch;
+          }
+          // Fallback for legacy weather points without timestamps: distribute by index over track duration.
+          if (!isFinite(offsetSec)) {
+            if (isFinite(Number(totalDuration)) && Number(totalDuration) > 0 && features.length > 1) {
+              offsetSec = (i / (features.length - 1)) * Number(totalDuration);
+            } else {
+              offsetSec = i;
+            }
+          }
+          items.push({ timeOffset: offsetSec, props: p });
         }
         items.sort(function(a, b) { return a.timeOffset - b.timeOffset; });
         return items;
@@ -6825,6 +6853,12 @@
       }
 
       function buildWeatherOverviewSlices(weatherLookup, totalDurationSec) {
+        if ((!isFinite(Number(totalDurationSec)) || Number(totalDurationSec) <= 0) && Array.isArray(weatherLookup) && weatherLookup.length > 1) {
+          totalDurationSec = Number(weatherLookup[weatherLookup.length - 1].timeOffset) || 0;
+        }
+        if (!isFinite(Number(totalDurationSec)) || Number(totalDurationSec) <= 0) {
+          totalDurationSec = 1;
+        }
         var durH = totalDurationSec / 3600;
         var N = durH < 1 ? 3 : durH < 3 ? 4 : durH < 6 ? 5 : durH < 10 ? 6 : durH < 18 ? 7 : 8;
         var fogThresh = (window.FGPX && FGPX.weatherFogThreshold != null) ? FGPX.weatherFogThreshold : 0.3;
@@ -6957,6 +6991,7 @@
         var tempLabel = (i18n && i18n.weatherOverviewTemp) || 'Temp';
         var rainLabel = (i18n && i18n.weatherOverviewRain) || 'Rain';
         var windLabel = (i18n && i18n.weatherOverviewWind) || 'Wind';
+        var nightLabel = (i18n && i18n.weatherOverviewNightSegment) || 'Nighttime segment';
         var existing = panelEl.querySelectorAll('.fgpx-weather-overview-card');
         for (var ri = existing.length - 1; ri >= 0; ri--) {
           panelEl.removeChild(existing[ri]);
@@ -6973,13 +7008,33 @@
           'fog': (i18n && i18n.weatherOverviewFogCond) || 'Fog',
           'wind': (i18n && i18n.weatherOverviewWindCond) || 'Wind'
         };
+        if (!Array.isArray(slices) || slices.length === 0) {
+          return 0;
+        }
+        var rendered = 0;
         for (var ci = 0; ci < slices.length; ci++) {
           var sl = slices[ci];
           var card = createEl('div', 'fgpx-weather-overview-card');
           var emojiSpan = createEl('span', 'fgpx-weather-overview-emoji');
+          var condLabel = condLabels[sl.conditionKey] || sl.conditionKey;
+          var tooltipParts = [condLabel];
           emojiSpan.setAttribute('role', 'img');
-          emojiSpan.setAttribute('aria-label', condLabels[sl.conditionKey] || sl.conditionKey);
+          emojiSpan.setAttribute('aria-label', condLabel);
+          emojiSpan.setAttribute('tabindex', '0');
           emojiSpan.textContent = sl.emoji + (sl.hasNight ? ' \uD83C\uDF19' : '');
+          tooltipParts.push(tempLabel + ': ' + sl.avgTemp + ' \u00B0C');
+          if (sl.maxRain >= rainThresh) {
+            tooltipParts.push(rainLabel + ': ' + sl.maxRain.toFixed(1) + ' mm');
+          }
+          if (sl.maxWind >= windThresh) {
+            tooltipParts.push(windLabel + ': ' + sl.maxWind + ' km/h');
+          }
+          if (sl.hasNight) {
+            tooltipParts.push(nightLabel);
+          }
+          emojiSpan.setAttribute('title', '');
+          emojiSpan.setAttribute('data-fgpx-tooltip', tooltipParts.join(' | '));
+          bindWeatherFloatingTooltip(emojiSpan);
           card.appendChild(emojiSpan);
           var labelEl = createEl('div', 'fgpx-weather-overview-label');
           labelEl.textContent = sl.label;
@@ -6998,6 +7053,34 @@
             card.appendChild(windEl);
           }
           panelEl.appendChild(card);
+          rendered++;
+        }
+        return rendered;
+      }
+
+      function renderWeatherOverviewLegend(legendEl, i18n) {
+        if (!legendEl) return;
+        legendEl.innerHTML = '';
+        var nightLabel = (i18n && i18n.weatherOverviewNightSegment) || 'Nighttime segment';
+        var legendItems = [
+          { emoji: '\u26C8\uFE0F', label: (i18n && i18n.weatherOverviewStormCond) || 'Heavy Rain' },
+          { emoji: '\uD83C\uDF27\uFE0F', label: (i18n && i18n.weatherOverviewRainCond) || 'Rain' },
+          { emoji: '\uD83C\uDF28\uFE0F', label: (i18n && i18n.weatherOverviewSnowCond) || 'Snow' },
+          { emoji: '\uD83C\uDF2B\uFE0F', label: (i18n && i18n.weatherOverviewFogCond) || 'Fog' },
+          { emoji: '\uD83D\uDCA8', label: (i18n && i18n.weatherOverviewWindCond) || 'Wind' },
+          { emoji: '\u2601\uFE0F', label: (i18n && i18n.weatherOverviewCloudCond) || 'Overcast' },
+          { emoji: '\u2600\uFE0F', label: (i18n && i18n.weatherOverviewClear) || 'Clear / Sunny' },
+          { emoji: '\uD83C\uDF19', label: nightLabel }
+        ];
+        for (var li = 0; li < legendItems.length; li++) {
+          var item = legendItems[li];
+          var node = createEl('span', 'fgpx-weather-legend-item');
+          node.setAttribute('title', '');
+          node.setAttribute('tabindex', '0');
+          node.setAttribute('data-fgpx-tooltip', item.label);
+          bindWeatherFloatingTooltip(node);
+          node.textContent = item.emoji + ' ' + item.label;
+          legendEl.appendChild(node);
         }
       }
 
@@ -10684,8 +10767,10 @@
           }
         }
         // Update weather overview playhead if that tab is active
-        if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead && totalDuration) {
-          var phPct = Math.max(0, Math.min(1, tOffset / totalDuration));
+        if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead) {
+          var phPct = (isFinite(totalDuration) && totalDuration > 0)
+            ? Math.max(0, Math.min(1, tOffset / totalDuration))
+            : Math.max(0, Math.min(1, progress));
           ui.weatherOverviewPlayhead.style.left = (phPct * 100) + '%';
         }
         // If photos are enabled with timestamps, show overlay when marker reaches the photo time
@@ -11939,8 +12024,10 @@
               updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
             }
           }
-          if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead && totalDuration) {
-            var seekPhPct = Math.max(0, Math.min(1, tOffset / totalDuration));
+          if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead) {
+            var seekPhPct = (isFinite(totalDuration) && totalDuration > 0)
+              ? Math.max(0, Math.min(1, tOffset / totalDuration))
+              : Math.max(0, Math.min(1, progress));
             ui.weatherOverviewPlayhead.style.left = (seekPhPct * 100) + '%';
           }
         } catch (_) {}
