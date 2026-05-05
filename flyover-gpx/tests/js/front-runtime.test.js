@@ -552,19 +552,18 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC.includes("setAttrIfChanged(celestial, 'data-fgpx-tooltip', celestialTooltip);")).toBe(true);
   });
 
-  test('chart tabs use instance-scoped switch handler (no global dependency)', () => {
+  test('chart tabs use instance-scoped switch handler (queueTabUntilReady)', () => {
     expect(FRONT_SRC.includes('var switchChartTab = function(tabType) {')).toBe(true);
-    expect(FRONT_SRC.includes("ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });")).toBe(true);
-    expect(FRONT_SRC.includes("ui.tabs.tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });")).toBe(false);
+    expect(FRONT_SRC.includes("tabElevation.addEventListener('click', queueTabUntilReady('elevation'));")).toBe(true);
+    expect(FRONT_SRC.includes("tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });")).toBe(false);
+    expect(FRONT_SRC.includes("tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });")).toBe(false);
   });
 
-  test('media tab listener in startPlayer is guarded by FGPX.photosEnabled (not inverted)', () => {
+  test('media tab listener is only added if FGPX.photosEnabled, using queueTabUntilReady', () => {
     expect(FRONT_SRC.includes("if (FGPX.photosEnabled) {")).toBe(true);
-    expect(FRONT_SRC.includes("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });")).toBe(true);
-    const guardedIdx = FRONT_SRC.indexOf("if (FGPX.photosEnabled) {");
-    const listenerIdx = FRONT_SRC.indexOf("ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });");
-    expect(listenerIdx).toBeGreaterThan(guardedIdx);
-    expect(FRONT_SRC.includes("if (!FGPX.photosEnabled) {\n        ui.tabs.tabMedia.addEventListener")).toBe(false);
+    expect(FRONT_SRC.includes("tabMedia.addEventListener('click', queueTabUntilReady('media'));")).toBe(true);
+    expect(FRONT_SRC.includes("tabMedia.addEventListener('click', function() { switchChartTab('media'); });")).toBe(false);
+    expect(FRONT_SRC.includes("if (!FGPX.photosEnabled) {\n        tabMedia.addEventListener")).toBe(false);
   });
 
   test('media tab and gallery rendering hooks are present', () => {
