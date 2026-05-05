@@ -1,6 +1,26 @@
 <?php
-
 declare(strict_types=1);
+
+if (!function_exists('wp_date')) {
+    /**
+     * Minimal wp_date() stub for unit tests. Returns formatted date string for timestamp.
+     * @param string $format
+     * @param int|string|null $timestamp
+     * @param \DateTimeZone|string|null $timezone
+     * @return string
+     */
+    function wp_date(string $format, $timestamp = null, $timezone = null): string
+    {
+        if ($timestamp === null) {
+            $timestamp = time();
+        }
+        if (!is_numeric($timestamp)) {
+            $timestamp = strtotime((string) $timestamp);
+        }
+        // Ignore timezone for test stub
+        return date($format, (int) $timestamp);
+    }
+}
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
