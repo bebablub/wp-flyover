@@ -6900,7 +6900,7 @@
           var avgTemp = sumTemp / total;
           var rainPrevalence = rainCount / total;
           var windPrevalence = windCount / total;
-          var hasNight = nightCount > total / 2;
+          var hasNight = nightCount > 0;
 
           var emoji, conditionKey;
           if (peakSnow >= 2 && peakWind >= 30) {
@@ -6952,6 +6952,11 @@
       }
 
       function renderWeatherOverviewPanel(panelEl, slices, i18n) {
+        var rainThresh = (window.FGPX && FGPX.weatherRainThreshold != null) ? FGPX.weatherRainThreshold : 0.1;
+        var windThresh = (window.FGPX && FGPX.weatherWindThreshold != null) ? FGPX.weatherWindThreshold : 3;
+        var tempLabel = (i18n && i18n.weatherOverviewTemp) || 'Temp';
+        var rainLabel = (i18n && i18n.weatherOverviewRain) || 'Rain';
+        var windLabel = (i18n && i18n.weatherOverviewWind) || 'Wind';
         var existing = panelEl.querySelectorAll('.fgpx-weather-overview-card');
         for (var ri = existing.length - 1; ri >= 0; ri--) {
           panelEl.removeChild(existing[ri]);
@@ -6980,16 +6985,16 @@
           labelEl.textContent = sl.label;
           card.appendChild(labelEl);
           var tempEl = createEl('div', 'fgpx-weather-overview-temp');
-          tempEl.textContent = sl.avgTemp + '\u00B0C';
+          tempEl.textContent = tempLabel + ': ' + sl.avgTemp + ' \u00B0C';
           card.appendChild(tempEl);
-          if (sl.maxRain > 0) {
+          if (sl.maxRain >= rainThresh) {
             var rainEl = createEl('div', 'fgpx-weather-overview-detail');
-            rainEl.textContent = '\uD83D\uDCA7 ' + sl.maxRain.toFixed(1) + ' mm';
+            rainEl.textContent = '\uD83D\uDCA7 ' + rainLabel + ': ' + sl.maxRain.toFixed(1) + ' mm';
             card.appendChild(rainEl);
           }
-          if (sl.maxWind > 0) {
+          if (sl.maxWind >= windThresh) {
             var windEl = createEl('div', 'fgpx-weather-overview-detail');
-            windEl.textContent = '\uD83D\uDCA8 ' + sl.maxWind + ' km/h';
+            windEl.textContent = '\uD83D\uDCA8 ' + windLabel + ': ' + sl.maxWind + ' km/h';
             card.appendChild(windEl);
           }
           panelEl.appendChild(card);

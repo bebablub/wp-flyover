@@ -1507,3 +1507,38 @@
 .fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-detail {
   color: #9ca3af;
 }
+
+@media (prefers-color-scheme: dark) {
+  .fgpx:not([data-fgpx-theme="light"]) .fgpx-weather-overview-panel {
+    background: #1a1f2e;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .fgpx:not([data-fgpx-theme="light"]) .fgpx-weather-overview-card {
+    background: #252d3d;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .fgpx:not([data-fgpx-theme="light"]) .fgpx-weather-overview-label,
+  .fgpx:not([data-fgpx-theme="light"]) .fgpx-weather-overview-detail {
+    color: #9ca3af;
+  }
+
+  .fgpx:not([data-fgpx-theme="light"]) .fgpx-weather-overview-temp {
+    color: #e5e7eb;
+  }
+}
+
+@media (max-width: 680px) {
+  .fgpx .fgpx-weather-overview-panel {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .fgpx .fgpx-weather-overview-card {
+    flex: 0 0 104px;
+  }
+}
