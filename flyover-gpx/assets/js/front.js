@@ -510,7 +510,7 @@
     stats.appendChild(statDist); stats.appendChild(statTime); stats.appendChild(statAvg); stats.appendChild(statGain);
     
     // Tab variables
-    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade, tabMedia;
+    var tabElevation, tabBiometrics, tabTemperature, tabPower, tabPowerZones, tabWindImpact, tabWindRose, tabAll, tabWeatherGrade, tabMedia, tabWeatherOverview;
     
     // Show no data message in chart area (will be defined in startPlayer with proper chart reference)
     // No global no-data handler; keep it instance-scoped inside startPlayer.
@@ -549,6 +549,8 @@
     tabWeatherGrade.textContent = (I18N.simulationTab || 'Simulation');
     tabMedia = createEl('button', 'fgpx-chart-tab');
     tabMedia.textContent = 'Media';
+    tabWeatherOverview = createEl('button', 'fgpx-chart-tab');
+    tabWeatherOverview.textContent = (I18N.weatherOverviewTab || 'Weather');
     chartTabs.appendChild(tabElevation);
     chartTabs.appendChild(tabBiometrics);
     chartTabs.appendChild(tabTemperature);
@@ -558,6 +560,7 @@
     chartTabs.appendChild(tabWindRose);
     chartTabs.appendChild(tabAll);
     chartTabs.appendChild(tabWeatherGrade);
+    chartTabs.appendChild(tabWeatherOverview);
     // Only add media tab if photos are enabled
     if (FGPX.photosEnabled) {
       chartTabs.appendChild(tabMedia);
@@ -584,6 +587,7 @@
     tabWindRose.addEventListener('click', queueTabUntilReady('windrose'));
     tabAll.addEventListener('click', queueTabUntilReady('all'));
     tabWeatherGrade.addEventListener('click', queueTabUntilReady('weathergrade'));
+    tabWeatherOverview.addEventListener('click', queueTabUntilReady('weatheroverview'));
     if (FGPX.photosEnabled) {
       tabMedia.addEventListener('click', queueTabUntilReady('media'));
     }
@@ -594,11 +598,15 @@
     var canvas = createEl('canvas');
     chartWrap.appendChild(canvas);
     var mediaPanel = createEl('div', 'fgpx-media-panel');
+    var weatherOverviewPanel = createEl('div', 'fgpx-weather-overview-panel');
+    var weatherOverviewPlayhead = createEl('div', 'fgpx-weather-overview-playhead');
+    weatherOverviewPanel.appendChild(weatherOverviewPlayhead);
     statsChart.appendChild(stats);
     statsChart.appendChild(chartTabs);
     statsChart.appendChild(chartLegend);
     statsChart.appendChild(chartWrap);
     statsChart.appendChild(mediaPanel);
+    statsChart.appendChild(weatherOverviewPanel);
 
     container.appendChild(spinner);
     container.appendChild(error);
@@ -613,9 +621,11 @@
       controls: { btnPlay: btnPlay, btnPause: btnPause, btnRestart: btnRestart, btnRecord: btnRecord, btnWeather: btnWeather, btnTemperature: btnTemperature, btnWind: btnWind, btnDayNight: btnDayNight, speedSel: speedSel, progressBar: progressBar }, 
       stats: { dist: statDist, time: statTime, avg: statAvg, gain: statGain }, 
       canvas: canvas,
-      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade, tabMedia: tabMedia },
+      tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade, tabMedia: tabMedia, tabWeatherOverview: tabWeatherOverview },
       chartLegend: chartLegend,
-      mediaPanel: mediaPanel
+      mediaPanel: mediaPanel,
+      weatherOverviewPanel: weatherOverviewPanel,
+      weatherOverviewPlayhead: weatherOverviewPlayhead
     };
   }
 
@@ -6364,14 +6374,14 @@
       // Define switchChartTab function here where event listeners can access it
       var switchChartTab = function(tabType) {
         DBG.log('Switching to tab', { tabType: tabType });
-        if (tabType === 'weathergrade' && !weatherGradeAvailable) {
+        if ((tabType === 'weathergrade' || tabType === 'weatheroverview') && !weatherGradeAvailable) {
           tabType = 'elevation';
         }
         currentChartTab = tabType;
         try { applyWeatherOverlayProfile(true); } catch (_) {}
         
-        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll, ui.tabs.tabWeatherGrade, ui.tabs.tabMedia];
-        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all', 'weathergrade', 'media'];
+        var tabElements = [ui.tabs.tabElevation, ui.tabs.tabBiometrics, ui.tabs.tabTemperature, ui.tabs.tabPower, ui.tabs.tabPowerZones, ui.tabs.tabWindImpact, ui.tabs.tabWindRose, ui.tabs.tabAll, ui.tabs.tabWeatherGrade, ui.tabs.tabMedia, ui.tabs.tabWeatherOverview];
+        var tabTypes = ['elevation', 'biometrics', 'temperature', 'power', 'powerzones', 'windimpact', 'windrose', 'all', 'weathergrade', 'media', 'weatheroverview'];
         
         tabElements.forEach(function(tab, index) {
           if (!tab) return; // Skip if tab doesn't exist (e.g., media tab when disabled)
@@ -6397,12 +6407,14 @@
         // Show weather cinema or chart canvas based on tab
         var weather = tabType === 'weathergrade';
         var media = tabType === 'media';
+        var weatherOverview = tabType === 'weatheroverview';
         var cinemaRoot = container || root;
         var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
         if (media) {
           ui.chartLegend.style.display = 'none';
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
           if (cinemaEl) cinemaEl.style.display = 'none';
+          if (ui.weatherOverviewPanel) ui.weatherOverviewPanel.style.display = 'none';
           if (ui.mediaPanel) {
             if ((!Array.isArray(mediaItems) || mediaItems.length === 0) && FGPX.photosEnabled && Array.isArray(photos) && photos.length > 0) {
               buildMediaItems();
@@ -6415,6 +6427,26 @@
           return;
         } else {
           if (ui.mediaPanel) ui.mediaPanel.style.display = 'none';
+        }
+        if (weatherOverview) {
+          ui.chartLegend.style.display = 'none';
+          if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = 'none';
+          if (cinemaEl) cinemaEl.style.display = 'none';
+          if (ui.weatherOverviewPanel) {
+            if (!ui.weatherOverviewPanel.getAttribute('data-rendered')) {
+              try {
+                var wLookup = buildWeatherLookup(payload);
+                var slices = buildWeatherOverviewSlices(wLookup, totalDuration || 0);
+                renderWeatherOverviewPanel(ui.weatherOverviewPanel, slices, I18N);
+                ui.weatherOverviewPanel.setAttribute('data-rendered', '1');
+              } catch (_) {}
+            }
+            ui.weatherOverviewPanel.style.display = 'flex';
+          }
+          try { applyWeatherOverlayProfile(true); } catch (_) {}
+          return;
+        } else {
+          if (ui.weatherOverviewPanel) ui.weatherOverviewPanel.style.display = 'none';
         }
         if (weather) {
           // Hide chart canvas
@@ -6523,6 +6555,9 @@
       if (!weatherGradeAvailable && ui.tabs.tabWeatherGrade) {
         ui.tabs.tabWeatherGrade.style.display = 'none';
       }
+      if (!weatherGradeAvailable && ui.tabs.tabWeatherOverview) {
+        ui.tabs.tabWeatherOverview.style.display = 'none';
+      }
       ui.tabs.tabElevation.addEventListener('click', function() { switchChartTab('elevation'); });
       ui.tabs.tabBiometrics.addEventListener('click', function() { switchChartTab('biometrics'); });
       ui.tabs.tabTemperature.addEventListener('click', function() { switchChartTab('temperature'); });
@@ -6532,6 +6567,7 @@
       ui.tabs.tabWindRose.addEventListener('click', function() { switchChartTab('windrose'); });
       ui.tabs.tabAll.addEventListener('click', function() { switchChartTab('all'); });
       ui.tabs.tabWeatherGrade.addEventListener('click', function() { switchChartTab('weathergrade'); });
+      ui.tabs.tabWeatherOverview.addEventListener('click', function() { switchChartTab('weatheroverview'); });
       if (FGPX.photosEnabled) {
         ui.tabs.tabMedia.addEventListener('click', function() { switchChartTab('media'); });
       }
@@ -6786,6 +6822,178 @@
           fog_intensity: lerp(lp.fog_intensity, hp.fog_intensity),
           cloud_cover_pct: lerp(lp.cloud_cover_pct, hp.cloud_cover_pct)
         };
+      }
+
+      function buildWeatherOverviewSlices(weatherLookup, totalDurationSec) {
+        var durH = totalDurationSec / 3600;
+        var N = durH < 1 ? 3 : durH < 3 ? 4 : durH < 6 ? 5 : durH < 10 ? 6 : durH < 18 ? 7 : 8;
+        var fogThresh = (window.FGPX && FGPX.weatherFogThreshold != null) ? FGPX.weatherFogThreshold : 0.3;
+        var rainThresh = (window.FGPX && FGPX.weatherRainThreshold != null) ? FGPX.weatherRainThreshold : 0.1;
+        var snowThresh = (window.FGPX && FGPX.weatherSnowThreshold != null) ? FGPX.weatherSnowThreshold : 0.1;
+        var windThresh = (window.FGPX && FGPX.weatherWindThreshold != null) ? FGPX.weatherWindThreshold : 3;
+        var cloudThresh = (window.FGPX && FGPX.weatherCloudThreshold != null) ? FGPX.weatherCloudThreshold : 50;
+        var sliceWidth = totalDurationSec / N;
+        var SAMPLES = 20;
+
+        var baseMs = NaN;
+        if (hasTimestamps && Array.isArray(timestamps) && timestamps.length > 0) {
+          for (var ti = 0; ti < timestamps.length; ti++) {
+            if (timestamps[ti]) {
+              var parsedBase = Date.parse(timestamps[ti]);
+              if (!isNaN(parsedBase)) { baseMs = parsedBase; break; }
+            }
+          }
+        }
+
+        function padTwo(n) { return n < 10 ? '0' + n : String(n); }
+
+        var slices = [];
+        for (var i = 0; i < N; i++) {
+          var startSec = i * sliceWidth;
+          var endSec = (i + 1) * sliceWidth;
+          var peakRain = 0, peakSnow = 0, peakWind = 0, peakFog = 0;
+          var sumCloud = 0, sumTemp = 0, rainCount = 0, windCount = 0, validSamples = 0;
+          var nightCount = 0;
+          var maxRain = 0, maxWind = 0;
+
+          for (var s = 0; s < SAMPLES; s++) {
+            var t = startSec + (s / Math.max(1, SAMPLES - 1)) * (endSec - startSec);
+            var cond = weatherInterpolateAt(weatherLookup, t);
+            if (!cond) continue;
+            validSamples++;
+            var rain = Number(cond.rain_mm) || 0;
+            var snow = Number(cond.snowfall_cm) || 0;
+            var wind = Number(cond.wind_speed_kmh) || 0;
+            var fog = Number(cond.fog_intensity) || 0;
+            var cloud = Number(cond.cloud_cover_pct) || 0;
+            var temp = Number(cond.temperature_c);
+            if (rain > peakRain) peakRain = rain;
+            if (snow > peakSnow) peakSnow = snow;
+            if (wind > peakWind) peakWind = wind;
+            if (fog > peakFog) peakFog = fog;
+            sumCloud += cloud;
+            sumTemp += isFinite(temp) ? temp : 15;
+            if (rain >= rainThresh) rainCount++;
+            if (wind >= windThresh) windCount++;
+            if (rain > maxRain) maxRain = rain;
+            if (wind > maxWind) maxWind = wind;
+
+            if (!isNaN(baseMs) && typeof window.SunCalc !== 'undefined') {
+              try {
+                var sampleDate = new Date(baseMs + t * 1000);
+                var coordIdx = 0;
+                if (Array.isArray(timeOffsets) && timeOffsets.length > 1) {
+                  var lo = 0, hi = timeOffsets.length - 1;
+                  while (lo < hi) { var mid2 = (lo + hi) >>> 1; if (timeOffsets[mid2] < t) lo = mid2 + 1; else hi = mid2; }
+                  coordIdx = lo;
+                }
+                var slat = (coords[coordIdx] && typeof coords[coordIdx][1] === 'number') ? coords[coordIdx][1] : 0;
+                var slon = (coords[coordIdx] && typeof coords[coordIdx][0] === 'number') ? coords[coordIdx][0] : 0;
+                var sunPos = window.SunCalc.getPosition(sampleDate, slat, slon);
+                if (sunPos && sunPos.altitude < 0) nightCount++;
+              } catch (_) {}
+            }
+          }
+
+          var total = validSamples || 1;
+          var avgCloud = sumCloud / total;
+          var avgTemp = sumTemp / total;
+          var rainPrevalence = rainCount / total;
+          var windPrevalence = windCount / total;
+          var hasNight = nightCount > total / 2;
+
+          var emoji, conditionKey;
+          if (peakSnow >= 2 && peakWind >= 30) {
+            emoji = '\u2744\uFE0F'; conditionKey = 'blizzard';
+          } else if (peakSnow >= snowThresh) {
+            emoji = '\uD83C\uDF28\uFE0F'; conditionKey = 'snow';
+          } else if (peakRain >= 5) {
+            emoji = '\u26C8\uFE0F'; conditionKey = 'thunderstorm';
+          } else if (peakRain >= rainThresh && rainPrevalence >= 0.1) {
+            emoji = '\uD83C\uDF27\uFE0F'; conditionKey = 'rain';
+          } else if (peakRain >= rainThresh) {
+            emoji = '\uD83C\uDF26\uFE0F'; conditionKey = 'drizzle';
+          } else if (peakFog >= fogThresh) {
+            emoji = '\uD83C\uDF2B\uFE0F'; conditionKey = 'fog';
+          } else if (peakWind >= windThresh && windPrevalence >= 0.5) {
+            emoji = '\uD83D\uDCA8'; conditionKey = 'wind';
+          } else if (avgCloud >= cloudThresh) {
+            emoji = '\u2601\uFE0F'; conditionKey = 'overcast';
+          } else if (avgCloud >= 25) {
+            emoji = '\uD83C\uDF24\uFE0F'; conditionKey = 'partlycloudy';
+          } else {
+            emoji = '\u2600\uFE0F'; conditionKey = 'sunny';
+          }
+
+          var label;
+          if (!isNaN(baseMs) && hasTimestamps) {
+            var sDate = new Date(baseMs + startSec * 1000);
+            var eDate = new Date(baseMs + endSec * 1000);
+            label = padTwo(sDate.getHours()) + ':' + padTwo(sDate.getMinutes()) + '\u2013' + padTwo(eDate.getHours()) + ':' + padTwo(eDate.getMinutes());
+          } else {
+            var sMin = Math.round(startSec / 60);
+            var eMin = Math.round(endSec / 60);
+            label = sMin + '\u2013' + eMin + ' min';
+          }
+
+          slices.push({
+            startSec: startSec,
+            endSec: endSec,
+            label: label,
+            emoji: emoji,
+            conditionKey: conditionKey,
+            avgTemp: Math.round(avgTemp),
+            maxRain: maxRain,
+            maxWind: Math.round(maxWind),
+            hasNight: hasNight
+          });
+        }
+        return slices;
+      }
+
+      function renderWeatherOverviewPanel(panelEl, slices, i18n) {
+        var existing = panelEl.querySelectorAll('.fgpx-weather-overview-card');
+        for (var ri = existing.length - 1; ri >= 0; ri--) {
+          panelEl.removeChild(existing[ri]);
+        }
+        var condLabels = {
+          'sunny': (i18n && i18n.weatherOverviewClear) || 'Clear / Sunny',
+          'partlycloudy': (i18n && i18n.weatherOverviewPartCloudCond) || 'Partly Cloudy',
+          'overcast': (i18n && i18n.weatherOverviewCloudCond) || 'Overcast',
+          'drizzle': (i18n && i18n.weatherOverviewDrizzleCond) || 'Drizzle',
+          'rain': (i18n && i18n.weatherOverviewRainCond) || 'Rain',
+          'thunderstorm': (i18n && i18n.weatherOverviewStormCond) || 'Heavy Rain',
+          'snow': (i18n && i18n.weatherOverviewSnowCond) || 'Snow',
+          'blizzard': (i18n && i18n.weatherOverviewBlizCond) || 'Blizzard',
+          'fog': (i18n && i18n.weatherOverviewFogCond) || 'Fog',
+          'wind': (i18n && i18n.weatherOverviewWindCond) || 'Wind'
+        };
+        for (var ci = 0; ci < slices.length; ci++) {
+          var sl = slices[ci];
+          var card = createEl('div', 'fgpx-weather-overview-card');
+          var emojiSpan = createEl('span', 'fgpx-weather-overview-emoji');
+          emojiSpan.setAttribute('role', 'img');
+          emojiSpan.setAttribute('aria-label', condLabels[sl.conditionKey] || sl.conditionKey);
+          emojiSpan.textContent = sl.emoji + (sl.hasNight ? ' \uD83C\uDF19' : '');
+          card.appendChild(emojiSpan);
+          var labelEl = createEl('div', 'fgpx-weather-overview-label');
+          labelEl.textContent = sl.label;
+          card.appendChild(labelEl);
+          var tempEl = createEl('div', 'fgpx-weather-overview-temp');
+          tempEl.textContent = sl.avgTemp + '\u00B0C';
+          card.appendChild(tempEl);
+          if (sl.maxRain > 0) {
+            var rainEl = createEl('div', 'fgpx-weather-overview-detail');
+            rainEl.textContent = '\uD83D\uDCA7 ' + sl.maxRain.toFixed(1) + ' mm';
+            card.appendChild(rainEl);
+          }
+          if (sl.maxWind > 0) {
+            var windEl = createEl('div', 'fgpx-weather-overview-detail');
+            windEl.textContent = '\uD83D\uDCA8 ' + sl.maxWind + ' km/h';
+            card.appendChild(windEl);
+          }
+          panelEl.appendChild(card);
+        }
       }
 
       function distanceAtPlaybackTime(sec) {
@@ -10470,6 +10678,11 @@
             updateWeatherCinema(_cinemaEl, payload, lastPlaybackSec || 0, playing || false, false);
           }
         }
+        // Update weather overview playhead if that tab is active
+        if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead && totalDuration) {
+          var phPct = Math.max(0, Math.min(1, tOffset / totalDuration));
+          ui.weatherOverviewPlayhead.style.left = (phPct * 100) + '%';
+        }
         // If photos are enabled with timestamps, show overlay when marker reaches the photo time
         try {
           if (FGPX.photosEnabled && Array.isArray(photos) && photos.length>0 && hasTimestamps && totalDuration != null) {
@@ -11720,6 +11933,10 @@
               seekCinemaEl._lastUpdate = 0;
               updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
             }
+          }
+          if (currentChartTab === 'weatheroverview' && ui.weatherOverviewPlayhead && totalDuration) {
+            var seekPhPct = Math.max(0, Math.min(1, tOffset / totalDuration));
+            ui.weatherOverviewPlayhead.style.left = (seekPhPct * 100) + '%';
           }
         } catch (_) {}
         // Preserve playback state when seeking - don't auto-start if was paused

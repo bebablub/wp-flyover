@@ -1399,3 +1399,111 @@
 .fgpx[data-fgpx-theme="dark"] .fgpx-map-mode-button-active .fgpx-map-mode-button-icon {
   color: #111 !important;
 }
+
+.fgpx .fgpx-weather-overview-panel {
+  display: none;
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  justify-content: center;
+  align-items: stretch;
+  min-height: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fafbfc;
+  border-top: 1px solid #eceff3;
+  box-sizing: border-box;
+}
+
+.fgpx .fgpx-weather-overview-card {
+  flex: 1 1 80px;
+  max-width: 140px;
+  min-width: 72px;
+  text-align: center;
+  padding: 10px 8px 8px;
+  border-radius: 8px;
+  background: #f0f2f5;
+  border: 1px solid #dde1e7;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.fgpx .fgpx-weather-overview-emoji {
+  font-size: 2.2rem;
+  line-height: 1.1;
+  display: block;
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+}
+
+.fgpx .fgpx-weather-overview-label {
+  font-size: 11px;
+  color: #666;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.fgpx .fgpx-weather-overview-temp {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.fgpx .fgpx-weather-overview-detail {
+  font-size: 11px;
+  color: #555;
+  line-height: 1.2;
+}
+
+.fgpx .fgpx-weather-overview-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  left: 0;
+  background: rgba(37, 99, 235, 0.75);
+  pointer-events: none;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 480px) {
+  .fgpx .fgpx-weather-overview-panel {
+    gap: 6px;
+    padding: 8px;
+  }
+  .fgpx .fgpx-weather-overview-card {
+    flex: 1 1 60px;
+    max-width: 110px;
+    padding: 8px 6px;
+  }
+  .fgpx .fgpx-weather-overview-emoji {
+    font-size: 1.8rem;
+  }
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-panel {
+  background: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-card {
+  background: #252d3d;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-label {
+  color: #9ca3af;
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-temp {
+  color: #e5e7eb;
+}
+
+.fgpx[data-fgpx-theme="dark"] .fgpx-weather-overview-detail {
+  color: #9ca3af;
+}

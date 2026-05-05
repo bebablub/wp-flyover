@@ -485,7 +485,7 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('weathergrade tab is guarded when weather data is unavailable', () => {
-    expect(FRONT_SRC.includes("if (tabType === 'weathergrade' && !weatherGradeAvailable)")).toBe(true);
+    expect(FRONT_SRC.includes("(tabType === 'weathergrade' || tabType === 'weatheroverview') && !weatherGradeAvailable")).toBe(true);
     expect(FRONT_SRC.includes("ui.tabs.tabWeatherGrade.style.display = 'none';")).toBe(true);
   });
 
