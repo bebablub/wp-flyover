@@ -399,6 +399,13 @@ if (!function_exists('site_url')) {
     }
 }
 
+if (!function_exists('rest_url')) {
+    function rest_url(string $path = ''): string
+    {
+        return 'https://example.test/wp-json/' . ltrim($path, '/');
+    }
+}
+
 if (!function_exists('trailingslashit')) {
     function trailingslashit(string $string): string
     {

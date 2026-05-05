@@ -168,6 +168,7 @@ final class CLI
 		update_post_meta($postId, 'fgpx_total_distance_m', (float) ($parse['stats']['total_distance_m'] ?? 0));
 		update_post_meta($postId, 'fgpx_moving_time_s', (float) ($parse['stats']['moving_time_s'] ?? 0));
 		update_post_meta($postId, 'fgpx_elevation_gain_m', (float) ($parse['stats']['elevation_gain_m'] ?? 0));
+		update_post_meta($postId, 'fgpx_max_speed_m_s', (float) ($parse['stats']['max_speed_m_s'] ?? 0));
 
 		// Enrich with weather data if enabled
 		\FGpx\Admin::enrichWithWeather($postId, $parse['geojson']);
@@ -180,6 +181,8 @@ final class CLI
 		}
 
 		\FGpx\Admin::clear_all_track_caches($postId);
+		\FGpx\Statistics::invalidate_cache();
+		\FGpx\GalleryShortcode::invalidate_tracks_cache();
 		\WP_CLI::success('Track imported. ID: ' . (int) $postId);
 
 		$host = (int) (\WP_CLI\Utils\get_flag_value($assoc_args, 'post', 0) ?? 0);

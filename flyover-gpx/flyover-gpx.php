@@ -95,6 +95,7 @@ require_once FGPX_DIR_PATH . 'includes/AssetManager.php';    // Asset loading an
 require_once FGPX_DIR_PATH . 'includes/DatabaseOptimizer.php'; // Database performance optimizations
 require_once FGPX_DIR_PATH . 'includes/Plugin.php';          // Core plugin functionality
 require_once FGPX_DIR_PATH . 'includes/GalleryShortcode.php'; // Track gallery shortcode
+require_once FGPX_DIR_PATH . 'includes/Statistics.php';      // Multi-track statistics shortcode and endpoints
 require_once FGPX_DIR_PATH . 'includes/Rest.php';            // REST API endpoints
 require_once FGPX_DIR_PATH . 'includes/GMediaCaptionSync.php'; // Grand Media caption sync service
 require_once FGPX_DIR_PATH . 'includes/Admin.php';           // Admin interface and upload handling
@@ -117,6 +118,9 @@ require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line int
 
     $gallery = new GalleryShortcode();
     $gallery->register();
+
+    $statistics = new Statistics();
+    $statistics->register();
 
     $rest = new Rest();
     $rest->register();

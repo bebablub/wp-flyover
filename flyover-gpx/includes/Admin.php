@@ -20,6 +20,7 @@ final class Admin
 	{
 		\add_action('admin_menu', [$this, 'register_settings_page']);
 		\add_action('admin_menu', [$this, 'register_add_new_track_page']);
+		\add_action('admin_menu', [$this, 'register_statistics_page']);
 		\add_action('admin_enqueue_scripts', [$this, 'admin_enqueue']);
 		\add_action('admin_post_fgpx_upload', [$this, 'handle_upload_form']);
 		\add_action('admin_post_fgpx_save_settings', [$this, 'handle_save_settings']);
@@ -330,6 +331,21 @@ final class Admin
 			'upload_files',
 			'fgpx-add-new-track',
 			[$this, 'render_add_new_track_page']
+		);
+	}
+
+	/**
+	 * Add a statistics dashboard page under the Tracks menu.
+	 */
+	public function register_statistics_page(): void
+	{
+		\add_submenu_page(
+			'edit.php?post_type=fgpx_track',
+			\esc_html__('Track Statistics', 'flyover-gpx'),
+			\esc_html__('Statistics', 'flyover-gpx'),
+			'manage_options',
+			'fgpx-statistics',
+			[$this, 'render_statistics_page']
 		);
 	}
 
@@ -1048,6 +1064,22 @@ final class Admin
 	}
 
 	/**
+	 * Render the statistics dashboard page.
+	 */
+	public function render_statistics_page(): void
+	{
+		if (!\current_user_can('manage_options')) {
+			\wp_die(\esc_html__('You do not have permission to access this page.', 'flyover-gpx'));
+		}
+
+		echo '<div class="wrap">';
+		echo '<h1>' . \esc_html__('Track Statistics', 'flyover-gpx') . '</h1>';
+		echo '<p>' . \esc_html__('Overview of all published tracks, trends, and heatmap density.', 'flyover-gpx') . '</p>';
+		echo '<div id="fgpx-stats-admin-root" class="fgpx-stats-root fgpx-stats-admin" style="--fgpx-stats-height:620px;"></div>';
+		echo '</div>';
+	}
+
+	/**
 	 * Handle upload form submission: validate, store, parse, and create track post.
 	 */
 	public function handle_upload_form(): void
@@ -1186,6 +1218,7 @@ final class Admin
 			'fgpx_total_distance_m' => (float) ($parse['stats']['total_distance_m'] ?? 0),
 			'fgpx_moving_time_s' => (float) ($parse['stats']['moving_time_s'] ?? 0),
 			'fgpx_elevation_gain_m' => (float) ($parse['stats']['elevation_gain_m'] ?? 0),
+			'fgpx_max_speed_m_s' => (float) ($parse['stats']['max_speed_m_s'] ?? 0),
 		];
 		DatabaseOptimizer::bulkUpdatePostMeta($postId, $initialMeta);
 
@@ -3286,7 +3319,7 @@ final class Admin
 	if (!$screen) { return; }
 	
 	// Enqueue admin.js and CSS on relevant pages
-	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track'];
+	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track', 'fgpx_track_page_fgpx-statistics'];
 	if (in_array($screen->id, $relevant_pages, true)) {
 		\wp_enqueue_script('jquery');
 		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.4', true);
@@ -3310,6 +3343,44 @@ final class Admin
 			'snapshotHeight' => 630,
 			'bulkMaxTracks' => 25,
 			'bulkPauseMs' => 200,
+		]);
+	}
+
+	if ($screen->id === 'fgpx_track_page_fgpx-statistics') {
+		$statistics = new Statistics();
+		$statistics->enqueue_assets();
+
+		\wp_localize_script('fgpx-stats', 'FGPXStatsAdmin', [
+			'rootId' => 'fgpx-stats-admin-root',
+			'endpointUrl' => \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate')),
+			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
+			'ajaxAction' => 'fgpx_stats',
+			'maxPoints' => 15000,
+			'showCharts' => true,
+			'showHeatmap' => true,
+			'mapStyle' => 'https://demotiles.maplibre.org/style.json',
+			'strings' => [
+				'loading' => \esc_html__('Loading statistics...', 'flyover-gpx'),
+				'failed' => \esc_html__('Could not load statistics.', 'flyover-gpx'),
+				'tracks' => \esc_html__('Tracks', 'flyover-gpx'),
+				'distance' => \esc_html__('Distance', 'flyover-gpx'),
+				'elevation' => \esc_html__('Elevation gain', 'flyover-gpx'),
+				'avgSpeed' => \esc_html__('Avg speed', 'flyover-gpx'),
+				'maxSpeed' => \esc_html__('Max speed', 'flyover-gpx'),
+				'avgDistance' => \esc_html__('Avg distance', 'flyover-gpx'),
+				'maxDistance' => \esc_html__('Max distance', 'flyover-gpx'),
+				'avgElevation' => \esc_html__('Avg elevation', 'flyover-gpx'),
+				'maxElevation' => \esc_html__('Max elevation', 'flyover-gpx'),
+				'chartDistanceByMonth' => \esc_html__('Distance by Month', 'flyover-gpx'),
+				'chartTracksByMonth' => \esc_html__('Tracks by Month', 'flyover-gpx'),
+				'chartTracksByYear' => \esc_html__('Tracks by Year', 'flyover-gpx'),
+				'chartDistanceKm' => \esc_html__('Distance (km)', 'flyover-gpx'),
+				'chartTracks' => \esc_html__('Tracks', 'flyover-gpx'),
+				'heatmapTitle' => \esc_html__('All Tracks Heatmap', 'flyover-gpx'),
+				'noTracks' => \esc_html__('No published tracks yet.', 'flyover-gpx'),
+				'noTrendData' => \esc_html__('No trend data available yet.', 'flyover-gpx'),
+				'noHeatmapData' => \esc_html__('No track points available for heatmap yet.', 'flyover-gpx'),
+			],
 		]);
 	}
 	
@@ -3375,6 +3446,7 @@ final class Admin
 		$minElev = null;
 		$maxElev = null;
 		$movingTime = 0.0; // seconds
+		$maxSpeedMs = 0.0;
 		$prev = null;
 		$rawElevations = [];
 
@@ -3421,6 +3493,7 @@ final class Admin
 						$dt = ($time !== null && $prev['time'] !== null) ? max(0, $time - $prev['time']) : 0;
 						if ($dt > 0) {
 							$speed = $d / $dt; // m/s
+							if ($speed > $maxSpeedMs) { $maxSpeedMs = $speed; }
 							if ($speed > 0.5) { // simple moving threshold
 								$movingTime += $dt;
 							}
@@ -3509,6 +3582,7 @@ final class Admin
 			'total_distance_m' => $totalDistance,
 			'moving_time_s' => $movingTime,
 			'average_speed_m_s' => $avgSpeed,
+			'max_speed_m_s' => $maxSpeedMs,
 			'elevation_gain_m' => $totalElevationGain,
 			'min_elevation_m' => $minElev,
 			'max_elevation_m' => $maxElev,
@@ -4096,6 +4170,7 @@ final class Admin
 		\delete_transient('fgpx_json_v2_' . (int) $postId . '_' . $modified . '_hp_0_simp_0');
 		// Invalidate gallery track list so the new/updated track appears immediately.
 		\FGpx\GalleryShortcode::invalidate_tracks_cache();
+		\FGpx\Statistics::invalidate_cache();
 	}
 
 	/**
@@ -4106,6 +4181,12 @@ final class Admin
 		// Invalidate cache for file path, weather, and preview metadata changes.
 		$trackedKeys = [
 			'fgpx_file_path',
+			'fgpx_stats',
+			'fgpx_total_distance_m',
+			'fgpx_moving_time_s',
+			'fgpx_elevation_gain_m',
+			'fgpx_max_speed_m_s',
+			'fgpx_geojson',
 			'fgpx_weather_points',
 			'fgpx_weather_summary',
 			'fgpx_preview_attachment_id',
@@ -4207,6 +4288,7 @@ final class Admin
 		\delete_transient('fgpx_json_' . $trackId . '_' . $modified);
 		// Invalidate gallery track list.
 		\FGpx\GalleryShortcode::invalidate_tracks_cache();
+		\FGpx\Statistics::invalidate_cache();
 	}
 
 	/**
