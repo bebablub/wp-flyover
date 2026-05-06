@@ -348,27 +348,42 @@ final class AssetManager
 		document.head.appendChild(element);
 	}
 
+	function checkAssetWithRetry(assetId, warningText, isCSS, attempt, maxAttempts, delayMs) {
+		var curAttempt = attempt || 1;
+		var maxTry = maxAttempts || 4;
+		var delay = delayMs || 250;
+		if (fallbacks[assetId].check()) {
+			return;
+		}
+		if (curAttempt < maxTry) {
+			setTimeout(function() {
+				checkAssetWithRetry(assetId, warningText, isCSS, curAttempt + 1, maxTry, delay);
+			}, delay);
+			return;
+		}
+		if (isCSS) {
+			// CSS application can lag behind script readiness; run one final grace check.
+			setTimeout(function() {
+				if (fallbacks[assetId].check()) {
+					return;
+				}
+				console.warn(warningText);
+				loadFallback(assetId, fallbacks[assetId].urls.slice(), true);
+			}, 450);
+			return;
+		}
+		console.warn(warningText);
+		loadFallback(assetId, fallbacks[assetId].urls.slice(), !!isCSS);
+	}
+
 	// Check assets after DOM is ready
 	function checkAssets() {
-		// Check MapLibre GL JS
-		if (!fallbacks['maplibre-gl-js'].check()) {
-			console.warn('Flyover GPX: MapLibre GL JS not loaded, trying fallbacks');
-			loadFallback('maplibre-gl-js', fallbacks['maplibre-gl-js'].urls.slice(), false);
-		}
-		
-		// Check Chart.js
-		if (!fallbacks['chartjs'].check()) {
-			console.warn('Flyover GPX: Chart.js not loaded, trying fallbacks');
-			loadFallback('chartjs', fallbacks['chartjs'].urls.slice(), false);
-		}
-		
-		// Check MapLibre CSS (delayed to allow styles to apply)
+		checkAssetWithRetry('maplibre-gl-js', 'Flyover GPX: MapLibre GL JS not loaded, trying fallbacks', false, 1, 5, 250);
+		checkAssetWithRetry('chartjs', 'Flyover GPX: Chart.js not loaded, trying fallbacks', false, 1, 5, 250);
+		// CSS can apply slightly later than script globals; start after a small initial delay.
 		setTimeout(function() {
-			if (!fallbacks['maplibre-gl-css'].check()) {
-				console.warn('Flyover GPX: MapLibre GL CSS not loaded, trying fallbacks');
-				loadFallback('maplibre-gl-css', fallbacks['maplibre-gl-css'].urls.slice(), true);
-			}
-		}, 100);
+			checkAssetWithRetry('maplibre-gl-css', 'Flyover GPX: MapLibre GL CSS not loaded, trying fallbacks', true, 1, 7, 300);
+		}, 150);
 	}
 
 	// Run checks when DOM is ready
