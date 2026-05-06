@@ -128,6 +128,7 @@ final class TimelineShortcode
         if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
             $photoOrderMode = 'geo_first';
         }
+        $debugLogging = (($options['fgpx_debug_logging'] ?? '0') === '1');
 
         $themeMode = \sanitize_key((string) ($options['fgpx_theme_mode'] ?? 'system'));
         if ($themeMode === 'dark') {
@@ -184,6 +185,7 @@ final class TimelineShortcode
                     'zoom15' => (int) ($options['fgpx_weather_heatmap_zoom15'] ?? '5000'),
                 ],
                 'daynightVisibleByDefault' => (($options['fgpx_daynight_visible_by_default'] ?? '0') === '1'),
+                'debugLogging' => $debugLogging,
                 'photosEnabled' => true,
                 'photoOrderMode' => $photoOrderMode,
                 'galleryPhotoStrategy' => 'latest_embed',
@@ -207,6 +209,7 @@ final class TimelineShortcode
             // Keep both keys for backward compatibility with earlier timeline config.
             'resolvedApiKey' => (string) $resolvedApiKey,
             'apiKey' => (string) $resolvedApiKey,
+            'debugLogging' => $debugLogging,
             'photoOrderMode' => $photoOrderMode,
             'preferAjaxFirst' => (($options['fgpx_ajax_first'] ?? '0') === '1'),
             'playerConfig' => $playerConfig,

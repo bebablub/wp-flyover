@@ -25,6 +25,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Privacy mode (hide first/last N km for playback window only)
 - Dark mode‑friendly UI
 - Gallery with tile/list view, Searchable, filterable, orderable
+- Timeline with horizontal and vertical view, overlay player
 - Admin tools: Add New Track page, sortable stats, live preview
 - Configurable defaults (height, zoom, pitch, chart colors, elevation coloring)
 - Custom styling: inline style.json or vector style URL; OSM raster fallback
@@ -101,15 +102,21 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 
 ## Installation
 
-1. Copy the `flyover-gpx` directory into your WordPress `wp-content/plugins` folder.
-2. If developing from source, install dependencies:
+### Prebuild
+
+1. Download release
+2. Upload release at Wordpress → Plugins → Add Plugins
+
+### Build from scratch
+
+1. Checkout sources
+2. Package files
 
 ```bash
-cd wp-content/plugins/flyover-gpx
-composer install --no-interaction --no-dev
+scripts/package.sh
 ```
 
-3. Activate the plugin in WordPress → Plugins.
+3. Upload release at Wordpress → Plugins → Add Plugins
 
 ## Getting Started
 
@@ -284,6 +291,41 @@ Examples:
 [flyover_gpx_gallery show_search="0" default_sort="distance"]
 [flyover_gpx_gallery photo_order_mode="time_first"]
 ```
+---
+
+## Timeline View
+Embed a browsable timeline of all tracks with inline player and month/year navigation:
+
+```text
+[flyover_gpx_timeline]
+```
+
+Parameters (all optional):
+
+- `height` (timeline height, e.g. `400px`, default `400px`)
+- `per_month` (max tracks per month, default `12`)
+- `style` (`raster` or `vector`)
+- `style_url` (MapLibre style URL)
+- `show_search` (`1` or `0`, default `1`)
+- `default_sort` (`newest|distance|duration|gain|title`, default `newest`)
+
+Default resolution order:
+- Shortcode attribute value (if provided)
+- Admin Timeline defaults (Settings → Flyover GPX)
+- Built-in fallback
+
+Features:
+- Horizontal scrollable timeline with month/year headers
+- Hover preview and quick open in inline player
+- Keyboard navigation, mobile/desktop responsive
+- Card style, hover effect, and title font match gallery
+- Debug logging toggle (respects admin setting)
+
+Example:
+```text
+[flyover_gpx_timeline height="350px" per_month="8" style="vector" show_search="0"]
+```
+---
 ### Inline Style JSON (Admin)
 
 You can paste a complete MapLibre `style.json` into Settings → Flyover GPX → Shortcode Defaults → “Inline style JSON (optional)”.

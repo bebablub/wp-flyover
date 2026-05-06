@@ -8,7 +8,22 @@
 (function() {
 	'use strict';
 
-	var DBG = window.DBG || function() {}; // Forward reference to debug logging
+	function isTimelineDebugEnabled() {
+		return !!(window.FGPX && window.FGPX.debugLogging);
+	}
+
+	function DBG() {
+		if (typeof window.DBG === 'function') {
+			window.DBG.apply(window, arguments);
+			return;
+		}
+		if (!isTimelineDebugEnabled() || !window.console || typeof window.console.log !== 'function') {
+			return;
+		}
+		var args = Array.prototype.slice.call(arguments);
+		args.unshift('[FGPX Timeline]');
+		window.console.log.apply(window.console, args);
+	}
 
 	// ---- Asset loading (same pattern as gallery.js) ----
 
@@ -169,6 +184,8 @@
 	 * @param {Object} config - Configuration object with REST URL, orientation, etc.
 	 */
 	function initTimeline(container, config) {
+		// Seed global config (including debugLogging) before first log message.
+		applyPlayerConfig(config);
 		DBG('Timeline init', { rootId: config.rootId, orientation: config.orientation });
 		applyTimelineCssVariables(container, config);
 
