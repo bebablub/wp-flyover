@@ -1969,23 +1969,50 @@
       var progressiveBaseColor = (window.FGPX && FGPX.elevationColorFlat) || '#ff5500';
       var progressiveSteepColor = (window.FGPX && FGPX.elevationColorSteep) || '#ff0000';
       var progressiveSegmentCounter = 0;
+      var SEGMENT_POOL_SIZE = 20;
+      var segmentPoolReady = false;
       
       if (elevationColoringEnabled && coords.length > 1) {
         progressiveGradients = calculateGradients(coords, cumDist);
         progressiveSmoothedGradients = smoothGradients(progressiveGradients, 5);
       }
 
-      // Helper function to clean up progressive segments
-      function cleanupProgressiveSegments() {
-        if (progressSegments.length > 0) {
-          for (var segIdx = 0; segIdx < progressSegments.length; segIdx++) {
-            try {
-              map.removeLayer('fgpx-progress-segment-' + segIdx);
-              map.removeSource('fgpx-progress-segment-' + segIdx);
-            } catch(_) {}
-          }
-          progressSegments = [];
+      // Pre-allocate a fixed pool of segment sources/layers at init.
+      // During playback we only call setData() — never add/remove layers.
+      var emptyFeatureCollection = { type: 'FeatureCollection', features: [] };
+      function initSegmentPool() {
+        for (var i = 0; i < SEGMENT_POOL_SIZE; i++) {
+          var srcId = 'fgpx-progress-segment-' + i;
+          var layId = 'fgpx-progress-segment-' + i;
+          try {
+            map.addSource(srcId, { type: 'geojson', data: emptyFeatureCollection });
+            var layerCfg = {
+              id: layId,
+              type: 'line',
+              source: srcId,
+              layout: { 'line-join': 'round', 'line-cap': 'round' },
+              paint: { 'line-color': progressiveBaseColor, 'line-width': 4, 'line-blur': 0.3 }
+            };
+            if (map.getLayer('fgpx-point-circle')) {
+              map.addLayer(layerCfg, 'fgpx-point-circle');
+            } else {
+              map.addLayer(layerCfg);
+            }
+          } catch(_) {}
         }
+        segmentPoolReady = true;
+      }
+
+      // Helper function to clean up progressive segments (resets pool to empty data)
+      function cleanupProgressiveSegments() {
+        for (var segIdx = 0; segIdx < SEGMENT_POOL_SIZE; segIdx++) {
+          try {
+            var src = map.getSource('fgpx-progress-segment-' + segIdx);
+            if (src) src.setData(emptyFeatureCollection);
+          } catch(_) {}
+        }
+        progressSegments = [];
+        segmentLengthCache = [];
       }
 
       // Helper function to create elevation-colored progressive segments
@@ -2046,6 +2073,7 @@
       var progressData = { type: 'Feature', geometry: { type: 'LineString', coordinates: [(privacyEnabled ? positionAtDistance(privacyStartD) : coords[0].slice(0,2))] } };
       map.addSource('fgpx-route-progress', { type: 'geojson', data: progressData });
       map.addLayer({ id: 'fgpx-route-progress-line', type: 'line', source: 'fgpx-route-progress', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ((window.FGPX && FGPX.elevationColorFlat) || (window.FGPX && FGPX.chartColor) || '#ff5500'), 'line-width': 4, 'line-blur': 0.3 } });
+
       if (arrowsEnabled && totalDistance > 0) {
         try {
           map.addLayer({
@@ -2064,6 +2092,11 @@
             }
           });
         } catch(e) { DBG.warn('Driven route arrows skipped', e); }
+      }
+
+      // Initialize the pre-allocated segment pool for elevation-colored progress line
+      if (elevationColoringEnabled) {
+        try { initSegmentPool(); } catch(_) {}
       }
 
       // Create colored arrow icons for different wind speeds and sizes
@@ -3754,6 +3787,7 @@
       var preloadOverlay = null;
       var preloadCompleted = false;
       var preloadingInProgress = false;
+      var preloadOverlayVisible = false;
       
       try {
         preloadOverlay = document.createElement('div');
@@ -3762,6 +3796,28 @@
         preloadOverlay.textContent = 'Preloading map tiles for smooth playback…';
         ui.mapEl.appendChild(preloadOverlay);
       } catch(_) {}
+
+      function setPreloadOverlayText(text) {
+        try {
+          if (!preloadOverlay) return;
+          preloadOverlay.textContent = String(text || 'Preparing playback…');
+        } catch(_) {}
+      }
+      function showPreloadOverlay(text) {
+        try {
+          if (!preloadOverlay) return;
+          setPreloadOverlayText(text);
+          preloadOverlay.style.display = 'flex';
+          preloadOverlayVisible = true;
+        } catch(_) {}
+      }
+      function hidePreloadOverlay() {
+        try {
+          if (!preloadOverlay) return;
+          preloadOverlay.style.display = 'none';
+          preloadOverlayVisible = false;
+        } catch(_) {}
+      }
 
       function lon2tileX(lon, z){ return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
       function lat2tileY(lat, z){ var rad = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(rad) + 1/Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z)); }
@@ -3826,10 +3882,10 @@
           var PAD_TILES = 1;
           var cap = isFinite(Number(maxTiles)) ? Math.max(20, Math.round(Number(maxTiles))) : 300;
           var zUse = Math.max(1, Math.min(19, Math.round(z)));
-          // Sample along the privacy window every ~500m
+          // Sample along the privacy window every ~700m
           var dStart = privacyEnabled ? privacyStartD : 0;
           var dEnd = privacyEnabled ? privacyEndD : totalDistance;
-          var stepM = 500;
+          var stepM = 700;
           for (var dCur = dStart; dCur <= dEnd; dCur += stepM) {
             var p = positionAtDistance(dCur);
             var x = lon2tileX(p[0], zUse); var y = lat2tileY(p[1], zUse);
@@ -3852,29 +3908,26 @@
       function prefetchTilesForRoute() {
         if (preloadCompleted || preloadingInProgress) { return Promise.resolve(); }
         preloadingInProgress = true;
+        function finishPreload() {
+          preloadCompleted = true;
+          preloadingInProgress = false;
+          updateButtonStates();
+        }
         try {
           var templates = getPrefetchTileTemplates();
           if (!templates || templates.length === 0) {
-            preloadCompleted = true;
-            preloadingInProgress = false;
+            finishPreload();
             return Promise.resolve(); 
           }
           DBG.time('route-prefetch');
           DBG.log('route-prefetch start');
-          // Show preloading overlay with updated message
-          try { 
-            if (preloadOverlay) {
-              preloadOverlay.textContent = 'Preloading map tiles for smooth playback…';
-              preloadOverlay.style.display = 'flex'; 
-            } 
-          } catch(_) {}
           // Disable play buttons during preloading
           updateButtonStates();
           var reqs = [];
-          var timeoutMs = 4000;
+          var timeoutMs = 3500;
           var controller = null;
-          var totalTileBudget = 300;
-          var perTemplateBudget = Math.max(30, Math.floor(totalTileBudget / Math.max(1, templates.length)));
+          var totalTileBudget = 400;
+          var perTemplateBudget = Math.max(60, Math.floor(totalTileBudget / Math.max(1, templates.length)));
           templates.forEach(function(meta) {
             try {
               var zUse = clampPrefetchZoom(defaultZoomSetting, meta);
@@ -3891,18 +3944,10 @@
           });
           var prefetch = Promise.allSettled(reqs)
             .then(function(){ 
-              try { if (preloadOverlay) preloadOverlay.style.display = 'none'; } catch(_) {} 
-              preloadCompleted = true;
-              preloadingInProgress = false;
-              // Re-enable play buttons after preloading completes
-              updateButtonStates();
+              finishPreload();
             })
             .catch(function(){ 
-              try { if (preloadOverlay) preloadOverlay.style.display = 'none'; } catch(_) {} 
-              preloadCompleted = true;
-              preloadingInProgress = false;
-              // Re-enable play buttons after preloading fails
-              updateButtonStates();
+              finishPreload();
             })
             .finally(function(){
               DBG.log('route-prefetch finished');
@@ -3910,19 +3955,13 @@
             });
           var timed = new Promise(function(resolve){ 
             setTimeout(function() { 
-              preloadCompleted = true; 
-              preloadingInProgress = false;
-              // Re-enable play buttons after timeout
-              updateButtonStates();
+              finishPreload();
               resolve(); 
             }, timeoutMs); 
           });
           return Promise.race([prefetch, timed]);
         } catch(_) { 
-          preloadCompleted = true;
-          preloadingInProgress = false;
-          // Re-enable play buttons after error
-          updateButtonStates();
+          finishPreload();
           return Promise.resolve(); 
         }
       }
@@ -5591,6 +5630,63 @@
       // Dynamic viewport edge prefetcher (5–10 Hz), rotation-aware
       var vpLastPrefetch = 0; // seconds
       var vpInflightKeys = new Set();
+      var forwardPrefetchCooldown = 0; // seconds
+      var forwardPrefetchInflight = new Set();
+
+      // Prefetch tiles along the route ahead of current position.
+      // Helps high-speed playback (50x+) where camera outpaces normal viewport prefetch.
+      function prefetchForwardRoute(currentDist, speedMult) {
+        try {
+          var templates = getPrefetchTileTemplates();
+          if (!templates || templates.length === 0) return;
+          // Look ahead distance scales with speed: at 1x = 200m, at 100x = 2000m, capped at 4000m
+          var lookAhead = Math.max(200, Math.min(4000, 200 * Math.max(1, speedMult || 1)));
+          var dEnd = privacyEnabled ? privacyEndD : totalDistance;
+          var dTarget = Math.min(dEnd, currentDist + lookAhead);
+          if (dTarget <= currentDist) return;
+          var zNow = Math.round(map.getZoom ? map.getZoom() : defaultZoomSetting);
+          var levels = [zNow, zNow + 1];
+          var sampleStep = Math.max(150, Math.floor(lookAhead / 8));
+          var maxTiles = 80;
+          var keys = new Set();
+          for (var dCur = currentDist; dCur <= dTarget; dCur += sampleStep) {
+            var pt = positionAtDistance(dCur);
+            for (var li = 0; li < levels.length; li++) {
+              var zl = levels[li];
+              var tx = lon2tileX(pt[0], zl);
+              var ty = lat2tileY(pt[1], zl);
+              for (var dx = -1; dx <= 1; dx++) {
+                for (var dy = -1; dy <= 1; dy++) {
+                  keys.add(zl + '/' + (tx + dx) + '/' + (ty + dy));
+                  if (keys.size >= maxTiles) break;
+                }
+                if (keys.size >= maxTiles) break;
+              }
+              if (keys.size >= maxTiles) break;
+            }
+            if (keys.size >= maxTiles) break;
+          }
+          keys.forEach(function(key) {
+            if (forwardPrefetchInflight.has(key)) return;
+            forwardPrefetchInflight.add(key);
+            var parts = key.split('/');
+            var zt = parseInt(parts[0], 10);
+            var xt = parseInt(parts[1], 10);
+            var yt = parseInt(parts[2], 10);
+            templates.forEach(function(meta) {
+              try {
+                var z = clampPrefetchZoom(zt, meta);
+                if (z !== zt) return;
+                var url = tileUrlFromTemplate(meta.template, zt, xt, yt);
+                fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function(){});
+              } catch(_) {}
+            });
+            // Limit set growth — clear once it gets large
+            if (forwardPrefetchInflight.size > 800) forwardPrefetchInflight.clear();
+          });
+        } catch(_) {}
+      }
+
       function expandBounds(b, margin, bearingDeg) {
         try {
           var sw = b.getSouthWest(); var ne = b.getNorthEast();
@@ -6166,6 +6262,9 @@
       function startPlaybackWithPreload() {
         if (playing || preloadingInProgress) return;
         hideSplash();
+        playStartTrace = { startedAt: performance.now() };
+        showPreloadOverlay('Preloading map tiles…');
+        DBG.log('play-start stage', { stage: 'gate-open', dtMs: 0 });
         if (prefetchEnabled && !preloadCompleted) {
           // Start preloading and wait for it to complete before any animation/playback
           tilePrefetchPromise = prefetchTilesForRoute();
@@ -6173,23 +6272,49 @@
         // Also ensure DEM tiles are warmed before play (critical for terrain mesh — see prefetchDemForRoute).
         // Returns the same singleton promise if already in-flight; null if no terrain.
         var demWarmup = prefetchDemForRoute();
-        // Build a combined gate: raster preload + DEM warmup, each capped at 4 s so the user is never blocked longer
+        if (hasTerrain && demWarmup) {
+          setPreloadOverlayText('Preparing 3D terrain…');
+        }
+        // Build a combined gate: raster preload + DEM warmup with strict caps.
         var rasterGate = tilePrefetchPromise || Promise.resolve();
-        var demGate = demWarmup ? Promise.race([demWarmup, new Promise(function(r){ setTimeout(r, 4000); })]) : Promise.resolve();
-        var gateProm = Promise.all([rasterGate, demGate]).then(function(){});
+        var rasterTracked = rasterGate.then(function() {
+          if (playStartTrace && playStartTrace.startedAt) {
+            DBG.log('play-start stage', {
+              stage: 'raster-ready',
+              dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+            });
+          }
+        });
+        var demGate = demWarmup ? Promise.race([demWarmup, new Promise(function(r){ setTimeout(r, 2000); })]) : Promise.resolve();
+        var demTracked = demGate.then(function() {
+          if (playStartTrace && playStartTrace.startedAt) {
+            DBG.log('play-start stage', {
+              stage: 'dem-ready',
+              dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+            });
+          }
+        });
+        var gateProm = Promise.all([rasterTracked, demTracked]).then(function(){});
         function doStartAfterGate() {
           // After prefetch/DEM are done, wait for map to reach idle before zooming in.
           // This ensures MapLibre has finished rendering at the overview zoom before we begin
           // the zoom-in, so tiles at the playback zoom level are crisp from the start.
+          setPreloadOverlayText('Preparing playback…');
           var mapIdleWait = new Promise(function(resolve) {
             if (typeof map.isMoving === 'function' && !map.isMoving()) {
               map.once('idle', resolve);
-              setTimeout(resolve, 1500); // cap: don't block longer than 1.5s
+              setTimeout(resolve, 800); // cap: don't block longer than 0.8s
             } else {
               resolve();
             }
           });
           mapIdleWait.then(function() {
+            if (playStartTrace && playStartTrace.startedAt) {
+              DBG.log('play-start stage', {
+                stage: 'map-idle-ready',
+                dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+              });
+            }
             if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
             else { setPlaying(true); scheduleRaf(); }
           });
@@ -6198,6 +6323,7 @@
           gateProm.then(doStartAfterGate);
         } catch(_) { 
           // Fallback: start immediately if promise fails
+          hidePreloadOverlay();
           if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
           else { setPlaying(true); scheduleRaf(); } 
         }
@@ -10060,6 +10186,8 @@
       var tOffset = 0; // accumulated paused time in seconds
       var progress = 0; // 0..1 by distance
       var lastFrame = null;
+      var playStartTrace = null; // stage timing diagnostics for startup pipeline
+      var mapFadeDurationDefault = null; // original style fade duration restored on pause
       var bearing = null; // smoothed
       var defaultZoom = defaultZoomSetting; // default zoom level when starting/restarting
       var lastFrameDt = 0; // seconds
@@ -10070,6 +10198,11 @@
       var cameraCooldown = 0; // seconds throttle for camera updates
       var forceCameraUpdate = true; // ensure first frame centers on marker
       var appliedBearing = null; // last bearing actually applied
+      var cameraJumpedThisFrame = false; // prevent progress setData in same frame as jumpTo
+      var progressLineVisible = null; // track visibility state to avoid redundant toggles
+      var lastMarkerPx = null; // track marker screen position to skip redundant setData
+      var segmentLengthCache = []; // per-pool-slot last coord count, to skip unchanged setData
+      var progressArrowsCooldown = 0; // throttle progressData source updates when arrows are enabled
       var currentPosLngLat = null; // last computed marker lng/lat for snap-to-center on seek
       var firstPlayZoomPending = true; // animate zoom-in on first play after stop
 
@@ -10094,6 +10227,13 @@
 
       function zoomInThenStartPlayback() {
         DBG.log('zoomInThenStartPlayback trigger');
+        if (playStartTrace && playStartTrace.startedAt) {
+          DBG.log('play-start stage', {
+            stage: 'zoom-start',
+            dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+          });
+        }
+        setPreloadOverlayText('Zooming in…');
         try {
           // Restore terrain if it was disabled during end transition.
           if (hasTerrain && terrainTemporarilyDisabled && terrainSourceId) {
@@ -10110,23 +10250,58 @@
           bearing = startBearing;
           appliedBearing = startBearing;
           forceCameraUpdate = false;
+
+          // Pre-warm tiles at the TARGET zoom/center/bearing BEFORE the animation starts.
+          // This gives tiles ~3200ms to load during the ease transition.
+          try {
+            if (prefetchEnabled) {
+              prefetchViewportTiles(hasTerrain ? 0.3 : 0.4, !hasTerrain, startBearing);
+            }
+          } catch (_) {}
+
+          // Suppress tile fade-in during zoom transition to prevent blurriness
+          var origFadeDuration = null;
+          try {
+            if (map.style && typeof map.style.fadeDuration !== 'undefined') {
+              origFadeDuration = map.style.fadeDuration;
+              map.style.fadeDuration = 0;
+            }
+          } catch (_) {}
+
           var doEase = function(){
             map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 3200, easing: easeInOutCubic });
             map.once('moveend', function(){
               firstPlayZoomPending = false;
-              // Give terrain a moment to settle at the final zoom/bearing before the first playback frame
+              // Prefetch viewport tiles at final position for immediate sharpness
               try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, startBearing); } } catch (_) {}
               var started = false;
+              // Prefer idle (tiles loaded) but cap to keep startup snappy.
               var settleTimer = setTimeout(function(){
                 if (started) return;
                 started = true;
+                // Restore fade duration
+                try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
+                if (playStartTrace && playStartTrace.startedAt) {
+                  DBG.log('play-start stage', {
+                    stage: 'zoom-settle-timeout',
+                    dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+                  });
+                }
                 setPlaying(true);
                 scheduleRaf();
-              }, 800);
+              }, 1000);
               map.once('idle', function(){
                 if (started) return;
                 started = true;
                 try { clearTimeout(settleTimer); } catch (_) {}
+                // Restore fade duration
+                try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
+                if (playStartTrace && playStartTrace.startedAt) {
+                  DBG.log('play-start stage', {
+                    stage: 'zoom-settle-idle',
+                    dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+                  });
+                }
                 setPlaying(true);
                 scheduleRaf();
               });
@@ -10151,6 +10326,16 @@
           try { window.cancelAnimationFrame(rafId); } catch (_) {}
           rafId = null;
         }
+        // Suppress tile fade during playback to prevent ghosting/flicker;
+        // restore on pause so tile transitions look normal when idle.
+        try {
+          if (map.style && typeof map.style.fadeDuration !== 'undefined') {
+            if (mapFadeDurationDefault == null) {
+              mapFadeDurationDefault = map.style.fadeDuration;
+            }
+            map.style.fadeDuration = playing ? 0 : mapFadeDurationDefault;
+          }
+        } catch (_) {}
         try {
           var cinemaRoot = container || root;
           var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
@@ -10166,6 +10351,14 @@
           // Reset frame timer so dt doesn't include paused duration
           lastFrame = null;
           hideSplash();
+          hidePreloadOverlay();
+          if (playStartTrace && playStartTrace.startedAt) {
+            DBG.log('play-start stage', {
+              stage: 'playing',
+              dtMs: Math.round(performance.now() - playStartTrace.startedAt)
+            });
+            playStartTrace = null;
+          }
         }
       }
       
@@ -10209,6 +10402,10 @@
         progressLineCooldown = 0;
         progressLastDistance = privacyEnabled ? privacyStartD : 0;
         progressNeedLineInit = true;
+        progressLineVisible = null;
+        lastMarkerPx = null;
+        segmentLengthCache = [];
+        progressArrowsCooldown = 0;
         cleanupProgressiveSegments();
         updateVisuals(progress);
         setProgressBar(progress);
@@ -10357,7 +10554,20 @@
         var src = map.getSource('fgpx-point');
         if (src) {
           if (markerVisible) {
-            src.setData(pointData);
+            // Skip marker setData if on-screen position hasn't moved enough
+            var markerMoved = true;
+            try {
+              var curPx = map.project(pos);
+              if (lastMarkerPx) {
+                var mDx = curPx.x - lastMarkerPx.x;
+                var mDy = curPx.y - lastMarkerPx.y;
+                if ((mDx * mDx + mDy * mDy) < 0.25) { markerMoved = false; } // < 0.5px
+              }
+              if (markerMoved) { lastMarkerPx = curPx; }
+            } catch(_) { markerMoved = true; }
+            if (markerMoved) {
+              src.setData(pointData);
+            }
             // Ensure marker layer is visible
             if (map.getLayer('fgpx-point')) {
               map.setLayoutProperty('fgpx-point', 'visibility', 'visible');
@@ -10417,10 +10627,10 @@
                 if (dayNightOverlayState === null) {
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity-transition', { duration: 0, delay: 0 });
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
-                  // Restore transition for future smooth fades
-                  setTimeout(function() {
+                  // Restore transition after map settles (avoids double-repaint with setTimeout)
+                  map.once('idle', function() {
                     try { map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity-transition', { duration: 2000, delay: 0 }); } catch(_) {}
-                  }, 50);
+                  });
                 } else {
                   map.setPaintProperty('fgpx-daynight-overlay', 'fill-opacity', nightOpacity === 1 ? targetOpacity : 0);
                 }
@@ -10435,11 +10645,13 @@
         // update progressive route up to current position
         var routeProgSrc = map.getSource('fgpx-route-progress');
         if (routeProgSrc) {
-          // Throttle progress line updates to ~40 FPS or 10 m movement
+          // Throttle progress line updates — increased intervals to reduce flicker
           var needUpdate = progressNeedLineInit
-            || (!hasTerrain && (progressLineCooldown >= 0.083))
-            || (hasTerrain && (progressLineCooldown >= 0.12))
-            || (Math.abs(d - progressLastDistance) >= 10);
+            || (!hasTerrain && (progressLineCooldown >= 0.10))
+            || (hasTerrain && (progressLineCooldown >= (speed >= 50 ? 0.20 : 0.15)))
+            || (Math.abs(d - progressLastDistance) >= (hasTerrain ? 25 : 15));
+          // Defer progress update if a camera jumpTo happened this frame (avoid competing repaints)
+          if (needUpdate && cameraJumpedThisFrame) { needUpdate = false; }
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
             while (lo < hi) { var mid = (lo + hi) >>> 1; if (cumDist[mid] < d) lo = mid + 1; else hi = mid; }
@@ -10449,100 +10661,110 @@
             var loS = 0, hiS = cumDist.length - 1;
             while (loS < hiS) { var midS = (loS + hiS) >>> 1; if (cumDist[midS] < startD) loS = midS + 1; else hiS = midS; }
             var startIdx = privacyEnabled ? Math.max(1, loS) : 1;
-            var coordsUpTo = coords.slice(startIdx, i);
+
+            // Build coords slice from raw coords (1:1 indexing — no pre-smoothing).
+            // Backend RDP simplification + 4px line + line-blur:0.3 give visually smooth result.
+            var coordsUpTo = [];
+            for (var ci = startIdx; ci < i; ci++) {
+              coordsUpTo.push([coords[ci][0], coords[ci][1]]);
+            }
             // ensure the first point is exactly at the privacy start when enabled
             if (privacyEnabled) {
               var pStart = positionAtDistance(privacyStartD);
-              coordsUpTo.unshift([pStart[0], pStart[1], 0]);
+              coordsUpTo.unshift([pStart[0], pStart[1]]);
             }
+            // Append interpolated tip at exact current distance
             var d0 = cumDist[i - 1], d1 = cumDist[i] || d0;
             var t = d1 > d0 ? (d - d0) / (d1 - d0) : 0;
             var p0 = coords[i - 1], p1 = coords[i] || coords[i - 1];
             var interp = [lerp(p0[0], p1[0], t), lerp(p0[1], p1[1], t)];
             coordsUpTo.push(interp);
-            var rawUpTo = coordsUpTo.map(function(c){ return c.slice(0,2); });
-            var smoothedUpTo = smoothPolyline(rawUpTo, 2);
 
             // Create elevation-colored segments or single route
-            var segments = createProgressiveSegments(smoothedUpTo, startIdx);
-            if (segments && segments.length > 0) {
-              // Keep the progressive source in sync for driven route arrows,
-              // even when the visible line is rendered as elevation-colored segments.
-              progressData.geometry.coordinates = smoothedUpTo;
-              routeProgSrc.setData(progressData);
+            var segments = createProgressiveSegments(coordsUpTo, startIdx);
+            if (segments && segments.length > 0 && segmentPoolReady) {
+              // Skip progressData.setData when in segment mode unless driven arrows need it.
+              // When arrows are enabled, throttle the source update at half the frequency
+              // since arrow placement is expensive (symbol layout).
+              if (arrowsEnabled) {
+                progressArrowsCooldown += (lastFrameDt || 0.016);
+                if (progressArrowsCooldown >= 0.4 || progressNeedLineInit) {
+                  progressData.geometry.coordinates = coordsUpTo;
+                  routeProgSrc.setData(progressData);
+                  progressArrowsCooldown = 0;
+                }
+              }
 
-              // Use elevation-colored segments - update existing or create new
-              for (var segIdx = 0; segIdx < segments.length; segIdx++) {
+              // Update pre-allocated segment pool (no add/remove — only setData + paint).
+              // Skip setData on slots where the coord count hasn't changed (only the growing
+              // tip segment changes most frames; static earlier segments stay stable).
+              var usedCount = Math.min(segments.length, SEGMENT_POOL_SIZE);
+              for (var segIdx = 0; segIdx < usedCount; segIdx++) {
                 var segment = segments[segIdx];
                 var segmentColor = segment.gradeBucket > 0 ? 
                   blendHex(progressiveBaseColor, progressiveSteepColor, segment.gradeBucket) : 
                   progressiveBaseColor;
-                
-                var segmentData = {
-                  type: 'Feature',
-                  geometry: { type: 'LineString', coordinates: segment.coordinates }
-                };
-                var segmentSourceId = 'fgpx-progress-segment-' + segIdx;
-                var segmentLayerId = 'fgpx-progress-segment-' + segIdx;
-                
-                // Update existing source or create new one
-                var existingSource = map.getSource(segmentSourceId);
-                if (existingSource) {
-                  existingSource.setData(segmentData);
-                } else {
-                  map.addSource(segmentSourceId, { type: 'geojson', data: segmentData });
-                  var segmentLayerConfig = {
-                    id: segmentLayerId,
-                    type: 'line',
-                    source: segmentSourceId,
-                    layout: { 'line-join': 'round', 'line-cap': 'round' },
-                    paint: { 'line-color': segmentColor, 'line-width': 4, 'line-blur': 0.3 }
+
+                // Diff: only setData if coordinate count changed for this slot
+                var prevLen = segmentLengthCache[segIdx] || 0;
+                if (segment.coordinates.length !== prevLen) {
+                  var segmentData = {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: segment.coordinates }
                   };
-                  if (map.getLayer('fgpx-point-circle')) {
-                    map.addLayer(segmentLayerConfig, 'fgpx-point-circle');
-                  } else {
-                    map.addLayer(segmentLayerConfig);
-                  }
+                  var segSrc = map.getSource('fgpx-progress-segment-' + segIdx);
+                  if (segSrc) segSrc.setData(segmentData);
+                  segmentLengthCache[segIdx] = segment.coordinates.length;
                 }
+                // Update color only if it changed
+                try {
+                  var curColor = map.getPaintProperty('fgpx-progress-segment-' + segIdx, 'line-color');
+                  if (curColor !== segmentColor) {
+                    map.setPaintProperty('fgpx-progress-segment-' + segIdx, 'line-color', segmentColor);
+                  }
+                } catch(_) {}
               }
               
-              // Remove excess segments only if we have fewer segments now
-              var currentSegmentCount = progressSegments.length || 0;
-              if (segments.length < currentSegmentCount) {
-                for (var removeIdx = segments.length; removeIdx < currentSegmentCount; removeIdx++) {
-                  try {
-                    map.removeLayer('fgpx-progress-segment-' + removeIdx);
-                    map.removeSource('fgpx-progress-segment-' + removeIdx);
-                  } catch(_) {}
+              // Clear unused pool slots with empty data (only if previously populated)
+              for (var emptyIdx = usedCount; emptyIdx < SEGMENT_POOL_SIZE; emptyIdx++) {
+                if ((segmentLengthCache[emptyIdx] || 0) > 0) {
+                  var emptySrc = map.getSource('fgpx-progress-segment-' + emptyIdx);
+                  if (emptySrc) emptySrc.setData(emptyFeatureCollection);
+                  segmentLengthCache[emptyIdx] = 0;
                 }
               }
               
               // Update segment tracking
               progressSegments = [];
-              for (var trackIdx = 0; trackIdx < segments.length; trackIdx++) {
+              for (var trackIdx = 0; trackIdx < usedCount; trackIdx++) {
                 progressSegments.push(trackIdx);
               }
               
-              // Hide the single-color progressive route
-              try {
-                map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'none');
-              } catch(_) {}
+              // Hide the single-color progressive route (only toggle once)
+              if (progressLineVisible !== false) {
+                try { map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'none'); } catch(_) {}
+                progressLineVisible = false;
+              }
             } else {
-              // Use single-color progressive route - clean up segments first
-              var currentSegmentCount = progressSegments.length || 0;
-              for (var cleanIdx = 0; cleanIdx < currentSegmentCount; cleanIdx++) {
-                try {
-                  map.removeLayer('fgpx-progress-segment-' + cleanIdx);
-                  map.removeSource('fgpx-progress-segment-' + cleanIdx);
-                } catch(_) {}
+              // Use single-color progressive route — clear pool slots
+              if (segmentPoolReady) {
+                for (var cleanIdx = 0; cleanIdx < SEGMENT_POOL_SIZE; cleanIdx++) {
+                  if ((segmentLengthCache[cleanIdx] || 0) > 0) {
+                    var clSrc = map.getSource('fgpx-progress-segment-' + cleanIdx);
+                    if (clSrc) clSrc.setData(emptyFeatureCollection);
+                    segmentLengthCache[cleanIdx] = 0;
+                  }
+                }
               }
               progressSegments = [];
               
-              progressData.geometry.coordinates = smoothedUpTo;
+              progressData.geometry.coordinates = coordsUpTo;
               routeProgSrc.setData(progressData);
-              try {
-                map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'visible');
-              } catch(_) {}
+              // Show single-color line (only toggle once)
+              if (progressLineVisible !== true) {
+                try { map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'visible'); } catch(_) {}
+                progressLineVisible = true;
+              }
             }
             
             progressLineCooldown = 0;
@@ -10551,6 +10773,7 @@
           }
         }
         // update camera bearing aimed forward with smoothing and turn-rate clamp
+        cameraJumpedThisFrame = false; // reset per-frame flag
         var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
         var remainingAhead = Math.max(0, dMaxAhead - d);
         var targetBearing = (bearing != null) ? bearing : 0;
@@ -10571,11 +10794,13 @@
           targetBearing = normalizeAngle(targetBearing);
         }
         // temporal smoothing on target bearing to prevent flicker
+        // Reduced alpha with terrain (0.12) vs flat (0.2) for less edge tile churn
         if (targetBearingSmooth == null) {
           targetBearingSmooth = targetBearing;
         } else {
           var deltaTB = shortestAngleDelta(targetBearingSmooth, targetBearing);
-          targetBearingSmooth = normalizeAngle(targetBearingSmooth + deltaTB * 0.2); // ease target
+          var bearingAlpha = hasTerrain ? 0.12 : 0.2;
+          targetBearingSmooth = normalizeAngle(targetBearingSmooth + deltaTB * bearingAlpha);
         }
         targetBearing = targetBearingSmooth;
         if (bearing == null) bearing = targetBearing;
@@ -10585,7 +10810,7 @@
         var zoomNow = defaultZoom; try { if (typeof map.getZoom === 'function') zoomNow = map.getZoom(); } catch(_) {}
         var pitchFactor = 1 - Math.min(1, (pitchNow / 60)) * 0.3; // up to -30%
         var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.15; // up to -15%
-        var maxTurnRate = 14 * pitchFactor * zoomFactor; // base 14 deg/s
+        var maxTurnRate = (hasTerrain ? 11 : 14) * pitchFactor * zoomFactor;
         var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
         var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
         // Throttle bearing updates to ~50 FPS unless a larger change is needed
@@ -10609,10 +10834,10 @@
         var nextPx = map.project([nextCenterLng, nextCenterLat]);
         var movePx = Math.hypot((nextPx.x - prevPx.x), (nextPx.y - prevPx.y));
         var bearingDeltaAbs = Math.abs(shortestAngleDelta(appliedBearing == null ? bearing : appliedBearing, bearing));
-        // Only update camera if movement or rotation exceeds tiny thresholds, or forced
-        var moveThresholdPx = hasTerrain ? 1.2 : 0.5;
-        var rotateThresholdDeg = hasTerrain ? 0.7 : 0.3;
-        var cameraInterval = hasTerrain ? 0.04 : 0.02;
+        // Increased thresholds for terrain to reduce jumpTo frequency and flicker
+        var moveThresholdPx = hasTerrain ? 2.0 : 0.5;
+        var rotateThresholdDeg = hasTerrain ? 1.2 : 0.3;
+        var cameraInterval = hasTerrain ? 0.06 : 0.02;
         var needCameraUpdate = forceCameraUpdate || (cameraCooldown >= cameraInterval) || (movePx > (moveThresholdPx * 2.2)) || (bearingDeltaAbs > (rotateThresholdDeg * 2.2));
         if (!userInteracting && needCameraUpdate && (movePx > moveThresholdPx || bearingDeltaAbs > rotateThresholdDeg || forceCameraUpdate)) {
           cameraCenter[0] = nextCenterLng;
@@ -10629,19 +10854,35 @@
           appliedBearing = bearing;
           forceCameraUpdate = false;
           cameraCooldown = 0;
+          cameraJumpedThisFrame = true; // signal to defer progress line setData
           // Dynamic edge prefetch at ~5–10 Hz; widen margin/zoom during larger rotations
           if (prefetchEnabled) {
             vpLastPrefetch += (lastFrameDt || 0.016);
             var extra = (bearingDeltaAbs > 1.0);
             var terrainPrefetchInterval = extra ? 0.24 : 0.34;
             var flatPrefetchInterval = extra ? 0.1 : 0.18;
+            if (!extra) {
+              var zoomDelta = 0;
+              try { zoomDelta = Math.abs((map.getZoom ? map.getZoom() : defaultZoom) - zoomNow); } catch(_) { zoomDelta = 0; }
+              if (zoomDelta < 0.05) {
+                terrainPrefetchInterval = 0.5;
+                flatPrefetchInterval = 0.5;
+              }
+            }
             var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
             if (vpLastPrefetch >= prefetchInterval) {
               prefetchViewportTiles(extra ? (hasTerrain ? 0.2 : 0.3) : (hasTerrain ? 0.15 : 0.2), hasTerrain ? false : extra, bearing);
               vpLastPrefetch = 0;
             }
+            // Forward-direction prefetch along the route (~1 Hz): warms tiles 500-1000m ahead
+            // at current zoom + 1 so high-speed playback sees sharp tiles instead of stretched parents.
+            forwardPrefetchCooldown += (lastFrameDt || 0.016);
+            if (forwardPrefetchCooldown >= 1.0) {
+              forwardPrefetchCooldown = 0;
+              try { prefetchForwardRoute(d, speed); } catch(_) {}
+            }
             if (typeof map.setPrefetchZoomDelta === 'function') {
-              map.setPrefetchZoomDelta(extra ? (hasTerrain ? 3 : 5) : (hasTerrain ? 2 : 4));
+              map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : (hasTerrain ? 4 : 4));
             }
           }
         }
@@ -11386,23 +11627,7 @@
         var atEnd = privacyEnabled ? (progress >= (privacyEndP - 1e-6)) : (progress >= 1);
         if (atEnd) { reset(); }
         if (!playing && !preloadingInProgress) {
-          // Start preloading if not already completed
-          if (prefetchEnabled && !preloadCompleted) {
-            tilePrefetchPromise = prefetchTilesForRoute();
-          }
-          try {
-            (tilePrefetchPromise||Promise.resolve()).then(function(){
-              // Only start zoom/playback after preloading is completely finished
-              try { hideSplash(); } catch(_) {}
-              if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-              else { setPlaying(true); scheduleRaf(); }
-            });
-          } catch(_) {
-            // Fallback: start immediately if promise fails
-            try { hideSplash(); } catch(_) {}
-            if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-            else { setPlaying(true); scheduleRaf(); }
-          }
+          startPlaybackWithPreload();
         }
       });
       ui.controls.btnPause.addEventListener('click', function () { 
@@ -11951,22 +12176,7 @@
           else if (!preloadingInProgress) {
             var atEndKey = privacyEnabled ? (progress >= (privacyEndP - 1e-6)) : (progress >= 1);
             if (atEndKey) reset();
-            // Start preloading if not already completed
-            if (prefetchEnabled && !preloadCompleted) {
-              tilePrefetchPromise = prefetchTilesForRoute();
-            }
-            try { 
-              hideSplash(); 
-              (tilePrefetchPromise||Promise.resolve()).then(function(){
-                // Only start zoom/playback after preloading is completely finished
-                if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-                else { setPlaying(true); scheduleRaf(); }
-              });
-            } catch(_) {
-              // Fallback: start immediately if promise fails
-              if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-              else { setPlaying(true); scheduleRaf(); }
-            }
+            startPlaybackWithPreload();
           }
         }
       };
