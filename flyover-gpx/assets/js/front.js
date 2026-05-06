@@ -1447,11 +1447,13 @@
       pitch: (window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30),
       prefetchZoomDelta: prefetchEnabled ? 4 : 0,
       fadeDuration: 100,
-      antialias: false,
+      canvasContextAttributes: { antialias: false },
       refreshExpiredTiles: false,
       renderWorldCopies: false,
       maxTileCacheSize: prefetchEnabled ? 2048 : 512, // tighter cache when disabled
       crossSourceCollisions: false,
+      cancelPendingTileRequestsWhileZooming: true,
+      validateStyle: false,
       localIdeographFontFamily: 'sans-serif',
       transformRequest: transformRequest
     });
@@ -4491,11 +4493,8 @@
           var center = this.map.getCenter();
           
           // Try symbol layer approach - this should not interact with terrain
-          self.map.loadImage(originalImageUrl, function(error, image) {
-            if (error) {
-              DBG.warn('Failed to load image for symbol layer', error);
-              return;
-            }
+          self.map.loadImage(originalImageUrl).then(function(response) {
+            var image = response.data;
             
             // Calculate proper aspect ratio to match browser overlay
             var canvas = self.map.getCanvas();
@@ -4570,6 +4569,8 @@
               imageAspect: imageAspect,
               canvasAspect: canvasAspect
             });
+          }).catch(function(error) {
+            DBG.warn('Failed to load image for symbol layer', error);
           });
           
         } catch (error) {
@@ -5034,20 +5035,8 @@
                     }
                   });
                   
-                  self.map.loadImage(img.src, function(error, image) {
-                    if (error) {
-                      DBG.warn('Failed to load thumbnail image, skipping', { 
-                        src: img.src, 
-                        error: error.message || error 
-                      });
-                      // Remove the source we created since we can't add the layer
-                      try {
-                        if (self.map.getSource(layerId)) {
-                          self.map.removeSource(layerId);
-                        }
-                      } catch (_) {}
-                      return;
-                    }
+                  self.map.loadImage(img.src).then(function(response) {
+                    var image = response.data;
                     
                     var iconId = 'thumbnail-' + index;
                     if (!self.map.hasImage(iconId)) {
@@ -5096,6 +5085,17 @@
                     });
                     
                     DBG.log('Added photo thumbnail layer', { layerId: layerId, iconId: iconId });
+                  }).catch(function(error) {
+                    DBG.warn('Failed to load thumbnail image, skipping', { 
+                      src: img.src, 
+                      error: error.message || error 
+                    });
+                    // Remove the source we created since we can't add the layer
+                    try {
+                      if (self.map.getSource(layerId)) {
+                        self.map.removeSource(layerId);
+                      }
+                    } catch (_) {}
                   });
                   
                   self.recordingTextLayers.push(layerId);
@@ -10305,7 +10305,6 @@
       var chartCooldown = 0; // seconds throttle for chart updates
       var hudCooldown = 0; // seconds throttle for HUD text updates
       var photoScanCooldown = 0; // seconds throttle for photo queue scans
-      var bearingCooldown = 0; // seconds throttle for bearing updates
       var cameraCooldown = 0; // seconds throttle for camera updates
       var forceCameraUpdate = true; // ensure first frame centers on marker
       var appliedBearing = null; // last bearing actually applied
@@ -10363,7 +10362,7 @@
         zoomOverlayTimer = setTimeout(function() {
           hidePreloadOverlay();
           zoomOverlayTimer = null;
-        }, 450);
+        }, 2800);
         try {
           // Restore terrain if it was disabled during end transition.
           if (hasTerrain && terrainTemporarilyDisabled && terrainSourceId) {
@@ -10381,16 +10380,15 @@
           appliedBearing = startBearing;
           forceCameraUpdate = false;
 
-          // Pre-warm tiles at the TARGET zoom/center/bearing BEFORE the animation starts.
-          // This gives tiles ~3200ms to load during the ease transition.
-          // Use direct tile-coordinate computation at target state instead of current viewport.
+          // Fire HTTP prefetch for tiles at target zoom into browser cache.
+          // MapLibre will hit the cache when it requests the same URLs during/after the ease.
           try {
             if (prefetchEnabled) {
-              prefetchTilesAtTarget(targetCenter, defaultZoom, startBearing, hasTerrain ? 0.3 : 0.4);
+              prefetchTilesAtTarget(targetCenter, defaultZoom, startBearing, hasTerrain ? 0.4 : 0.5);
             }
           } catch (_) {}
 
-          // Suppress tile fade-in during zoom transition to prevent blurriness
+          // Suppress tile fade-in during zoom so new tiles snap in instantly (no crossfade blur)
           var origFadeDuration = null;
           try {
             if (map.style && typeof map.style.fadeDuration !== 'undefined') {
@@ -10399,51 +10397,38 @@
             }
           } catch (_) {}
 
-          var doEase = function(){
+          var doEase = function() {
             map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 2200, easing: easeInOutCubic });
-            map.once('moveend', function(){
+            map.once('moveend', function() {
               firstPlayZoomPending = false;
-              // Prefetch viewport tiles at final position for immediate sharpness
-              try { if (prefetchEnabled) { prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, startBearing); } } catch (_) {}
+              // At target zoom now — wait for all tiles to fully load before starting playback.
+              // This prevents blurry overzoomed parent tiles from showing during first seconds.
               var started = false;
-              // Prefer idle (tiles loaded) but allow more time for tile loading.
-              // 2500ms cap ensures tiles at target zoom are loaded before playback starts.
-              var settleTimer = setTimeout(function(){
+              var settleTimer = setTimeout(function() {
                 if (started) return;
                 started = true;
-                // Restore fade duration
                 try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
-                if (playStartTrace && playStartTrace.startedAt) {
-                  DBG.log('play-start stage', {
-                    stage: 'zoom-settle-timeout',
-                    dtMs: Math.round(performance.now() - playStartTrace.startedAt)
-                  });
-                }
+                DBG.log('play-start stage', { stage: 'settle-timeout', dtMs: playStartTrace ? Math.round(performance.now() - playStartTrace.startedAt) : 0 });
                 setPlaying(true);
                 scheduleRaf();
-              }, 2500);
-              map.once('idle', function(){
+              }, 4000);
+              map.once('idle', function() {
                 if (started) return;
                 started = true;
                 try { clearTimeout(settleTimer); } catch (_) {}
-                // Restore fade duration
                 try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
-                if (playStartTrace && playStartTrace.startedAt) {
-                  DBG.log('play-start stage', {
-                    stage: 'zoom-settle-idle',
-                    dtMs: Math.round(performance.now() - playStartTrace.startedAt)
-                  });
-                }
+                DBG.log('play-start stage', { stage: 'settle-idle', dtMs: playStartTrace ? Math.round(performance.now() - playStartTrace.startedAt) : 0 });
                 setPlaying(true);
                 scheduleRaf();
               });
             });
           };
-          // Gate the first zoom until map is idle to avoid tile churn
-          if (typeof map.isMoving === 'function') {
-            if (map.isMoving()) { map.once('idle', doEase); }
-            else { doEase(); }
-          } else { doEase(); }
+          // Gate the ease until map is idle to avoid tile churn from ongoing loads
+          if (typeof map.isMoving === 'function' && map.isMoving()) {
+            map.once('idle', doEase);
+          } else {
+            doEase();
+          }
         } catch(_) { 
           firstPlayZoomPending = false; 
           setPlaying(true); 
@@ -10699,7 +10684,7 @@
         var markerDistanceThresholds = terrainOn ? [1.8, 2.4, 3.0] : [1.2, 1.6, 2.2];
         var arrowsIntervals = terrainOn ? [0.32, 0.36, 0.42] : [0.26, 0.30, 0.36];
         var chartIntervals = [0.12, 0.16, 0.20];
-        var hudIntervals = [0.12, 0.18, 0.24];
+        var hudIntervals = [0.05, 0.07, 0.10];
         var photoIntervals = [0.12, 0.20, 0.28];
         var cameraMoveThresholds = terrainOn ? [1.35, 1.55, 1.8] : [0.6, 0.7, 0.8];
         var cameraRotateThresholds = terrainOn ? [1.1, 1.3, 1.5] : [0.35, 0.45, 0.55];
@@ -11070,11 +11055,9 @@
         var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
         var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
         var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
-        // Throttle bearing updates to ~50 FPS unless a larger change is needed
-        if (bearingCooldown >= 0.02 || Math.abs(delta) >= 1.2) {
-          bearing = normalizeAngle(bearing + step);
-          bearingCooldown = 0;
-        }
+        // Always apply the rate-limited step — the step itself is already bounded by
+        // maxTurnRate*dt so additional gating causes accumulate-then-snap stutter.
+        bearing = normalizeAngle(bearing + step);
         // Cinematic camera: track a point AHEAD of current position so the camera
         // shows where the rider is going, not where they are. This creates an elastic
         // trailing effect — the camera smoothly anticipates rather than chases.
@@ -11105,7 +11088,10 @@
         var moveGate = moveThresholdPx * hysteresisFactor;
         var rotateGate = rotateThresholdDeg * hysteresisFactor;
         var needCameraUpdate = forceCameraUpdate || (cameraCooldown >= cameraInterval) || (movePx > (moveGate * 2.0)) || (bearingDeltaAbs > (rotateGate * 2.0));
-        if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > rotateGate || forceCameraUpdate)) {
+        // When position is nearly stationary, lower rotate gate so small heading
+        // changes still produce smooth rotation rather than accumulate-then-snap.
+        var effectiveRotateGate = (movePx < 0.5) ? rotateGate * 0.3 : rotateGate;
+        if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > effectiveRotateGate || forceCameraUpdate)) {
           cameraCenter[0] = nextCenterLng;
           cameraCenter[1] = nextCenterLat;
           var camOpts = { center: cameraCenter, bearing: bearing };
@@ -11299,7 +11285,6 @@
         hudCooldown += dt;
         photoScanCooldown += dt;
         markerDataCooldown += dt;
-        bearingCooldown += dt;
         cameraCooldown += dt;
         progressLineCooldown += dt;
         

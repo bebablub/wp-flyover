@@ -21,24 +21,24 @@ final class AssetManager
 	private static $assetDefinitions = [
 		'maplibre-gl-js' => [
 			'type' => 'script',
-			'primary' => 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js',
+			'primary' => 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js',
 			'fallbacks' => [
-				'https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js',
-				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.min.js',
+				'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',
+				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.js',
 			],
-			'version' => '3.6.2',
+			'version' => '5.24.0',
 			'deps' => [],
 			'in_footer' => true,
 			'integrity' => '', // SRI hash if available
 		],
 		'maplibre-gl-css' => [
 			'type' => 'style',
-			'primary' => 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css',
+			'primary' => 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css',
 			'fallbacks' => [
-				'https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css',
-				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.min.css',
+				'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css',
+				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.css',
 			],
-			'version' => '3.6.2',
+			'version' => '5.24.0',
 			'deps' => [],
 		],
 		'chartjs' => [
@@ -229,7 +229,7 @@ final class AssetManager
 		$maplibreSrc = \apply_filters('fgpx_maplibre_src', '');
 		if (\is_string($maplibreSrc) && $maplibreSrc !== '') {
 			\wp_deregister_script('maplibre-gl-js');
-			\wp_register_script('maplibre-gl-js', $maplibreSrc, [], '3.6.2', true);
+			\wp_register_script('maplibre-gl-js', $maplibreSrc, [], '5.24.0', true);
 		}
 
 		// Chart.js filter
