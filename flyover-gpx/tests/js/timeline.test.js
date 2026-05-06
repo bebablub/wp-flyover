@@ -277,27 +277,32 @@ describe('Timeline Component', () => {
 	});
 
 	test('two timelines on same page initialize independently', async () => {
-		const container2 = document.createElement('div');
-		container2.id = 'test-timeline-2';
-		container2.setAttribute('data-root-id', 'test-root-id-2');
-		container2.classList.add('fgpx-timeline');
-		document.body.appendChild(container2);
+	       // Simulate desktop viewport so orientation config is respected
+	       Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
 
-		window.FGPXTimelineInstances['test-root-id-2'] = {
-			...mockConfig,
-			rootId: 'test-root-id-2',
-			orientation: 'horizontal',
-		};
+	       const container2 = document.createElement('div');
+	       container2.id = 'test-timeline-2';
+	       container2.setAttribute('data-root-id', 'test-root-id-2');
+	       container2.classList.add('fgpx-timeline');
+	       document.body.appendChild(container2);
 
-		eval(TIMELINE_SRC);
+	       // Set explicit orientation for both containers
+	       window.FGPXTimelineInstances['test-root-id-1'].orientation = 'vertical';
+	       window.FGPXTimelineInstances['test-root-id-2'] = {
+		       ...mockConfig,
+		       rootId: 'test-root-id-2',
+		       orientation: 'horizontal',
+	       };
 
-		await flushPromises();
-		await flushPromises();
+	       eval(TIMELINE_SRC);
 
-		expect(container.querySelector('.timeline-content').classList.contains('timeline-vertical')).toBe(true);
-		expect(container2.querySelector('.timeline-content').classList.contains('timeline-horizontal')).toBe(true);
+	       await flushPromises();
+	       await flushPromises();
 
-		document.body.removeChild(container2);
+	       expect(container.querySelector('.timeline-content').classList.contains('timeline-vertical')).toBe(true);
+	       expect(container2.querySelector('.timeline-content').classList.contains('timeline-horizontal')).toBe(true);
+
+	       document.body.removeChild(container2);
 	});
 
 	test('hasMore false prevents additional pages from loading', async () => {
