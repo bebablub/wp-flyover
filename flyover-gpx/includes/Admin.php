@@ -406,6 +406,14 @@ final class Admin
 		$galleryDefaultSort = $options['fgpx_gallery_default_sort'];
 		$galleryShowViewToggle = $options['fgpx_gallery_show_view_toggle'];
 		$galleryShowSearch = $options['fgpx_gallery_show_search'];
+		$timelinePerPage = (string) ($options['fgpx_timeline_per_page'] ?? '20');
+		$timelineOrientation = (string) ($options['fgpx_timeline_orientation'] ?? 'vertical');
+		if (!\in_array($timelineOrientation, ['vertical', 'horizontal'], true)) {
+			$timelineOrientation = 'vertical';
+		}
+		$timelineCardWidth = (string) ($options['fgpx_timeline_card_width'] ?? '280px');
+		$timelineCardHeight = (string) ($options['fgpx_timeline_card_height'] ?? '280px');
+		$timelineMonthGrouping = (string) ($options['fgpx_timeline_month_grouping'] ?? '1');
 		$ajaxFirst = (string) ($options['fgpx_ajax_first'] ?? '0');
 		$galleryAutoSpeedEnabled = $options['fgpx_gallery_auto_speed_enabled'];
 		$galleryAutoSpeedThresholdKm = $options['fgpx_gallery_auto_speed_threshold_km'];
@@ -604,6 +612,31 @@ final class Admin
 		foreach (['1','10','25','50','100','250'] as $opt) { echo '<option value="' . \esc_attr($opt) . '"' . selected($galleryAutoSpeedValue, $opt, false) . '>' . \esc_html($opt . '×') . '</option>'; }
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Playback speed to apply for long tracks in gallery.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</table>';
+
+		// Timeline Defaults Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🕒 Timeline Defaults', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_timeline_per_page">' . \esc_html__('Timeline items per page (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_timeline_per_page" name="fgpx_timeline_per_page" class="small-text" min="10" max="50" step="1" value="' . \esc_attr($timelinePerPage) . '" />';
+		echo '<p class="description">' . \esc_html__('Used by [flyover_gpx_timeline] when per_page is not set in shortcode.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_timeline_orientation">' . \esc_html__('Timeline orientation (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_timeline_orientation" name="fgpx_timeline_orientation">';
+		echo '<option value="vertical"' . selected($timelineOrientation, 'vertical', false) . '>' . \esc_html__('Vertical', 'flyover-gpx') . '</option>';
+		echo '<option value="horizontal"' . selected($timelineOrientation, 'horizontal', false) . '>' . \esc_html__('Horizontal', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Desktop and tablet default. On mobile, timeline is always rendered vertical.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_timeline_card_width">' . \esc_html__('Timeline card width (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_timeline_card_width" name="fgpx_timeline_card_width" class="regular-text" value="' . \esc_attr($timelineCardWidth) . '" placeholder="280px" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_timeline_card_height">' . \esc_html__('Timeline card height (default)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="text" id="fgpx_timeline_card_height" name="fgpx_timeline_card_height" class="regular-text" value="' . \esc_attr($timelineCardHeight) . '" placeholder="280px" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_timeline_month_grouping">' . \esc_html__('Group timeline tracks by month', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_timeline_month_grouping" name="fgpx_timeline_month_grouping" value="1"' . ($timelineMonthGrouping === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show month headers and groups by default.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
 
@@ -2428,6 +2461,26 @@ final class Admin
 		$rawAutoSpeedVal = isset($_POST['fgpx_gallery_auto_speed_value']) ? (string)(int)\sanitize_text_field(\wp_unslash($_POST['fgpx_gallery_auto_speed_value'])) : '100';
 		$galleryAutoSpeedVal = \in_array($rawAutoSpeedVal, $galleryAutoSpeedValues, true) ? $rawAutoSpeedVal : '100';
 		\update_option('fgpx_gallery_auto_speed_value', $galleryAutoSpeedVal, true);
+		$timelinePerPage = $this->getValidInt('fgpx_timeline_per_page', 20, 10, 50);
+		$timelineOrientation = isset($_POST['fgpx_timeline_orientation']) ? \sanitize_key((string) $_POST['fgpx_timeline_orientation']) : 'vertical';
+		if (!\in_array($timelineOrientation, ['vertical', 'horizontal'], true)) {
+			$timelineOrientation = 'vertical';
+		}
+		$timelineCardWidth = isset($_POST['fgpx_timeline_card_width']) ? \sanitize_text_field((string) $_POST['fgpx_timeline_card_width']) : '280px';
+		if ($timelineCardWidth === '' || !\preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $timelineCardWidth)) {
+			$timelineCardWidth = '280px';
+		}
+		$timelineCardHeight = isset($_POST['fgpx_timeline_card_height']) ? \sanitize_text_field((string) $_POST['fgpx_timeline_card_height']) : '280px';
+		if ($timelineCardHeight === '' || !\preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $timelineCardHeight)) {
+			$timelineCardHeight = '280px';
+		}
+		$timelineMonthGrouping = $this->getValidBool('fgpx_timeline_month_grouping') ? '1' : '0';
+
+		\update_option('fgpx_timeline_per_page', (string) $timelinePerPage, true);
+		\update_option('fgpx_timeline_orientation', $timelineOrientation, true);
+		\update_option('fgpx_timeline_card_width', $timelineCardWidth, true);
+		\update_option('fgpx_timeline_card_height', $timelineCardHeight, true);
+		\update_option('fgpx_timeline_month_grouping', $timelineMonthGrouping, true);
 		// Use type-safe validation helpers for boolean values
 		\update_option('fgpx_show_labels', $this->getValidBool('fgpx_show_labels') ? '1' : '0', true);
 		\update_option('fgpx_photos_enabled', $this->getValidBool('fgpx_photos_enabled') ? '1' : '0', true);

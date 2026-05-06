@@ -72,6 +72,11 @@ final class Options
 		'fgpx_gallery_auto_speed_enabled' => '1',
 		'fgpx_gallery_auto_speed_threshold_km' => '200',
 		'fgpx_gallery_auto_speed_value' => '100',
+		'fgpx_timeline_per_page' => '20',
+		'fgpx_timeline_orientation' => 'vertical',
+		'fgpx_timeline_card_width' => '280px',
+		'fgpx_timeline_card_height' => '280px',
+		'fgpx_timeline_month_grouping' => '1',
 
 		// Performance & Backend
 		'fgpx_backend_simplify_enabled' => '1',

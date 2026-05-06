@@ -292,61 +292,48 @@ class TimelineShortcodeTest extends TestCase
         $GLOBALS['fgpx_test_inline_scripts'] = [];
         $this->timeline->render_shortcode([]);
 
-        $inlineScripts = $GLOBALS['fgpx_test_inline_scripts']['fgpx-timeline'] ?? [];
-        $this->assertNotEmpty($inlineScripts);
-
-        // Find the before-position script that contains the instance config
-        $configJson = null;
-        foreach ($inlineScripts as $entry) {
-            if (($entry['position'] ?? '') === 'before' && str_contains($entry['data'], 'playerScripts')) {
-                // Extract JSON: find last occurrence of ' = {' (the config assignment)
-                $pos = strrpos($entry['data'], ' = {');
-                if ($pos !== false) {
-                    $jsonStr = substr($entry['data'], $pos + 3, -1); // strip trailing ;
-                    $configJson = json_decode($jsonStr, true);
-                }
-                break;
-            }
-        }
+        $configJson = $this->extractTimelineInlineConfig();
 
         $this->assertNotNull($configJson, 'Config JSON should be present in inline script');
         $this->assertArrayHasKey('playerScripts', $configJson);
         $this->assertArrayHasKey('playerStyles', $configJson);
         $this->assertArrayHasKey('styleJson', $configJson);
         $this->assertArrayHasKey('resolvedApiKey', $configJson);
+        $this->assertArrayHasKey('cardWidth', $configJson);
+        $this->assertArrayHasKey('cardHeight', $configJson);
+        $this->assertArrayHasKey('monthGrouping', $configJson);
         $this->assertIsArray($configJson['playerScripts']);
         $this->assertIsArray($configJson['playerStyles']);
         $this->assertIsString($configJson['styleJson']);
         $this->assertIsString($configJson['resolvedApiKey']);
+        $this->assertSame('280px', $configJson['cardWidth']);
+        $this->assertSame('280px', $configJson['cardHeight']);
+        $this->assertTrue($configJson['monthGrouping']);
+        $this->assertArrayHasKey('playerConfig', $configJson);
+        $this->assertTrue($configJson['playerConfig']['photosEnabled']);
+        $this->assertSame('latest_embed', $configJson['playerConfig']['galleryPhotoStrategy']);
+        $this->assertArrayHasKey('weatherEnabled', $configJson['playerConfig']);
+        $this->assertArrayHasKey('contoursEnabled', $configJson['playerConfig']);
+        $this->assertArrayHasKey('satelliteTilesUrl', $configJson['playerConfig']);
         $this->assertNotEmpty($configJson['playerScripts']);
         $this->assertNotEmpty($configJson['playerStyles']);
     }
 
-    /**
-     * Test render shortcode validates height attribute — invalid CSS falls back to default.
-     */
-    public function test_render_shortcode_validates_height_attribute(): void
+    public function test_render_shortcode_validates_timeline_specific_attributes(): void
     {
         $GLOBALS['fgpx_test_inline_scripts'] = [];
-        $this->timeline->render_shortcode(['height' => 'javascript:alert(1)']);
+        $this->timeline->render_shortcode([
+            'card_width' => 'bad-value',
+            'card_height' => 'drop-table',
+            'month_grouping' => '0',
+        ]);
 
-        $inlineScripts = $GLOBALS['fgpx_test_inline_scripts']['fgpx-timeline'] ?? [];
-        $configJson = null;
-        foreach ($inlineScripts as $entry) {
-            if (($entry['position'] ?? '') === 'before') {
-                $pos = strrpos($entry['data'], ' = {');
-                if ($pos !== false) {
-                    $jsonStr = substr($entry['data'], $pos + 3, -1);
-                    $configJson = json_decode($jsonStr, true);
-                }
-                break;
-            }
-        }
+        $configJson = $this->extractTimelineInlineConfig();
 
         $this->assertNotNull($configJson);
-        // Should fall back to the default height, not the invalid value
-        $this->assertNotEquals('javascript:alert(1)', $configJson['playerHeight']);
-        $this->assertMatchesRegularExpression('/^\d+px$/', $configJson['playerHeight']);
+        $this->assertSame('280px', $configJson['cardWidth']);
+        $this->assertSame('280px', $configJson['cardHeight']);
+        $this->assertFalse($configJson['monthGrouping']);
     }
 
     /**
@@ -410,6 +397,26 @@ class TimelineShortcodeTest extends TestCase
     }
 
     /**
+     * Test timeline render config includes modal player transport config for front.js.
+     */
+    public function test_render_shortcode_includes_player_transport_config(): void
+    {
+        $GLOBALS['fgpx_test_inline_scripts'] = [];
+        $this->timeline->render_shortcode([]);
+
+        $configJson = $this->extractTimelineInlineConfig();
+
+        $this->assertNotNull($configJson);
+        $this->assertArrayHasKey('playerConfig', $configJson);
+        $this->assertSame('https://example.test/wp-json/fgpx/v1', $configJson['playerConfig']['restUrl']);
+        $this->assertSame('https://example.test/wp-json/fgpx/v1', $configJson['playerConfig']['restBase']);
+        $this->assertSame('https://example.test/wp-admin/admin-ajax.php', $configJson['playerConfig']['ajaxUrl']);
+        $this->assertArrayHasKey('nonce', $configJson['playerConfig']);
+        $this->assertArrayHasKey('preferAjaxFirst', $configJson['playerConfig']);
+        $this->assertSame('https://example.test/wp-json/fgpx/v1/timeline/tracks', $configJson['restUrl']);
+    }
+
+    /**
      * Helper method to invoke private methods.
      *
      * @param object $objectOrClass
@@ -424,5 +431,33 @@ class TimelineShortcodeTest extends TestCase
         $method->setAccessible(true);
 
         return $method->invokeArgs($objectOrClass, $parameters);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function extractTimelineInlineConfig(): ?array
+    {
+        $inlineScripts = $GLOBALS['fgpx_test_inline_scripts']['fgpx-timeline'] ?? [];
+        $this->assertNotEmpty($inlineScripts);
+
+        foreach ($inlineScripts as $entry) {
+            if (($entry['position'] ?? '') !== 'before') {
+                continue;
+            }
+
+            $pos = strrpos($entry['data'], ' = {');
+            if ($pos === false) {
+                continue;
+            }
+
+            $jsonStr = substr($entry['data'], $pos + 3, -1);
+            $decoded = json_decode($jsonStr, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return null;
     }
 }

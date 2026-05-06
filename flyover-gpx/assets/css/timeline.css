@@ -173,12 +173,29 @@
 }
 
 .timeline-horizontal .timeline-track-item {
+	position: relative;
 	flex: 0 0 var(--fgpx-card-width);
+	padding-top: 18px;
 	scroll-snap-align: start;
 	animation: slideInBottom 0.6s ease-out forwards;
 	opacity: 0;
 	transform: translateY(20px);
 	will-change: opacity, transform;
+}
+
+.timeline-horizontal .timeline-track-item::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 50%;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background-color: var(--fgpx-t-dot-bg);
+	border: 3px solid var(--fgpx-t-dot-color);
+	transform: translateX(-50%);
+	box-sizing: border-box;
+	z-index: 2;
 }
 
 @keyframes slideInBottom {
@@ -204,18 +221,17 @@
 	height: var(--fgpx-card-height);
 	background-color: var(--fgpx-t-card-bg);
 	border: 1px solid var(--fgpx-t-card-border);
-	border-radius: 8px;
+	border-radius: 0;
 	overflow: hidden;
 	cursor: pointer;
-	transition: all 0.3s ease;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+	box-shadow: none;
 	will-change: transform, box-shadow;
-	contain: paint;
 }
 
 .timeline-track-card:hover {
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-	transform: translateY(-4px);
+	border-color: var(--fgpx-t-dot-color);
+	transform: translateY(-1px);
 }
 
 .timeline-track-card:focus-within {
@@ -261,43 +277,39 @@
 /* Card Overlay */
 .timeline-track-overlay {
 	position: absolute;
+	top: 0;
 	bottom: 0;
 	left: 0;
 	right: 0;
-	padding: 16px;
-	background: var(--fgpx-t-overlay-bg);
+	padding: 10px 12px;
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.68));
 	color: #fff;
 	z-index: 2;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	transition: all 0.3s ease;
-	will-change: backdrop-filter;
-}
-
-.timeline-track-card:hover .timeline-track-overlay {
-	backdrop-filter: blur(4px);
+	justify-content: flex-end;
+	gap: 4px;
 }
 
 /* Track Title */
 .timeline-track-title {
-	margin: 0;
-	font-size: 16px;
+	margin: 0 0 65px 0 !important;
+	font-size: 20px;
 	font-weight: 600;
-	color: #fff;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+	color: var(--fgpx-g-title-text, #fff) !important;
+	line-height: 1.3;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+	word-break: break-word;
 }
 
 /* Track Stats */
 .timeline-track-stats {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 12px;
-	font-size: 13px;
-	color: #e0e0e0;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0px;
+	font-size: 12px;
+	color: #f1f1f1;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 .timeline-track-stats span {
@@ -305,6 +317,7 @@
 	align-items: center;
 	gap: 4px;
 	white-space: nowrap;
+	line-height: 1.6;
 }
 
 .stat-icon {
@@ -318,14 +331,16 @@
 	left: 0;
 	right: 0;
 	bottom: 0;
+	padding: 24px;
 	background-color: var(--fgpx-t-modal-bg);
 	display: flex;
-	align-items: center;
+	align-items: center; /* vertical centering */
 	justify-content: center;
 	z-index: 9999;
 	animation: fadeIn 0.3s ease;
 	will-change: opacity;
-	contain: layout;
+	overflow: auto;
+	box-sizing: border-box;
 }
 
 @keyframes fadeIn {
@@ -339,16 +354,14 @@
 
 .timeline-modal-content {
 	position: relative;
-	width: 90%;
-	max-width: 900px;
-	max-height: 90vh;
+	width: min(96vw, 1400px);
+	margin: 0 auto;
 	background-color: var(--fgpx-t-card-bg);
 	border-radius: 12px;
-	overflow: auto;
+	overflow: visible;
 	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 	animation: slideUp 0.3s ease;
 	will-change: transform, opacity;
-	contain: layout, paint;
 }
 
 @keyframes slideUp {
@@ -363,18 +376,17 @@
 }
 
 .timeline-modal-close {
-	position: sticky;
-	top: 0;
-	right: 0;
-	z-index: 10;
+	float: right;
+	margin: 4px 10px 0 0;
 	background: transparent;
 	border: none;
 	font-size: 32px;
 	color: var(--fgpx-t-card-text);
 	cursor: pointer;
-	padding: 8px 16px;
-	float: right;
+	padding: 4px 10px;
+	line-height: 1;
 	transition: color 0.2s;
+	display: block;
 }
 
 .timeline-modal-close:hover {
@@ -391,6 +403,12 @@
 	display: flex;
 	flex-direction: column;
 	clear: both;
+}
+
+.timeline-modal-player.fgpx {
+	height: auto !important;
+	min-height: 0;
+	margin-bottom: 0;
 }
 
 /* Responsive Design */
@@ -462,6 +480,11 @@
 		flex: 1 1 auto;
 	}
 
+	.timeline-horizontal .timeline-track-item::before {
+		left: 16px;
+		transform: none;
+	}
+
 	.timeline-track-card {
 		min-height: var(--fgpx-touch-target);
 	}
@@ -471,7 +494,7 @@
 	}
 
 	.timeline-track-title {
-		font-size: 15px;
+		font-size: 18px;
 	}
 
 	.timeline-track-stats {
@@ -480,8 +503,8 @@
 	}
 
 	.timeline-modal-content {
-		width: 95%;
-		max-height: 95vh;
+		width: 100%;
+		margin: 0;
 	}
 }
 

@@ -57,9 +57,11 @@ function mockFetchFailure() {
 describe('Timeline Component', () => {
 	let container;
 	let mockConfig;
+	let originalXMLHttpRequest;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		originalXMLHttpRequest = window.XMLHttpRequest;
 
 		// Clear any existing instances
 		delete window.FGPXTimelineInstances;
@@ -79,13 +81,35 @@ describe('Timeline Component', () => {
 			rootId: 'test-root-id-1',
 			orientation: 'vertical',
 			perPage: 20,
-			playerHeight: '636px',
+			cardWidth: '280px',
+			cardHeight: '280px',
+			monthGrouping: true,
 			style: 'default',
 			styleUrl: '',
 			photoOrderMode: 'geo_first',
 			ajaxUrl: '/wp-admin/admin-ajax.php',
 			restUrl: '/wp-json/fgpx/v1/timeline/tracks',
 			restNonce: 'test-nonce-123',
+			playerConfig: {
+				restUrl: '/wp-json/fgpx/v1',
+				restBase: '/wp-json/fgpx/v1',
+				nonce: 'player-nonce-456',
+				ajaxUrl: '/wp-admin/admin-ajax.php',
+				preferAjaxFirst: true,
+				hostPostId: 987,
+				mapSelectorDefault: 'satellite_contours',
+				contoursEnabled: true,
+				contoursTilesUrl: 'https://tiles.example.test/contours/{z}/{x}/{y}.png',
+				contoursSourceLayer: 'contour',
+				satelliteLayerId: 'satellite',
+				satelliteTilesUrl: 'https://tiles.example.test/sat/{z}/{x}/{y}.jpg',
+				weatherEnabled: true,
+				weatherOpacity: 0.7,
+				weatherVisibleByDefault: false,
+				photoOrderMode: 'geo_first',
+				photosEnabled: true,
+				galleryPhotoStrategy: 'latest_embed',
+			},
 			playerStyles: [],
 			playerScripts: [],
 		};
@@ -127,6 +151,7 @@ describe('Timeline Component', () => {
 		delete window.FGPXTimelineI18n;
 		delete window.FGPX;
 		delete window.fetch;
+		window.XMLHttpRequest = originalXMLHttpRequest;
 		delete window.__FGPXTimelinePlayerAssetsPromise;
 	});
 
@@ -144,6 +169,17 @@ describe('Timeline Component', () => {
 
 		const content = container.querySelector('.timeline-content');
 		expect(content.classList.contains('timeline-horizontal')).toBe(true);
+	});
+
+	test('mobile viewport forces vertical orientation regardless of config', () => {
+		mockConfig.orientation = 'horizontal';
+		Object.defineProperty(window, 'innerWidth', { value: 700, configurable: true });
+
+		eval(TIMELINE_SRC);
+
+		const content = container.querySelector('.timeline-content');
+		expect(content.classList.contains('timeline-vertical')).toBe(true);
+		expect(content.classList.contains('timeline-horizontal')).toBe(false);
 	});
 
 	test('skeleton is shown immediately on boot before fetch resolves', () => {
@@ -181,6 +217,21 @@ describe('Timeline Component', () => {
 
 		const emptyState = container.querySelector('.timeline-empty-state');
 		expect(emptyState).not.toBeNull();
+	});
+
+	test('month grouping disabled renders tracks without month headers', async () => {
+		mockConfig.monthGrouping = false;
+		mockFetchSuccess(makePayload([
+			makeMonth(1746144000, [{ id: 1, title: 'P1', distanceKm: 1, durationLabel: '5m', elevationGainLabel: '10', dateLabel: 'March 1, 2025', activityDateTs: 1740825600, previewUrl: '' }]),
+			makeMonth(1748822400, [{ id: 2, title: 'P2', distanceKm: 2, durationLabel: '10m', elevationGainLabel: '20', dateLabel: 'April 1, 2025', activityDateTs: 1743465600, previewUrl: '' }]),
+		], false));
+
+		eval(TIMELINE_SRC);
+		await flushPromises();
+		await flushPromises();
+
+		expect(container.querySelectorAll('.timeline-month-header').length).toBe(0);
+		expect(container.querySelectorAll('.timeline-track-item').length).toBe(2);
 	});
 
 	       test('shows error state on network failure', async () => {
@@ -261,6 +312,34 @@ describe('Timeline Component', () => {
 		expect(window.fetch).toHaveBeenCalledTimes(1);
 	});
 
+	test('timeline list uses AJAX first when configured', async () => {
+		mockConfig.preferAjaxFirst = true;
+		window.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(makePayload()) }));
+
+		const xhrOpen = jest.fn();
+		const xhrSetRequestHeader = jest.fn();
+		const xhrSend = jest.fn(function() {
+			this.status = 200;
+			this.responseText = JSON.stringify(makePayload());
+			if (typeof this.onload === 'function') {
+				this.onload();
+			}
+		});
+
+		window.XMLHttpRequest = jest.fn(function() {
+			this.open = xhrOpen;
+			this.setRequestHeader = xhrSetRequestHeader;
+			this.send = xhrSend;
+		});
+
+		eval(TIMELINE_SRC);
+		await flushPromises();
+		await flushPromises();
+
+		expect(xhrOpen).toHaveBeenCalledWith('GET', '/wp-admin/admin-ajax.php?action=fgpx_timeline_tracks&page=1&per_page=20');
+		expect(window.fetch).not.toHaveBeenCalled();
+	});
+
 	test('arrow navigation keeps focus on timeline cards', async () => {
 		const payload = makePayload([makeMonth(1746144000, [
 			{ id: 1, title: 'First', distanceKm: 1, durationLabel: '5m', elevationGainLabel: '10', dateLabel: 'March 1, 2025', activityDateTs: 1740825600, previewUrl: '' },
@@ -319,6 +398,82 @@ describe('Timeline Component', () => {
 
 		const modalError = document.querySelector('.timeline-modal-player .timeline-error');
 		expect(modalError).not.toBeNull();
+	});
+
+	test('modal boot hydrates global player transport config for front.js', async () => {
+		mockFetchSuccess(makePayload());
+		window.FGPX = {
+			ajaxUrl: null,
+			restUrl: undefined,
+			nonce: undefined,
+			preferAjaxFirst: false,
+			contoursEnabled: false,
+			weatherEnabled: false,
+			galleryPhotoStrategy: 'default',
+			instances: {},
+			initContainer: jest.fn(),
+		};
+
+		eval(TIMELINE_SRC);
+		await flushPromises();
+		await flushPromises();
+
+		const card = container.querySelector('.timeline-track-card');
+		expect(card).not.toBeNull();
+		card.click();
+
+		await flushPromises();
+
+		expect(window.FGPX.ajaxUrl).toBe('/wp-admin/admin-ajax.php');
+		expect(window.FGPX.restUrl).toBe('/wp-json/fgpx/v1');
+		expect(window.FGPX.nonce).toBe('player-nonce-456');
+		expect(window.FGPX.preferAjaxFirst).toBe(true);
+		expect(window.FGPX.hostPostId).toBe(987);
+		expect(window.FGPX.contoursEnabled).toBe(true);
+		expect(window.FGPX.contoursTilesUrl).toBe('https://tiles.example.test/contours/{z}/{x}/{y}.png');
+		expect(window.FGPX.satelliteTilesUrl).toBe('https://tiles.example.test/sat/{z}/{x}/{y}.jpg');
+		expect(window.FGPX.weatherEnabled).toBe(true);
+		expect(window.FGPX.photosEnabled).toBe(true);
+		expect(window.FGPX.galleryPhotoStrategy).toBe('latest_embed');
+		expect(window.FGPX.initContainer).toHaveBeenCalled();
+	});
+
+	test('modal player root matches front player container contract', async () => {
+		mockFetchSuccess(makePayload());
+		window.FGPX = {
+			instances: {},
+			initContainer: jest.fn(),
+		};
+
+		eval(TIMELINE_SRC);
+		await flushPromises();
+		await flushPromises();
+
+		const card = container.querySelector('.timeline-track-card');
+		expect(card).not.toBeNull();
+		card.click();
+
+		await flushPromises();
+
+		const playerRoot = document.getElementById('fgpx-timeline-player-1');
+		expect(playerRoot).not.toBeNull();
+		expect(playerRoot.classList.contains('fgpx')).toBe(true);
+		expect(playerRoot.classList.contains('timeline-modal-player')).toBe(true);
+		expect(playerRoot.style.height).toBe('');
+		expect(playerRoot.getAttribute('data-style')).toBe('default');
+		expect(window.FGPX.instances[playerRoot.id].photosEnabled).toBe(true);
+		expect(window.FGPX.instances[playerRoot.id].galleryPhotoStrategy).toBe('latest_embed');
+
+		const modalContent = document.querySelector('.timeline-modal-content');
+		expect(modalContent.style.maxWidth).toBe('');
+		expect(modalContent.style.maxHeight).toBe('');
+	});
+
+	test('boot applies card sizing css variables from timeline config', () => {
+		eval(TIMELINE_SRC);
+
+		expect(container.style.getPropertyValue('--fgpx-card-width')).toBe('280px');
+		expect(container.style.getPropertyValue('--fgpx-card-height')).toBe('280px');
 	});
 
 	test('boot skips gracefully when FGPXTimelineInstances missing', () => {

@@ -65,11 +65,22 @@ final class TimelineShortcode
     public function render_shortcode(array $atts = []): string
     {
         $options = Options::getAll();
+        $frontendOptions = Options::getForFrontend();
+
+        $timelineDefaultOrientation = \sanitize_key((string) ($options['fgpx_timeline_orientation'] ?? 'vertical'));
+        if (!\in_array($timelineDefaultOrientation, ['vertical', 'horizontal'], true)) {
+            $timelineDefaultOrientation = 'vertical';
+        }
+
+        $timelineDefaultPerPage = (int) ($options['fgpx_timeline_per_page'] ?? 20);
+        $timelineDefaultPerPage = max(10, min(50, $timelineDefaultPerPage));
 
         $defaults = [
-            'orientation' => 'vertical',
-            'per_page' => '20',
-            'height' => (string) ($options['fgpx_gallery_player_height'] ?? '636px'),
+            'orientation' => $timelineDefaultOrientation,
+            'per_page' => (string) $timelineDefaultPerPage,
+            'card_width' => (string) ($options['fgpx_timeline_card_width'] ?? '280px'),
+            'card_height' => (string) ($options['fgpx_timeline_card_height'] ?? '280px'),
+            'month_grouping' => (string) ($options['fgpx_timeline_month_grouping'] ?? '1'),
             'style' => $options['fgpx_default_style'],
             'style_url' => $options['fgpx_default_style_url'],
             'photo_order_mode' => \sanitize_key((string) ($options['fgpx_photo_order_mode'] ?? 'geo_first')),
@@ -90,11 +101,11 @@ final class TimelineShortcode
             $perPage = 50;
         }
 
-        $height = \sanitize_text_field((string) $atts['height']);
-        // Allow only safe CSS length values (e.g. 636px, 80vh, 100%, 50em, 20rem).
-        if ($height === '' || !preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $height)) {
-            $height = '636px';
-        }
+        $cardWidth = $this->sanitizeCssLength((string) ($atts['card_width'] ?? ''), '280px');
+        $cardHeight = $this->sanitizeCssLength((string) ($atts['card_height'] ?? ''), '280px');
+
+        $monthGroupingRaw = \strtolower(\trim((string) ($atts['month_grouping'] ?? '1')));
+        $monthGrouping = \in_array($monthGroupingRaw, ['1', 'true', 'yes', 'on'], true);
 
         $style = \sanitize_key((string) $atts['style']);
         if ($style === 'raster') {
@@ -127,6 +138,59 @@ final class TimelineShortcode
             $themeAttr = '';
         }
 
+        global $post;
+        $hostPostId = ($post && isset($post->ID)) ? (int) $post->ID : 0;
+        $restBase = \esc_url_raw(\site_url('/wp-json/fgpx/v1'));
+        $playerConfig = array_merge(
+            $frontendOptions,
+            [
+                'restUrl' => $restBase,
+                'restBase' => $restBase,
+                'nonce' => \wp_create_nonce('wp_rest'),
+                'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
+                'pluginUrl' => \esc_url_raw(\trailingslashit(FGPX_DIR_URL)),
+                'preferAjaxFirst' => (($options['fgpx_ajax_first'] ?? '0') === '1'),
+                'hostPostId' => $hostPostId,
+                'styleJson' => (string) $styleJson,
+                'mapSelectorDefault' => (function() use ($options): string {
+                    $value = \sanitize_key((string) ($options['fgpx_map_selector_default'] ?? 'satellite'));
+                    if ($value === 'basic' || $value === '') {
+                        return 'satellite';
+                    }
+                    if ($value === 'basic_contours') {
+                        return 'satellite_contours';
+                    }
+
+                    return \in_array($value, ['satellite', 'satellite_contours'], true) ? $value : 'satellite';
+                })(),
+                'contoursEnabled' => (($options['fgpx_contours_enabled'] ?? '1') === '1'),
+                'contoursTilesUrl' => (string) ($options['fgpx_contours_tiles_url'] ?? ''),
+                'contoursSourceLayer' => (string) ($options['fgpx_contours_source_layer'] ?? 'contour'),
+                'satelliteLayerId' => (string) ($options['fgpx_satellite_layer_id'] ?? 'satellite'),
+                'satelliteTilesUrl' => (string) ($options['fgpx_satellite_tiles_url'] ?? ''),
+                'contoursColor' => (string) ($options['fgpx_contours_color'] ?? '#ffffff'),
+                'contoursWidth' => (float) ($options['fgpx_contours_width'] ?? '1.2'),
+                'contoursOpacity' => (float) ($options['fgpx_contours_opacity'] ?? '0.75'),
+                'contoursMinZoom' => (int) ($options['fgpx_contours_minzoom'] ?? '9'),
+                'contoursMaxZoom' => (int) ($options['fgpx_contours_maxzoom'] ?? '16'),
+                'weatherEnabled' => (($options['fgpx_weather_enabled'] ?? '0') === '1'),
+                'weatherOpacity' => (float) ($options['fgpx_weather_opacity'] ?? '0.7'),
+                'weatherVisibleByDefault' => (($options['fgpx_weather_visible_by_default'] ?? '0') === '1'),
+                'weatherHeatmapRadius' => [
+                    'zoom0' => (int) ($options['fgpx_weather_heatmap_zoom0'] ?? '20'),
+                    'zoom9' => (int) ($options['fgpx_weather_heatmap_zoom9'] ?? '200'),
+                    'zoom12' => (int) ($options['fgpx_weather_heatmap_zoom12'] ?? '1000'),
+                    'zoom14' => (int) ($options['fgpx_weather_heatmap_zoom14'] ?? '3000'),
+                    'zoom15' => (int) ($options['fgpx_weather_heatmap_zoom15'] ?? '5000'),
+                ],
+                'daynightVisibleByDefault' => (($options['fgpx_daynight_visible_by_default'] ?? '0') === '1'),
+                'photosEnabled' => true,
+                'photoOrderMode' => $photoOrderMode,
+                'galleryPhotoStrategy' => 'latest_embed',
+                'resolvedApiKey' => (string) $resolvedApiKey,
+            ]
+        );
+
         $rootId = \wp_generate_uuid4();
         $containerClass = 'fgpx-timeline';
 
@@ -134,7 +198,9 @@ final class TimelineShortcode
             'rootId' => $rootId,
             'orientation' => $orientation,
             'perPage' => $perPage,
-            'playerHeight' => $height,
+            'cardWidth' => $cardWidth,
+            'cardHeight' => $cardHeight,
+            'monthGrouping' => $monthGrouping,
             'style' => $style,
             'styleUrl' => $styleUrl,
             'styleJson' => (string) $styleJson,
@@ -142,6 +208,8 @@ final class TimelineShortcode
             'resolvedApiKey' => (string) $resolvedApiKey,
             'apiKey' => (string) $resolvedApiKey,
             'photoOrderMode' => $photoOrderMode,
+            'preferAjaxFirst' => (($options['fgpx_ajax_first'] ?? '0') === '1'),
+            'playerConfig' => $playerConfig,
             'ajaxUrl' => \admin_url('admin-ajax.php'),
             'restUrl' => \rest_url('fgpx/v1/timeline/tracks'),
             'restNonce' => \wp_create_nonce('wp_rest'),
@@ -253,6 +321,16 @@ final class TimelineShortcode
             'styleJson' => (string) ($resolvedStyle['styleJson'] ?? ''),
             'resolvedKey' => isset($resolvedStyle['resolvedKey']) ? (string) $resolvedStyle['resolvedKey'] : '',
         ];
+    }
+
+    private function sanitizeCssLength(string $value, string $fallback): string
+    {
+        $clean = \sanitize_text_field($value);
+        if ($clean === '' || !\preg_match('/^\d+(\.\d+)?(px|vh|vw|em|rem|%)$/', $clean)) {
+            return $fallback;
+        }
+
+        return $clean;
     }
 
     /**

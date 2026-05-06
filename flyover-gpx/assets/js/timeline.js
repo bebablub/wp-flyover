@@ -49,6 +49,7 @@
 	}
 
 	function ensurePlayerAssets(cfg) {
+		applyPlayerConfig(cfg);
 		if (window.FGPX && typeof window.FGPX.initContainer === 'function') {
 			return Promise.resolve();
 		}
@@ -56,6 +57,7 @@
 			window.__FGPXTimelinePlayerAssetsPromise = loadStyles(cfg.playerStyles || [])
 				.then(function() { return loadScriptsSequential(cfg.playerScripts || []); })
 				.then(function() {
+					applyPlayerConfig(cfg);
 					if (!window.FGPX || typeof window.FGPX.initContainer !== 'function') {
 						throw new Error('Player boot function is unavailable.');
 					}
@@ -65,7 +67,73 @@
 					throw error;
 				});
 		}
-		return window.__FGPXTimelinePlayerAssetsPromise;
+		return window.__FGPXTimelinePlayerAssetsPromise.then(function() {
+			applyPlayerConfig(cfg);
+		});
+	}
+
+	function applyPlayerConfig(cfg) {
+		var playerConfig = (cfg && cfg.playerConfig) || {};
+		var forceOverrideKeys = {
+			restUrl: true,
+			restBase: true,
+			ajaxUrl: true,
+			nonce: true,
+			hostPostId: true,
+			preferAjaxFirst: true,
+			mapSelectorDefault: true,
+			contoursEnabled: true,
+			contoursTilesUrl: true,
+			contoursSourceLayer: true,
+			satelliteLayerId: true,
+			satelliteTilesUrl: true,
+			contoursColor: true,
+			contoursWidth: true,
+			contoursOpacity: true,
+			contoursMinZoom: true,
+			contoursMaxZoom: true,
+			weatherEnabled: true,
+			weatherOpacity: true,
+			weatherVisibleByDefault: true,
+			weatherHeatmapRadius: true,
+			daynightVisibleByDefault: true,
+			simulationEnabled: true,
+			simulationWaypointsEnabled: true,
+			simulationCitiesEnabled: true,
+			simulationWaypointWindowKm: true,
+			simulationCityWindowKm: true,
+			galleryPhotoStrategy: true,
+		};
+
+		window.FGPX = window.FGPX || {};
+		for (var key in playerConfig) {
+			if (!Object.prototype.hasOwnProperty.call(playerConfig, key)) {
+				continue;
+			}
+			if (typeof window.FGPX[key] === 'undefined' || forceOverrideKeys[key]) {
+				window.FGPX[key] = playerConfig[key];
+			}
+		}
+
+		if (playerConfig.photosEnabled !== undefined) {
+			window.FGPX.photosEnabled = playerConfig.photosEnabled;
+		}
+		if (playerConfig.photoOrderMode !== undefined) {
+			window.FGPX.photoOrderMode = playerConfig.photoOrderMode;
+		}
+	}
+
+	function applyTimelineCssVariables(container, config) {
+		if (!container || !config) {
+			return;
+		}
+
+		if (config.cardWidth) {
+			container.style.setProperty('--fgpx-card-width', String(config.cardWidth));
+		}
+		if (config.cardHeight) {
+			container.style.setProperty('--fgpx-card-height', String(config.cardHeight));
+		}
 	}
 
 	// ---- End asset loading ----
@@ -102,6 +170,12 @@
 	 */
 	function initTimeline(container, config) {
 		DBG('Timeline init', { rootId: config.rootId, orientation: config.orientation });
+		applyTimelineCssVariables(container, config);
+
+		var monthGroupingRaw = config.monthGrouping;
+		var monthGroupingEnabled = !(monthGroupingRaw === false || monthGroupingRaw === '0' || monthGroupingRaw === 0 || monthGroupingRaw === 'false');
+		var isMobile = window.innerWidth <= 740;
+		var orientation = isMobile ? 'vertical' : config.orientation;
 
 		var state = {
 			rootId: config.rootId,
@@ -116,12 +190,13 @@
 			observedItem: null,
 			modalOpen: false,
 			isFirstLoad: true,
+			monthGroupingEnabled: monthGroupingEnabled,
 		};
 
 		// Build initial HTML structure
 		var contentWrapper = document.createElement('div');
 		contentWrapper.className = 'timeline-content';
-		if (config.orientation === 'horizontal') {
+		if (orientation === 'horizontal') {
 			contentWrapper.classList.add('timeline-horizontal');
 		} else {
 			contentWrapper.classList.add('timeline-vertical');
@@ -156,28 +231,37 @@
 			page: state.currentPage,
 			per_page: state.config.perPage || 20,
 		};
+		var preferAjaxFirst = !!(state.config && state.config.preferAjaxFirst);
 
-		// Try REST endpoint first when fetch exists, otherwise use AJAX fallback directly.
-		var url = state.config.restUrl + '?' + buildQueryString(params);
-		var requestPromise;
-
-		if (typeof window.fetch === 'function') {
-			requestPromise = window.fetch(url, {
+		function fetchRestTracks() {
+			var url = state.config.restUrl + '?' + buildQueryString(params);
+			if (typeof window.fetch !== 'function') {
+				return Promise.reject(new Error('REST fetch unavailable'));
+			}
+			return window.fetch(url, {
 				method: 'GET',
 				headers: {
 					'X-WP-Nonce': state.config.restNonce,
 				},
-			})
-				.then(function(response) {
-					if (!response.ok) {
-						throw new Error('HTTP ' + response.status);
-					}
-					return response.json();
-				})
-				.catch(function(error) {
-					DBG('REST fetch failed, trying AJAX', error);
-					return ajaxLoadTracks(state, params);
-				});
+			}).then(function(response) {
+				if (!response.ok) {
+					throw new Error('HTTP ' + response.status);
+				}
+				return response.json();
+			});
+		}
+
+		var requestPromise;
+		if (preferAjaxFirst) {
+			requestPromise = ajaxLoadTracks(state, params).catch(function(error) {
+				DBG('AJAX load failed, trying REST', error);
+				return fetchRestTracks();
+			});
+		} else if (typeof window.fetch === 'function') {
+			requestPromise = fetchRestTracks().catch(function(error) {
+				DBG('REST fetch failed, trying AJAX', error);
+				return ajaxLoadTracks(state, params);
+			});
 		} else {
 			requestPromise = ajaxLoadTracks(state, params);
 		}
@@ -207,8 +291,11 @@
 					return;
 				}
 
-				// Append months to timeline
-				renderMonths(state, contentWrapper, data.months);
+				if (state.monthGroupingEnabled) {
+					renderMonths(state, contentWrapper, data.months);
+				} else {
+					renderFlatTracks(state, contentWrapper, data.months);
+				}
 
 				// Update pagination
 				if (data.pagination) {
@@ -296,49 +383,65 @@
 			itemsContainer.className = 'timeline-month-items';
 
 			monthGroup.items.forEach(function(track, index) {
-				var li = document.createElement('li');
-				li.className = 'timeline-track-item';
-				li.setAttribute('data-track-id', track.id);
-				li.style.animationDelay = index * 45 + 'ms'; // Staggered animation
-
-				var card = buildTrackCard(track, state);
-				li.appendChild(card);
-
-				// Store event handlers for cleanup
-				var handlers = {
-					click: function() {
-						openTrackModal(state, track);
-					},
-					keydown: function(e) {
-						// Enter or Space to open modal
-						if (e.key === 'Enter' || e.key === ' ') {
-							e.preventDefault();
-							openTrackModal(state, track);
-						}
-						// Arrow keys for card navigation (across months)
-						else if (e.key === 'ArrowUp') {
-							e.preventDefault();
-							navigateToTrack(card, -1, state.container);
-						}
-						else if (e.key === 'ArrowDown') {
-							e.preventDefault();
-							navigateToTrack(card, 1, state.container);
-						}
-					},
-				};
-
-				card.addEventListener('click', handlers.click);
-				card.addEventListener('keydown', handlers.keydown);
-
-				// Store handlers for potential cleanup
-				li.setAttribute('data-handlers', 'click,keydown');
-
-				itemsContainer.appendChild(li);
+				itemsContainer.appendChild(buildTrackItem(track, state, index));
 			});
 
 			monthSection.appendChild(itemsContainer);
 			contentWrapper.appendChild(monthSection);
 		});
+	}
+
+	function renderFlatTracks(state, contentWrapper, months) {
+		var section = document.createElement('div');
+		section.className = 'timeline-month-section timeline-month-section-ungrouped';
+
+		var itemsContainer = document.createElement('ul');
+		itemsContainer.className = 'timeline-month-items';
+
+		var index = 0;
+		months.forEach(function(monthGroup) {
+			(monthGroup.items || []).forEach(function(track) {
+				itemsContainer.appendChild(buildTrackItem(track, state, index));
+				index += 1;
+			});
+		});
+
+		section.appendChild(itemsContainer);
+		contentWrapper.appendChild(section);
+	}
+
+	function buildTrackItem(track, state, index) {
+		var li = document.createElement('li');
+		li.className = 'timeline-track-item';
+		li.setAttribute('data-track-id', track.id);
+		li.style.animationDelay = index * 45 + 'ms'; // Staggered animation
+
+		var card = buildTrackCard(track, state);
+		li.appendChild(card);
+
+		var handlers = {
+			click: function() {
+				openTrackModal(state, track);
+			},
+			keydown: function(e) {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					openTrackModal(state, track);
+				} else if (e.key === 'ArrowUp') {
+					e.preventDefault();
+					navigateToTrack(card, -1, state.container);
+				} else if (e.key === 'ArrowDown') {
+					e.preventDefault();
+					navigateToTrack(card, 1, state.container);
+				}
+			},
+		};
+
+		card.addEventListener('click', handlers.click);
+		card.addEventListener('keydown', handlers.keydown);
+		li.setAttribute('data-handlers', 'click,keydown');
+
+		return li;
 	}
 
 	/**
@@ -411,47 +514,36 @@
 		title.className = 'timeline-track-title';
 		title.textContent = track.title;
 
-		var stats = document.createElement('div');
-		stats.className = 'timeline-track-stats';
+			var stats = document.createElement('div');
+			stats.className = 'timeline-track-stats';
 
-		if (track.distanceKm) {
-			var distSpan = document.createElement('span');
-			distSpan.className = 'stat-distance';
-			distSpan.title = i18n.distanceLabel || 'Distance';
-			var distIcon = document.createElement('span');
-			distIcon.className = 'stat-icon';
-			distIcon.textContent = '📍';
-			distSpan.appendChild(distIcon);
-			distSpan.appendChild(document.createTextNode(' ' + track.distanceKm + ' ' + (i18n.distanceUnitKm || 'km')));
-			stats.appendChild(distSpan);
-		}
-		if (track.durationLabel) {
-			var durSpan = document.createElement('span');
-			durSpan.className = 'stat-duration';
-			durSpan.title = i18n.durationLabel || 'Duration';
-			var durIcon = document.createElement('span');
-			durIcon.className = 'stat-icon';
-			durIcon.textContent = '⏱️';
-			durSpan.appendChild(durIcon);
-			durSpan.appendChild(document.createTextNode(' ' + track.durationLabel));
-			stats.appendChild(durSpan);
-		}
-		if (track.elevationGainLabel) {
-			var gainSpan = document.createElement('span');
-			gainSpan.className = 'stat-elevation';
-			gainSpan.title = i18n.elevationGainLabel || 'Elevation Gain';
-			var gainIcon = document.createElement('span');
-			gainIcon.className = 'stat-icon';
-			gainIcon.textContent = '📈';
-			gainSpan.appendChild(gainIcon);
-			gainSpan.appendChild(document.createTextNode(' ' + track.elevationGainLabel + ' ' + (i18n.elevationUnitM || 'm')));
-			stats.appendChild(gainSpan);
-		}
-		overlay.appendChild(title);
-		overlay.appendChild(stats);
-		card.appendChild(overlay);
+			function appendMetaLine(label, value) {
+				var row = document.createElement('span');
+				var strong = document.createElement('strong');
+				strong.textContent = label + ':';
+				row.appendChild(strong);
+				row.appendChild(document.createTextNode(' ' + String(value || '')));
+				stats.appendChild(row);
+			}
 
-		return card;
+			if (track.distanceKm) {
+				appendMetaLine(i18n.distanceLabel || 'Distance', String(track.distanceKm) + ' ' + (i18n.distanceUnitKm || 'km'));
+			}
+			if (track.durationLabel) {
+				appendMetaLine(i18n.durationLabel || 'Duration', track.durationLabel);
+			}
+			if (track.elevationGainLabel) {
+				appendMetaLine(i18n.elevationGainLabel || 'Gain', String(track.elevationGainLabel) + ' ' + (i18n.elevationUnitM || 'm'));
+			}
+			if (track.dateLabel) {
+				appendMetaLine(i18n.uploadedLabel || 'Uploaded', track.dateLabel);
+			}
+
+		       overlay.appendChild(title);
+		       overlay.appendChild(stats);
+		       card.appendChild(overlay);
+
+		       return card;
 	}
 
 	/**
@@ -541,21 +633,23 @@
 
 		// Player container
 		var playerContainer = document.createElement('div');
-		playerContainer.className = 'timeline-modal-player';
+		playerContainer.className = 'timeline-modal-player fgpx';
 		playerContainer.id = 'fgpx-timeline-player-' + track.id;
 
 		// Build player config
 		var playerConfig = {
 			trackId: track.id,
-			height: state.config.playerHeight || '636px',
 			style: state.config.style || 'default',
 			styleUrl: state.config.styleUrl || '',
 			styleJson: state.config.styleJson || '',
 			resolvedApiKey: state.config.resolvedApiKey || state.config.apiKey || '',
+			photosEnabled: true,
 			photoOrderMode: state.config.photoOrderMode || 'geo_first',
+			galleryPhotoStrategy: 'latest_embed',
 		};
 
 		// Store config for player initialization
+		applyPlayerConfig(state.config);
 		if (!window.FGPX) {
 			window.FGPX = { instances: {} };
 		}
@@ -568,12 +662,10 @@
 
 		// Build data attribute for player
 		playerContainer.setAttribute('data-track-id', track.id);
-		playerContainer.setAttribute('data-height', playerConfig.height);
 		playerContainer.setAttribute('data-style', playerConfig.style);
 		if (playerConfig.styleUrl) {
 			playerContainer.setAttribute('data-style-url', playerConfig.styleUrl);
 		}
-		playerContainer.classList.add('fgpx-player-container');
 
 		// Append to modal
 		modalContent.appendChild(closeBtn);
