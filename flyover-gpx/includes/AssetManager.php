@@ -42,9 +42,10 @@ final class AssetManager
 		'chartjs' => [
 			'type' => 'script',
 			'primary' => 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js',
-			'fallbacks' => [
-				'https://unpkg.com/chart.js@4.5.1/dist/chart.umd.min.js',
-			],
+				       'fallbacks' => [
+					       'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.js',
+					       'https://unpkg.com/chart.js@4.5.1/dist/chart.umd.min.js',
+				       ],
 			'version' => '4.5.1',
 			'deps' => [],
 			'in_footer' => true,
