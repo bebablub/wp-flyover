@@ -2025,7 +2025,7 @@
           var layId = 'fgpx-progress-segment-' + i;
           try {
             map.addSource(srcId, { type: 'geojson', data: emptyFeatureCollection });
-            var layerCfg = {
+            var segmentLayerConfig = {
               id: layId,
               type: 'line',
               source: srcId,
@@ -2033,9 +2033,9 @@
               paint: { 'line-color': progressiveBaseColor, 'line-width': 4, 'line-blur': 0.3 }
             };
             if (map.getLayer('fgpx-point-circle')) {
-              map.addLayer(layerCfg, 'fgpx-point-circle');
+              map.addLayer(segmentLayerConfig, 'fgpx-point-circle');
             } else {
-              map.addLayer(layerCfg);
+              map.addLayer(segmentLayerConfig);
             }
           } catch(_) {}
         }
@@ -11325,7 +11325,7 @@
           // MapLibre handles concurrent setData + jumpTo within the same frame correctly.
           var progressInterval = cadence.progressInterval;
           var needUpdate = progressNeedLineInit
-            || (progressLineCooldown >= progressInterval)
+            || (progressLineCooldown >= 0.083)
             || (Math.abs(d - progressLastDistance) >= progressDistThreshold);
           if (needUpdate) {
             var lo = 0, hi = cumDist.length - 1;
