@@ -452,6 +452,49 @@
             });
         });
 
+        $('#fgpx-clear-playback-stats').on('click', function(e) {
+            e.preventDefault();
+
+            const $btn = $(this);
+            const nonce = String($btn.data('nonce') || '');
+            if (!nonce) {
+                showAdminNotice('Missing nonce for playback statistics clearing.', 'error');
+                return;
+            }
+
+            if (!confirm('Clear all playback statistics? This cannot be undone.')) {
+                return;
+            }
+
+            const originalText = $btn.text();
+            $btn.prop('disabled', true).text('Clearing...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_clear_playback_stats',
+                    nonce: nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $btn.text('✓ Cleared');
+                        showAdminNotice('Playback statistics cleared successfully. The page will reload.', 'success');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1200);
+                    } else {
+                        $btn.prop('disabled', false).text(originalText);
+                        showAdminNotice(response.data && response.data.message ? response.data.message : 'Failed to clear playback statistics.', 'error');
+                    }
+                },
+                error: function() {
+                    $btn.prop('disabled', false).text(originalText);
+                    showAdminNotice('Network error during playback statistics clearing.', 'error');
+                }
+            });
+        });
+
         $('#fgpx-test-smart-keys').on('click', function(e) {
             e.preventDefault();
 

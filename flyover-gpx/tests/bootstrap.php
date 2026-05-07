@@ -104,7 +104,48 @@ if (!function_exists('get_option')) {
      */
     function get_option(string $option, $default = false)
     {
+        if (isset($GLOBALS['fgpx_test_options']) && is_array($GLOBALS['fgpx_test_options']) && array_key_exists($option, $GLOBALS['fgpx_test_options'])) {
+            return $GLOBALS['fgpx_test_options'][$option];
+        }
         return $default;
+    }
+}
+
+if (!function_exists('update_option')) {
+    function update_option(string $option, $value, bool $autoload = true): bool
+    {
+        if (!isset($GLOBALS['fgpx_test_options']) || !is_array($GLOBALS['fgpx_test_options'])) {
+            $GLOBALS['fgpx_test_options'] = [];
+        }
+
+        $GLOBALS['fgpx_test_options'][$option] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('delete_option')) {
+    function delete_option(string $option): bool
+    {
+        if (isset($GLOBALS['fgpx_test_options']) && is_array($GLOBALS['fgpx_test_options'])) {
+            unset($GLOBALS['fgpx_test_options'][$option]);
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('current_time')) {
+    function current_time(string $type, int $gmt = 0)
+    {
+        $timestamp = isset($GLOBALS['fgpx_test_current_time'])
+            ? strtotime((string) $GLOBALS['fgpx_test_current_time'])
+            : time();
+
+        if ($type === 'timestamp' || $type === 'U') {
+            return $timestamp;
+        }
+
+        return date($type, $timestamp);
     }
 }
 

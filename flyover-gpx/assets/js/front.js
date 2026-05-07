@@ -6973,6 +6973,20 @@
       try { if (window.getComputedStyle && window.getComputedStyle(ui.mapEl).position === 'static') { ui.mapEl.style.position = 'relative'; } } catch(_) {}
       ui.mapEl.appendChild(splash);
       function hideSplash(){ try { splash.style.display = 'none'; splashDismissed = true; } catch(_) {} }
+      var playbackCountedForRun = false;
+      function recordPlaybackStart() {
+        try {
+          if (playbackCountedForRun) return;
+          if (window.FGPX && FGPX.ajaxUrl && FGPX.playbackTrackingNonce && trackId) {
+            playbackCountedForRun = true;
+            var trackingForm = new FormData();
+            trackingForm.append('action', 'fgpx_record_playback');
+            trackingForm.append('track_id', trackId);
+            trackingForm.append('_wpnonce', FGPX.playbackTrackingNonce);
+            fetch(FGPX.ajaxUrl, { method: 'POST', body: trackingForm }).catch(function () {});
+          }
+        } catch (_) {}
+      }
       function startPlaybackWithPreload() {
         if (playing || preloadingInProgress) return;
         hideSplash();
@@ -7050,7 +7064,10 @@
               });
             }
             if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
-            else { setPlaying(true); scheduleRaf(); }
+            else {
+              setPlaying(true); scheduleRaf();
+              recordPlaybackStart();
+            }
           });
         }
         try { 
@@ -7059,7 +7076,10 @@
           // Fallback: start immediately if promise fails
           hidePreloadOverlay();
           if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
-          else { setPlaying(true); scheduleRaf(); } 
+          else {
+            setPlaying(true); scheduleRaf();
+            recordPlaybackStart();
+          } 
         }
       }
       
@@ -11250,6 +11270,7 @@
                 } catch(_) {}
                 setPlaying(true);
                 scheduleRaf();
+                recordPlaybackStart();
               }
               if (shouldRunStartupCountdown()) {
                 var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
@@ -11380,6 +11401,7 @@
       function reset() {
         DBG.log('reset() invoked');
         tStart = null; lastFrame = null; bearing = null;
+        playbackCountedForRun = false;
         // If end transition disabled terrain to avoid flicker, restore for next run.
         if (hasTerrain && terrainTemporarilyDisabled && terrainSourceId) {
           try {

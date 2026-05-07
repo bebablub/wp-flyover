@@ -325,6 +325,56 @@ final class Statistics
     }
 
     /**
+     * Compute playback aggregation from the global aggregated playback counters.
+     *
+     * @return array<string, mixed> Associative array with 'playbacks_by_month' and 'playbacks_by_year' keys
+     */
+    private function compute_playbacks_aggregation(): array
+    {
+        $stats = Admin::get_playback_stats_option();
+        $monthlyPlaybacks = [];
+        $yearlyPlaybacks = [];
+
+        foreach ($stats['monthly'] as $period => $count) {
+            $monthlyPlaybacks[] = [
+                'period' => (string) $period,
+                'playbackCount' => (int) $count,
+            ];
+        }
+
+        foreach ($stats['yearly'] as $period => $count) {
+            $yearlyPlaybacks[] = [
+                'period' => (string) $period,
+                'playbackCount' => (int) $count,
+            ];
+        }
+
+        return [
+            'playbacks_by_month' => $monthlyPlaybacks,
+            'playbacks_by_year' => $yearlyPlaybacks,
+        ];
+    }
+
+    /**
+     * Merge fresh playback data into a cached or newly built payload.
+     *
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function append_playback_data(array $payload): array
+    {
+        $playbackData = $this->compute_playbacks_aggregation();
+        if (!isset($payload['charts']) || !\is_array($payload['charts'])) {
+            $payload['charts'] = [];
+        }
+
+        $payload['charts']['playbacks_by_month'] = $playbackData['playbacks_by_month'];
+        $payload['charts']['playbacks_by_year'] = $playbackData['playbacks_by_year'];
+
+        return $payload;
+    }
+
+    /**
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
@@ -337,7 +387,7 @@ final class Statistics
         $cacheKey = self::CACHE_KEY_PREFIX . 'mp_' . $maxPoints . '_hm_' . ($includeHeatmap ? '1' : '0');
         $cached = \get_transient($cacheKey);
         if (\is_array($cached)) {
-            return $cached;
+            return $this->append_playback_data($cached);
         }
 
         $query = new \WP_Query([
@@ -623,7 +673,7 @@ final class Statistics
         ];
 
         \set_transient($cacheKey, $payload, 15 * MINUTE_IN_SECONDS);
-        return $payload;
+        return $this->append_playback_data($payload);
     }
 
     /**
@@ -659,6 +709,8 @@ final class Statistics
                 'track_length_histogram' => $this->get_track_length_histogram_template(),
                 'weekday_distribution' => [],
                 'hour_distribution' => [],
+                'playbacks_by_month' => [],
+                'playbacks_by_year' => [],
             ],
             'heatmap' => [
                 'maxPoints' => $maxPoints,
@@ -667,6 +719,18 @@ final class Statistics
             ],
             'generatedAt' => \gmdate('c'),
         ];
+    }
+
+    /**
+     * Public static helper to get statistics data for dashboard widgets.
+     * Creates a temporary instance and returns aggregated stats.
+     *
+     * @return array<string,mixed>
+     */
+    public static function get_statistics_data(): array
+    {
+        $stats = new self();
+        return $stats->get_aggregate_stats(new \WP_REST_Request('GET', '/fgpx/v1/stats/aggregate'))->get_data();
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FGpx\Tests\Unit;
 
 use FGpx\DatabaseOptimizer;
+use FGpx\Admin;
 use FGpx\Statistics;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -17,8 +18,11 @@ final class StatisticsFeatureTest extends TestCase
 
         $GLOBALS['fgpx_test_wp_query_posts'] = [];
         $GLOBALS['fgpx_test_post_meta'] = [];
+        $GLOBALS['fgpx_test_posts'] = [];
         $GLOBALS['fgpx_test_post_times'] = [];
         $GLOBALS['fgpx_test_transients'] = [];
+        $GLOBALS['fgpx_test_options'] = [];
+        $GLOBALS['fgpx_test_current_time'] = '2026-05-07 12:00:00';
         $GLOBALS['fgpx_test_registered_styles'] = [];
         $GLOBALS['fgpx_test_registered_scripts'] = [];
         $GLOBALS['fgpx_test_enqueued_styles'] = [];
@@ -344,5 +348,160 @@ final class StatisticsFeatureTest extends TestCase
         $this->assertContains('200-300 km', $labels);
         $this->assertContains('300-400 km', $labels);
         $this->assertContains('500+ km', $labels);
+    }
+
+    public function test_compute_playbacks_aggregation_groups_events_by_month_and_year(): void
+    {
+        $GLOBALS['fgpx_test_options']['fgpx_playback_stats'] = [
+            'monthly' => [
+                '2025-12' => 1,
+                '2026-04' => 1,
+                '2026-05' => 3,
+            ],
+            'yearly' => [
+                '2025' => 1,
+                '2026' => 4,
+            ],
+            'total' => 5,
+        ];
+
+        $statistics = new Statistics();
+        $method = new ReflectionMethod(Statistics::class, 'compute_playbacks_aggregation');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($statistics);
+
+        $this->assertSame([
+            ['period' => '2025-12', 'playbackCount' => 1],
+            ['period' => '2026-04', 'playbackCount' => 1],
+            ['period' => '2026-05', 'playbackCount' => 3],
+        ], $result['playbacks_by_month']);
+
+        $this->assertSame([
+            ['period' => '2025', 'playbackCount' => 1],
+            ['period' => '2026', 'playbackCount' => 4],
+        ], $result['playbacks_by_year']);
+    }
+
+    public function test_build_payload_includes_playback_chart_datasets(): void
+    {
+        $trackId = 401;
+        $GLOBALS['fgpx_test_wp_query_posts'] = [$trackId];
+        $GLOBALS['fgpx_test_post_times'][$trackId] = strtotime('2026-05-15 12:00:00 UTC');
+
+        $GLOBALS['fgpx_test_post_meta'][$trackId] = [
+            'fgpx_stats' => [
+                'total_distance_m' => 1200.0,
+                'moving_time_s' => 240.0,
+                'elevation_gain_m' => 60.0,
+            ],
+            'fgpx_total_distance_m' => 1200.0,
+            'fgpx_moving_time_s' => 240.0,
+            'fgpx_elevation_gain_m' => 60.0,
+            'fgpx_geojson' => wp_json_encode([
+                'type' => 'LineString',
+                'coordinates' => [
+                    [16.0, 48.0],
+                    [16.01, 48.01],
+                ],
+                'properties' => [
+                    'speeds' => [2.5, 3.5],
+                ],
+            ]),
+        ];
+        $GLOBALS['fgpx_test_options']['fgpx_playback_stats'] = [
+            'monthly' => ['2026-05' => 2],
+            'yearly' => ['2026' => 2],
+            'total' => 2,
+        ];
+
+        $statistics = new Statistics();
+        $method = new ReflectionMethod(Statistics::class, 'build_payload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($statistics, ['include_heatmap' => '0']);
+
+        $this->assertArrayHasKey('playbacks_by_month', $payload['charts']);
+        $this->assertArrayHasKey('playbacks_by_year', $payload['charts']);
+        $this->assertSame([
+            ['period' => '2026-05', 'playbackCount' => 2],
+        ], $payload['charts']['playbacks_by_month']);
+        $this->assertSame([
+            ['period' => '2026', 'playbackCount' => 2],
+        ], $payload['charts']['playbacks_by_year']);
+    }
+
+    public function test_record_playback_for_track_updates_aggregated_option_counters(): void
+    {
+        $trackId = 777;
+        $GLOBALS['fgpx_test_current_time'] = '2026-11-04 09:10:11';
+        $GLOBALS['fgpx_test_posts'][$trackId] = new \WP_Post([
+            'ID' => $trackId,
+            'post_type' => 'fgpx_track',
+            'post_status' => 'publish',
+        ]);
+
+        Admin::record_playback_for_track($trackId);
+
+        $stats = $GLOBALS['fgpx_test_options']['fgpx_playback_stats'];
+        $this->assertSame(['2026-11' => 1], $stats['monthly']);
+        $this->assertSame(['2026' => 1], $stats['yearly']);
+        $this->assertSame(1, $stats['total']);
+        $this->assertNotSame('', (string) ($stats['updatedAt'] ?? ''));
+    }
+
+    public function test_build_payload_merges_fresh_playback_data_even_when_base_payload_is_cached(): void
+    {
+        $cacheKey = 'fgpx_stats_aggregate_v1_mp_15000_hm_0';
+        $GLOBALS['fgpx_test_transients'][$cacheKey] = [
+            'summary' => ['totalTracks' => 1],
+            'trends' => ['monthly' => [], 'yearly' => []],
+            'charts' => [
+                'tracks_by_month' => [],
+                'tracks_by_year' => [],
+                'distance_by_month' => [],
+                'distance_by_year' => [],
+                'elevation_by_month' => [],
+                'elevation_by_year' => [],
+                'avg_speed_by_month' => [],
+                'avg_speed_by_year' => [],
+                'track_length_histogram' => [],
+                'weekday_distribution' => [],
+                'hour_distribution' => [],
+            ],
+            'heatmap' => ['maxPoints' => 15000, 'pointCount' => 0, 'points' => []],
+            'generatedAt' => '2026-01-01T00:00:00+00:00',
+        ];
+        $GLOBALS['fgpx_test_options']['fgpx_playback_stats'] = [
+            'monthly' => ['2026-05' => 9],
+            'yearly' => ['2026' => 9],
+            'total' => 9,
+        ];
+
+        $statistics = new Statistics();
+        $method = new ReflectionMethod(Statistics::class, 'build_payload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($statistics, ['include_heatmap' => '0']);
+
+        $this->assertSame([
+            ['period' => '2026-05', 'playbackCount' => 9],
+        ], $payload['charts']['playbacks_by_month']);
+        $this->assertSame([
+            ['period' => '2026', 'playbackCount' => 9],
+        ], $payload['charts']['playbacks_by_year']);
+    }
+
+    public function test_clear_playback_stats_removes_aggregated_option(): void
+    {
+        $GLOBALS['fgpx_test_options']['fgpx_playback_stats'] = [
+            'monthly' => ['2026-05' => 4],
+            'yearly' => ['2026' => 4],
+            'total' => 4,
+        ];
+
+        Admin::clear_playback_stats();
+
+        $this->assertArrayNotHasKey('fgpx_playback_stats', $GLOBALS['fgpx_test_options']);
     }
 }

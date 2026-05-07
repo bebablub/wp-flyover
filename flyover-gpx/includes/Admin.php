@@ -13,6 +13,8 @@ if (!\defined('ABSPATH')) {
  */
 final class Admin
 {
+	private const PLAYBACK_STATS_OPTION = 'fgpx_playback_stats';
+
 	/**
 	 * Register admin hooks: settings page, uploader action, notices, deletion cleanup.
 	 */
@@ -50,6 +52,10 @@ final class Admin
 		\add_action('wp_ajax_fgpx_clear_cache', [$this, 'ajax_clear_track_cache']);
 		\add_action('wp_ajax_fgpx_test_smart_api_keys', [$this, 'ajax_test_smart_api_keys']);
 		\add_action('wp_ajax_fgpx_sync_gmedia_caption', [$this, 'ajax_sync_gmedia_caption']);
+		\add_action('wp_ajax_fgpx_clear_playback_stats', [$this, 'ajax_clear_playback_stats']);
+		// Playback tracking AJAX handler (no privilege required, queued on frontend playback start)
+		\add_action('wp_ajax_nopriv_fgpx_record_playback', [$this, 'ajax_record_playback']);
+		\add_action('wp_ajax_fgpx_record_playback', [$this, 'ajax_record_playback']);
 		\add_action('save_post', [$this, 'sync_track_preview_references_on_post_save'], 20, 3);
 		\add_action('post_updated', [$this, 'sync_track_preview_references_on_post_updated'], 20, 3);
 		// Invalidate track caches when embedding posts change status or are deleted
@@ -66,6 +72,9 @@ final class Admin
 		
 		// Hide default "Add New" buttons except our menu item
 		\add_action('admin_head', [$this, 'hide_default_add_new_buttons']);
+
+		// Register dashboard widgets for track and playback statistics
+		\add_action('wp_dashboard_setup', [$this, 'register_dashboard_widgets']);
 	}
 
 	/**
@@ -1067,6 +1076,10 @@ final class Admin
 		echo '<textarea name="fgpx_custom_css" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($customCss) . '</textarea>';
 		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save CSS', 'flyover-gpx') . '</button></p>';
 		echo '</form>';
+		echo '<hr />';
+		echo '<h2>' . \esc_html__('Playback Statistics', 'flyover-gpx') . '</h2>';
+		echo '<p>' . \esc_html__('Clear all aggregated playback counters used by the statistics page and dashboard widgets.', 'flyover-gpx') . '</p>';
+		echo '<p><button type="button" class="button button-secondary" id="fgpx-clear-playback-stats" data-nonce="' . \esc_attr(\wp_create_nonce('fgpx_clear_playback_stats')) . '">' . \esc_html__('Clear Playback Statistics', 'flyover-gpx') . '</button></p>';
 		echo '</div>';
 	}
 
@@ -1138,6 +1151,8 @@ final class Admin
 			'distance_by_month',
 			'tracks_by_year',
 			'tracks_by_month',
+			'playbacks_by_month',
+			'playbacks_by_year',
 			'distance_by_year',
 			'elevation_by_month',
 			'elevation_by_year',
@@ -3499,6 +3514,8 @@ final class Admin
 				'chartDistanceByMonth' => \esc_html__('Distance by Month', 'flyover-gpx'),
 				'chartTracksByMonth' => \esc_html__('Tracks by Month', 'flyover-gpx'),
 				'chartTracksByYear' => \esc_html__('Tracks by Year', 'flyover-gpx'),
+				'chartPlaybacksByMonth' => \esc_html__('Playbacks by Month', 'flyover-gpx'),
+				'chartPlaybacksByYear' => \esc_html__('Playbacks by Year', 'flyover-gpx'),
 				'chartDistanceByYear' => \esc_html__('Distance by Year', 'flyover-gpx'),
 				'chartElevationByMonth' => \esc_html__('Elevation by Month', 'flyover-gpx'),
 				'chartElevationByYear' => \esc_html__('Elevation by Year', 'flyover-gpx'),
@@ -3511,6 +3528,7 @@ final class Admin
 				'chartElevationM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
 				'chartAvgSpeedKmh' => \esc_html__('Average speed (km/h)', 'flyover-gpx'),
 				'chartTracksCount' => \esc_html__('Track count', 'flyover-gpx'),
+				'chartPlaybacksCount' => \esc_html__('Playback count', 'flyover-gpx'),
 				'chartLengthBuckets' => \esc_html__('Distance buckets', 'flyover-gpx'),
 				'weekdaySun' => \esc_html__('Sun', 'flyover-gpx'),
 				'weekdayMon' => \esc_html__('Mon', 'flyover-gpx'),
@@ -4894,6 +4912,221 @@ final class Admin
 			'message' => (string) ($sync['message'] ?? 'Caption sync finished.'),
 			'result' => $sync,
 		]);
+	}
+
+	/**
+	 * AJAX handler to record a playback event for a track.
+	 * Records into aggregated counters so storage stays constant-size.
+	 * Nonce verification is required but no capability check (playbacks are public).
+	 */
+	public function ajax_record_playback(): void
+	{
+		// Verify nonce without dying; silent fail is acceptable for analytics
+		if (!isset($_POST['_wpnonce']) || !wp_verify_nonce((string) $_POST['_wpnonce'], 'fgpx_record_playback')) {
+			\wp_send_json_success(); // Silently succeed to not disrupt playback
+		}
+
+		$trackId = isset($_POST['track_id']) ? (int) $_POST['track_id'] : 0;
+		if ($trackId <= 0) {
+			\wp_send_json_success(); // Silently succeed
+		}
+
+		$post = \get_post($trackId);
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			\wp_send_json_success(); // Silently succeed
+		}
+
+		self::record_playback_for_track($trackId);
+		\wp_send_json_success();
+	}
+
+	/**
+	 * Record a playback event in aggregated monthly and yearly counters.
+	 */
+	public static function record_playback_for_track(int $trackId): void
+	{
+		if ($trackId <= 0) {
+			return;
+		}
+
+		$post = \get_post($trackId);
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			return;
+		}
+
+		$currentDate = (string) \current_time('Y-m-d');
+		$monthKey = \substr($currentDate, 0, 7);
+		$yearKey = \substr($currentDate, 0, 4);
+
+		$stats = self::get_playback_stats_option();
+		$stats['monthly'][$monthKey] = (int) ($stats['monthly'][$monthKey] ?? 0) + 1;
+		$stats['yearly'][$yearKey] = (int) ($stats['yearly'][$yearKey] ?? 0) + 1;
+		$stats['total'] = (int) ($stats['total'] ?? 0) + 1;
+		$stats['updatedAt'] = \gmdate('c');
+
+		\ksort($stats['monthly']);
+		\ksort($stats['yearly']);
+		\update_option(self::PLAYBACK_STATS_OPTION, $stats, false);
+	}
+
+	/**
+	 * Return normalized playback stats counters.
+	 *
+	 * @return array{monthly: array<string,int>, yearly: array<string,int>, total:int, updatedAt:string}
+	 */
+	public static function get_playback_stats_option(): array
+	{
+		$raw = \get_option(self::PLAYBACK_STATS_OPTION, []);
+		$stats = \is_array($raw) ? $raw : [];
+		$monthly = [];
+		$yearly = [];
+
+		if (isset($stats['monthly']) && \is_array($stats['monthly'])) {
+			foreach ($stats['monthly'] as $period => $count) {
+				$key = (string) $period;
+				if (\preg_match('/^\d{4}-\d{2}$/', $key)) {
+					$monthly[$key] = max(0, (int) $count);
+				}
+			}
+		}
+
+		if (isset($stats['yearly']) && \is_array($stats['yearly'])) {
+			foreach ($stats['yearly'] as $period => $count) {
+				$key = (string) $period;
+				if (\preg_match('/^\d{4}$/', $key)) {
+					$yearly[$key] = max(0, (int) $count);
+				}
+			}
+		}
+
+		\ksort($monthly);
+		\ksort($yearly);
+
+		return [
+			'monthly' => $monthly,
+			'yearly' => $yearly,
+			'total' => max(0, (int) ($stats['total'] ?? array_sum($monthly))),
+			'updatedAt' => isset($stats['updatedAt']) ? (string) $stats['updatedAt'] : '',
+		];
+	}
+
+	/**
+	 * Clear playback statistics counters.
+	 */
+	public static function clear_playback_stats(): void
+	{
+		\delete_option(self::PLAYBACK_STATS_OPTION);
+	}
+
+	/**
+	 * AJAX handler to clear aggregated playback statistics.
+	 */
+	public function ajax_clear_playback_stats(): void
+	{
+		$nonce = \sanitize_key((string) ($_POST['nonce'] ?? ''));
+		if (!$nonce) {
+			\wp_send_json_error(['message' => 'Invalid request'], 400);
+		}
+
+		if (!\wp_verify_nonce($nonce, 'fgpx_clear_playback_stats')) {
+			\wp_send_json_error(['message' => 'Nonce verification failed'], 403);
+		}
+
+		if (!\current_user_can('manage_options')) {
+			\wp_send_json_error(['message' => 'Permission denied'], 403);
+		}
+
+		self::clear_playback_stats();
+		\wp_send_json_success(['message' => 'Playback statistics cleared successfully']);
+	}
+
+	/**
+	 * Register WordPress dashboard widgets for Flyover GPX statistics.
+	 */
+	public function register_dashboard_widgets(): void
+	{
+		if (!\current_user_can('read')) {
+			return;
+		}
+
+		\wp_add_dashboard_widget(
+			'fgpx_dashboard_tracks_by_month',
+			\esc_html__('Flyover GPX - Tracks by Month', 'flyover-gpx'),
+			[$this, 'render_dashboard_widget_tracks_by_month']
+		);
+
+		\wp_add_dashboard_widget(
+			'fgpx_dashboard_tracks_by_year',
+			\esc_html__('Flyover GPX - Tracks by Year', 'flyover-gpx'),
+			[$this, 'render_dashboard_widget_tracks_by_year']
+		);
+
+		\wp_add_dashboard_widget(
+			'fgpx_dashboard_playbacks_by_month',
+			\esc_html__('Flyover GPX - Playbacks by Month', 'flyover-gpx'),
+			[$this, 'render_dashboard_widget_playbacks_by_month']
+		);
+
+		\wp_add_dashboard_widget(
+			'fgpx_dashboard_playbacks_by_year',
+			\esc_html__('Flyover GPX - Playbacks by Year', 'flyover-gpx'),
+			[$this, 'render_dashboard_widget_playbacks_by_year']
+		);
+	}
+
+	/**
+	 * Render a compact dashboard table widget from chart rows.
+	 */
+	private function render_dashboard_period_widget(array $rows, string $countKey, string $emptyMessage): void
+	{
+		if (empty($rows)) {
+			echo '<p>' . \esc_html($emptyMessage) . '</p>';
+			return;
+		}
+
+		echo '<table style="width:100%;border-collapse:collapse;">';
+		echo '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px;">' . \esc_html__('Period', 'flyover-gpx') . '</th><th style="text-align:right;padding:4px;">' . \esc_html__('Count', 'flyover-gpx') . '</th></tr>';
+		foreach (array_reverse($rows) as $row) {
+			echo '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;">' . \esc_html((string) ($row['period'] ?? '')) . '</td><td style="text-align:right;padding:4px;">' . \intval($row[$countKey] ?? 0) . '</td></tr>';
+		}
+		echo '</table>';
+		echo '<p><a href="' . \esc_url(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')) . '">' . \esc_html__('View Full Statistics →', 'flyover-gpx') . '</a></p>';
+	}
+
+	/**
+	 * Render dashboard widget for tracks by month.
+	 */
+	public function render_dashboard_widget_tracks_by_month(): void
+	{
+		$stats = Statistics::get_statistics_data();
+		$this->render_dashboard_period_widget($stats['charts']['tracks_by_month'] ?? [], 'trackCount', 'No monthly track data available.');
+	}
+
+	/**
+	 * Render dashboard widget for tracks by year.
+	 */
+	public function render_dashboard_widget_tracks_by_year(): void
+	{
+		$stats = Statistics::get_statistics_data();
+		$this->render_dashboard_period_widget($stats['charts']['tracks_by_year'] ?? [], 'trackCount', 'No yearly track data available.');
+	}
+
+	/**
+	 * Render dashboard widget for playbacks by month.
+	 */
+	public function render_dashboard_widget_playbacks_by_month(): void
+	{
+		$stats = Statistics::get_statistics_data();
+		$this->render_dashboard_period_widget($stats['charts']['playbacks_by_month'] ?? [], 'playbackCount', 'No monthly playback data available yet.');
+	}
+
+	/**
+	 * Render dashboard widget for playbacks by year.
+	 */
+	public function render_dashboard_widget_playbacks_by_year(): void
+	{
+		$stats = Statistics::get_statistics_data();
+		$this->render_dashboard_period_widget($stats['charts']['playbacks_by_year'] ?? [], 'playbackCount', 'No yearly playback data available yet.');
 	}
 
 	/**

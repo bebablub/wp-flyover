@@ -177,6 +177,9 @@
         return { period: y.period, avgSpeedKmh: speed };
       });
     }
+    if (key === 'playbacks_by_month' || key === 'playbacks_by_year') {
+      return payload && payload.charts && Array.isArray(payload.charts[key]) ? payload.charts[key] : [];
+    }
 
     return [];
   }
@@ -258,6 +261,33 @@
         strings.chartTracksCount || 'Track count',
         rows.map(function (r) { return Number(r.trackCount || 0); }),
         theme.tracks
+      );
+      return true;
+    },
+    playbacks_by_month: function (wrap, payload, strings, theme) {
+      var rows = getChartRows(payload, 'playbacks_by_month');
+      if (!rows.length) return false;
+      var canvas = makeChartCanvas(wrap, strings.chartPlaybacksByMonth || 'Playbacks by Month');
+      renderLineChart(
+        canvas,
+        rows.map(function (r) { return r.period; }),
+        strings.chartPlaybacksCount || 'Playback count',
+        rows.map(function (r) { return Number(r.playbackCount || 0); }),
+        theme.speed,
+        theme.lineFill
+      );
+      return true;
+    },
+    playbacks_by_year: function (wrap, payload, strings, theme) {
+      var rows = getChartRows(payload, 'playbacks_by_year');
+      if (!rows.length) return false;
+      var canvas = makeChartCanvas(wrap, strings.chartPlaybacksByYear || 'Playbacks by Year');
+      renderBarChart(
+        canvas,
+        rows.map(function (r) { return r.period; }),
+        strings.chartPlaybacksCount || 'Playback count',
+        rows.map(function (r) { return Number(r.playbackCount || 0); }),
+        theme.speed
       );
       return true;
     },

@@ -519,6 +519,7 @@ final class Plugin
             'deferViewport' => $lazyViewportEnabled,
             'gpxDownloadUrl' => $gpxDownloadUrl,
             'gpxDownloadNonce' => $gpxDownloadNonce,
+            'playbackTrackingNonce' => \wp_create_nonce('fgpx_record_playback'),
             'resolvedApiKey' => $resolvedApiKey,
             'photoCacheVersion' => (string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0'),
         ];
