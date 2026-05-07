@@ -3826,6 +3826,9 @@
       var preloadingInProgress = false;
       var preloadOverlayVisible = false;
       var zoomOverlayTimer = null;
+      var countdownOverlay = null;
+      var countdownTimer = null;
+      var startupCountdownDone = false;
       
       try {
         preloadOverlay = document.createElement('div');
@@ -3834,6 +3837,94 @@
         preloadOverlay.textContent = 'Preloading map tiles for smooth playback…';
         ui.mapEl.appendChild(preloadOverlay);
       } catch(_) {}
+
+      try {
+        countdownOverlay = document.createElement('div');
+        countdownOverlay.className = 'fgpx-start-countdown';
+        countdownOverlay.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.18);z-index:6;pointer-events:none;color:#fff;font:800 128px/1 system-ui,Segoe UI,Roboto,Arial,sans-serif;text-shadow:0 4px 18px rgba(0,0,0,.65);letter-spacing:0.03em';
+        countdownOverlay.textContent = '';
+        ui.mapEl.appendChild(countdownOverlay);
+      } catch(_) {}
+
+      function clearCountdownTimer() {
+        if (countdownTimer) {
+          try { clearTimeout(countdownTimer); } catch(_) {}
+          countdownTimer = null;
+        }
+      }
+      function hideCountdownOverlay() {
+        clearCountdownTimer();
+        try {
+          if (!countdownOverlay) return;
+          countdownOverlay.style.display = 'none';
+          countdownOverlay.textContent = '';
+        } catch(_) {}
+      }
+      function showCountdownOverlay(value) {
+        try {
+          if (!countdownOverlay) return;
+          countdownOverlay.textContent = String(value);
+          countdownOverlay.style.display = 'flex';
+        } catch(_) {}
+      }
+      function shouldRunStartupCountdown() {
+        // Run only once per instance after initial splash-based startup.
+        return !startupCountdownDone && !isRecording;
+      }
+      function runStartupCountdown(seconds) {
+        return new Promise(function(resolve) {
+          var total = Math.max(0, Math.floor(Number(seconds) || 0));
+          if (total <= 0) {
+            startupCountdownDone = true;
+            hideCountdownOverlay();
+            resolve();
+            return;
+          }
+          var remaining = total;
+          clearCountdownTimer();
+          showCountdownOverlay(remaining);
+          function step() {
+            remaining -= 1;
+            if (remaining <= 0) {
+              startupCountdownDone = true;
+              hideCountdownOverlay();
+              resolve();
+              return;
+            }
+            showCountdownOverlay(remaining);
+            countdownTimer = setTimeout(step, 1000);
+          }
+          countdownTimer = setTimeout(step, 1000);
+        });
+      }
+      function waitForStartupDecodeReady(maxWaitMs) {
+        return new Promise(function(resolve) {
+          var started = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          function isReady() {
+            try {
+              var styleReady = (typeof map.isStyleLoaded === 'function') ? map.isStyleLoaded() : true;
+              var tilesReady = (typeof map.areTilesLoaded === 'function') ? map.areTilesLoaded() : true;
+              var idleNow = (typeof map.isMoving === 'function') ? !map.isMoving() : true;
+              return !!(styleReady && tilesReady && idleNow);
+            } catch(_) {
+              return true;
+            }
+          }
+          function tick() {
+            if (isReady()) {
+              resolve('ready');
+              return;
+            }
+            var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            if ((now - started) >= maxWaitMs) {
+              resolve('timeout');
+              return;
+            }
+            try { requestAnimationFrame(tick); } catch(_) { setTimeout(tick, 80); }
+          }
+          tick();
+        });
+      }
 
       function setPreloadOverlayText(text) {
         try {
@@ -3856,6 +3947,9 @@
           preloadOverlayVisible = false;
         } catch(_) {}
       }
+      registerTeardown(function() {
+        hideCountdownOverlay();
+      });
 
       function lon2tileX(lon, z){ return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
       function lat2tileY(lat, z){ var rad = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(rad) + 1/Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z)); }
@@ -5820,7 +5914,7 @@
           var metersPerPx = 156543.03 * Math.cos(centerLatRad) / Math.pow(2, z);
           var viewW = Math.max(320, (ui && ui.mapEl && ui.mapEl.clientWidth) ? ui.mapEl.clientWidth : 1280);
           var viewH = Math.max(240, (ui && ui.mapEl && ui.mapEl.clientHeight) ? ui.mapEl.clientHeight : 720);
-          var safetyPx = Math.max(96, Math.round(Math.max(viewW, viewH) * 0.18));
+          var safetyPx = Math.max(140, Math.round(Math.max(viewW, viewH) * 0.24));
           var halfMetersX = metersPerPx * ((viewW / 2) + safetyPx);
           var halfMetersY = metersPerPx * ((viewH / 2) + safetyPx);
           var degPerMeterLat = 1 / 110540;
@@ -5828,7 +5922,7 @@
           var degPerMeterLon = 1 / (111320 * cosLat);
           var halfSpanLon = halfMetersX * degPerMeterLon;
           var halfSpanLat = halfMetersY * degPerMeterLat;
-          var pad = (typeof margin === 'number') ? Math.max(0, margin) : 0.18;
+          var pad = (typeof margin === 'number') ? Math.max(0, margin) : 0.24;
           var lonPad = halfSpanLon * (1 + pad);
           var latPad = halfSpanLat * (1 + pad);
           var ex = {
@@ -5872,8 +5966,8 @@
 
           // Only target zoom level — no extra levels.
           // Keep request volume bounded to avoid runaway network usage.
-          var reqs = queuePrefetchForZoom(z, 180);
-          DBG.log('prefetch tiles at target zoom', { z: z, tiles: reqs.length, maxTilesTotal: 180, viewW: viewW, viewH: viewH, margin: pad, safetyPx: safetyPx, bearing: bearingDeg });
+          var reqs = queuePrefetchForZoom(z, 320);
+          DBG.log('prefetch tiles at target zoom', { z: z, tiles: reqs.length, maxTilesTotal: 320, viewW: viewW, viewH: viewH, margin: pad, safetyPx: safetyPx, bearing: bearingDeg });
           return Promise.allSettled(reqs).then(function(){
             if (vpInflightKeys.size > 2000) { vpInflightKeys.clear(); }
           });
@@ -10421,24 +10515,145 @@
       var dbgCameraJumpCount = 0;
       var currentPosLngLat = null; // last computed marker lng/lat for snap-to-center on seek
       var firstPlayZoomPending = true; // animate zoom-in on first play after stop
+      var suppressCameraUpdateFrames = 0; // startup handoff guard to prevent first-frame snap after countdown
+      var STARTUP_COUNTDOWN_SECONDS = 3;
+      var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
+      var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
+      var startupSuppressProgressLine = false; // suppress route line during warm-up phase
 
       function targetBearingAtDistance(d) {
         try {
           var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
           var pos = positionAtDistance(d);
-          var ahead15 = positionAtDistance(Math.min(dMaxAhead, d + 25));
-          var ahead30 = positionAtDistance(Math.min(dMaxAhead, d + 50));
-          var ahead60 = positionAtDistance(Math.min(dMaxAhead, d + 100));
-          var b15 = bearingBetween(pos, ahead15);
-          var b30 = bearingBetween(pos, ahead30);
-          var b60 = bearingBetween(pos, ahead60);
-          var w15 = 0.5, w30 = 0.35, w60 = 0.15;
-          var rad15 = b15 * Math.PI / 180, rad30 = b30 * Math.PI / 180, rad60 = b60 * Math.PI / 180;
-          var vx = Math.cos(rad15) * w15 + Math.cos(rad30) * w30 + Math.cos(rad60) * w60;
-          var vy = Math.sin(rad15) * w15 + Math.sin(rad30) * w30 + Math.sin(rad60) * w60;
+          var remainingAhead = Math.max(0, dMaxAhead - d);
+          if (remainingAhead <= 8) return isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
+          var ahead40 = positionAtDistance(Math.min(dMaxAhead, d + 40));
+          var ahead80 = positionAtDistance(Math.min(dMaxAhead, d + 80));
+          var ahead150 = positionAtDistance(Math.min(dMaxAhead, d + 150));
+          var ahead250 = positionAtDistance(Math.min(dMaxAhead, d + 250));
+          var b40 = bearingBetween(pos, ahead40);
+          var b80 = bearingBetween(pos, ahead80);
+          var b150 = bearingBetween(pos, ahead150);
+          var b250 = bearingBetween(pos, ahead250);
+          var w40 = 0.2, w80 = 0.3, w150 = 0.3, w250 = 0.2;
+          var rad40 = b40 * Math.PI / 180, rad80 = b80 * Math.PI / 180;
+          var rad150 = b150 * Math.PI / 180, rad250 = b250 * Math.PI / 180;
+          var vx = Math.cos(rad40) * w40 + Math.cos(rad80) * w80 + Math.cos(rad150) * w150 + Math.cos(rad250) * w250;
+          var vy = Math.sin(rad40) * w40 + Math.sin(rad80) * w80 + Math.sin(rad150) * w150 + Math.sin(rad250) * w250;
           var tb = Math.atan2(vy, vx) * 180 / Math.PI;
           return normalizeAngle(tb);
         } catch(_) { return 0; }
+      }
+
+      function cameraTargetAtDistance(d, lookaheadFactor) {
+        try {
+          var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
+          var pos = positionAtDistance(d);
+          var remainingAhead = Math.max(0, dMaxAhead - d);
+          var factor = isFinite(Number(lookaheadFactor)) ? Math.max(0, Number(lookaheadFactor)) : 0.4;
+          var cameraLookaheadD = Math.min(remainingAhead * factor, hasTerrain ? 35 : 50);
+          return (cameraLookaheadD > 2)
+            ? positionAtDistance(Math.min(dMaxAhead, d + cameraLookaheadD)).slice(0, 2)
+            : pos.slice(0, 2);
+        } catch(_) {
+          return positionAtDistance(d).slice(0, 2);
+        }
+      }
+
+      function timeOffsetAtDistance(dMeters) {
+        try {
+          if (!hasTimestamps || !Array.isArray(timeOffsets) || !Array.isArray(cumDist) || timeOffsets.length < 2 || cumDist.length < 2) {
+            return isFinite(Number(tOffset)) ? Number(tOffset) : 0;
+          }
+          var dClamped = Math.max(0, Math.min(totalDistance, Number(dMeters) || 0));
+          var lo = 0, hi = cumDist.length - 1;
+          while (lo < hi) {
+            var mid = (lo + hi) >>> 1;
+            if (cumDist[mid] < dClamped) lo = mid + 1; else hi = mid;
+          }
+          var i = Math.max(1, lo);
+          var d0 = Number(cumDist[i - 1]) || 0;
+          var d1 = Number(cumDist[i]) || d0;
+          var t0 = Number(timeOffsets[i - 1]) || 0;
+          var t1 = Number(timeOffsets[i]) || t0;
+          if (d1 <= d0) return t0;
+          var u = (dClamped - d0) / (d1 - d0);
+          return t0 + (t1 - t0) * u;
+        } catch(_) {
+          return isFinite(Number(tOffset)) ? Number(tOffset) : 0;
+        }
+      }
+
+      function distanceAtTimeOffset(tSeconds) {
+        try {
+          if (!hasTimestamps || !Array.isArray(timeOffsets) || !Array.isArray(cumDist) || timeOffsets.length < 2 || cumDist.length < 2) {
+            return Math.max(0, Math.min(totalDistance, (Number(progress) || 0) * totalDistance));
+          }
+          var tClamped = Math.max(0, Math.min(totalDuration, Number(tSeconds) || 0));
+          var lo = 0, hi = timeOffsets.length - 1;
+          while (lo < hi) {
+            var mid = (lo + hi) >>> 1;
+            if (timeOffsets[mid] < tClamped) lo = mid + 1; else hi = mid;
+          }
+          var i = Math.max(1, lo);
+          var t0 = Number(timeOffsets[i - 1]) || 0;
+          var t1 = Number(timeOffsets[i]) || t0;
+          var d0 = Number(cumDist[i - 1]) || 0;
+          var d1 = Number(cumDist[i]) || d0;
+          if (t1 <= t0) return d0;
+          var u = (tClamped - t0) / (t1 - t0);
+          return d0 + (d1 - d0) * u;
+        } catch(_) {
+          return Math.max(0, Math.min(totalDistance, (Number(progress) || 0) * totalDistance));
+        }
+      }
+
+
+
+      function animateStartupCountdownHandoff(dStart, seconds) {
+        return new Promise(function(resolve) {
+          try {
+            var durationMs = Math.max(0, Math.floor(Number(seconds) || 0) * 1000);
+            var handoffCenter = cameraTargetAtDistance(dStart, 0.4);
+            var handoffBearing = targetBearingAtDistance(dStart);
+            var currentCenter = cameraCenter.slice(0, 2);
+            if (typeof map.getCenter === 'function') {
+              var liveCenter = map.getCenter();
+              if (liveCenter && isFinite(liveCenter.lng) && isFinite(liveCenter.lat)) {
+                currentCenter = [liveCenter.lng, liveCenter.lat];
+              }
+            }
+            var currentBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
+            if (typeof map.getBearing === 'function') {
+              var liveBearing = Number(map.getBearing());
+              if (isFinite(liveBearing)) currentBearing = normalizeAngle(liveBearing);
+            }
+            var needsHandoff = false;
+            if (typeof map.project === 'function') {
+              var currentPx = map.project(currentCenter);
+              var targetPx = map.project(handoffCenter);
+              if (currentPx && targetPx) {
+                needsHandoff = Math.hypot((targetPx.x - currentPx.x), (targetPx.y - currentPx.y)) > 1.0;
+              }
+            }
+            var bearingDelta = Math.abs(shortestAngleDelta(currentBearing, handoffBearing));
+            needsHandoff = needsHandoff || (bearingDelta > 0.2);
+            if (!needsHandoff || durationMs <= 0 || typeof map.easeTo !== 'function') {
+              resolve();
+              return;
+            }
+            var finished = false;
+            function done() {
+              if (finished) return;
+              finished = true;
+              resolve();
+            }
+            map.once('moveend', done);
+            map.easeTo({ center: handoffCenter, bearing: handoffBearing, duration: durationMs, easing: easeInOutCubic });
+          } catch(_) {
+            resolve();
+          }
+        });
       }
 
       function zoomInThenStartPlayback() {
@@ -10464,15 +10679,8 @@
             } catch (_) {}
           }
           var dNow = Math.max(0, Math.min(1, progress)) * totalDistance;
-          var posNow = positionAtDistance(dNow);
-          var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
-          var remainingAhead = Math.max(0, dMaxAhead - dNow);
-          // Match playback camera framing at handoff: end zoom on the same lead center
-          // that runtime camera logic uses, avoiding a moveend->first-frame jump.
-          var cameraLookaheadD = Math.min(remainingAhead * 0.4, hasTerrain ? 35 : 50);
-          var targetCenter = (cameraLookaheadD > 2)
-            ? positionAtDistance(Math.min(dMaxAhead, dNow + cameraLookaheadD)).slice(0, 2)
-            : posNow.slice(0, 2);
+          // Use the exact start position — no lead offset — so zoom, handoff and playback all agree.
+          var targetCenter = cameraTargetAtDistance(dNow, 0.4);
           var startBearing = targetBearingAtDistance(dNow);
           // Pre-set bearing state so the first animation frame does not jump
           bearing = startBearing;
@@ -10496,27 +10704,143 @@
           var prefetchPromise;
           try {
             if (prefetchEnabled) {
-              prefetchPromise = prefetchTilesAtTargetAsync(targetCenter, defaultZoom, startBearing, 0.18);
+              prefetchPromise = prefetchTilesAtTargetAsync(targetCenter, defaultZoom, startBearing, 0.24);
             }
           } catch (_) {}
           if (!prefetchPromise) prefetchPromise = Promise.resolve();
 
           prefetchPromise.then(function() {
+            setPreloadOverlayText('Finalizing startup…');
+            return waitForStartupDecodeReady(2200);
+          }).then(function(readyState) {
+            DBG.log('startup decode gate', { state: readyState });
             setPreloadOverlayText('Zooming in…');
             zoomOverlayTimer = setTimeout(function() {
               hidePreloadOverlay();
               zoomOverlayTimer = null;
-            }, 2800);
+            }, 1200);
 
             // Animate to target — tiles are already in browser HTTP cache
             map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 3500, easing: easeInOutCubic });
             map.once('moveend', function() {
               firstPlayZoomPending = false;
+              if (zoomOverlayTimer) {
+                try { clearTimeout(zoomOverlayTimer); } catch(_) {}
+                zoomOverlayTimer = null;
+              }
               try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
               DBG.log('play-start stage', { stage: 'moveend-start', dtMs: playStartTrace ? Math.round(performance.now() - playStartTrace.startedAt) : 0 });
-              // Start playback immediately — tiles already loaded from prefetch
-              setPlaying(true);
-              scheduleRaf();
+              hidePreloadOverlay();
+              try {
+                // Sync marker/progress visuals immediately after zoom finishes so countdown
+                // does not end with a visible marker snap.
+                if (typeof map.getCenter === 'function') {
+                  var _cz = map.getCenter();
+                  if (_cz && isFinite(_cz.lng) && isFinite(_cz.lat)) {
+                    cameraCenter[0] = _cz.lng;
+                    cameraCenter[1] = _cz.lat;
+                  }
+                }
+                if (typeof map.getBearing === 'function') {
+                  var _bz = Number(map.getBearing());
+                  if (isFinite(_bz)) {
+                    bearing = normalizeAngle(_bz);
+                    appliedBearing = bearing;
+                    targetBearingSmooth = bearing;
+                  }
+                }
+                forceCameraUpdate = false;
+                cameraCooldown = 0;
+                cameraJumpedLastFrame = false;
+                cameraJumpStreak = 0;
+                suppressCameraUpdateFrames = Math.max(suppressCameraUpdateFrames, 1);
+                markerDataCooldown = 999;
+                progressNeedLineInit = true;
+                progressLineCooldown = 999;
+                try { updateVisuals(progress, getPlaybackCadence(speed, hasTerrain, currentChartTab)); } catch(_) {}
+              } catch(_) {}
+              // Apply playback rendering optimizations NOW (before countdown) so MapLibre
+              // settles label placement and tile state during the 3-second countdown.
+              // This prevents the visible label-shift "jump" that occurs when properties
+              // are changed at the exact moment playback starts.
+              try {
+                if (map.style && typeof map.style.fadeDuration !== 'undefined') {
+                  if (mapFadeDurationDefault == null) mapFadeDurationDefault = map.style.fadeDuration;
+                  map.style.fadeDuration = 0;
+                }
+                var _pst = map.getStyle();
+                var _players = (_pst && _pst.layers) ? _pst.layers : [];
+                for (var _pli = 0; _pli < _players.length; _pli++) {
+                  var _plyr = _players[_pli];
+                  if (!_plyr || !_plyr.id || !map.getLayer(_plyr.id)) continue;
+                  if (_plyr.type === 'raster') {
+                    try { map.setPaintProperty(_plyr.id, 'raster-fade-duration', 0); } catch(_) {}
+                  }
+                  if (_plyr.type === 'symbol') {
+                    try {
+                      map.setLayoutProperty(_plyr.id, 'text-allow-overlap', true);
+                      map.setLayoutProperty(_plyr.id, 'text-ignore-placement', true);
+                    } catch(_) {}
+                  }
+                }
+              } catch(_) {}
+              function beginPlayback() {
+                try {
+                  var _dStart = Math.max(0, Math.min(1, progress)) * totalDistance;
+                  if (hasTimestamps && Array.isArray(timeOffsets)) {
+                    tOffset = timeOffsetAtDistance(_dStart);
+                  }
+                  // Sync camera state from live map.
+                  if (typeof map.getCenter === 'function') {
+                    var _c = map.getCenter();
+                    if (_c && isFinite(_c.lng) && isFinite(_c.lat)) {
+                      cameraCenter[0] = _c.lng;
+                      cameraCenter[1] = _c.lat;
+                    }
+                  }
+                  if (typeof map.getBearing === 'function') {
+                    var _b = Number(map.getBearing());
+                    if (isFinite(_b)) {
+                      bearing = normalizeAngle(_b);
+                      appliedBearing = bearing;
+                      targetBearingSmooth = bearing;
+                    }
+                  }
+                  forceCameraUpdate = false;
+                  cameraCooldown = 0;
+                  cameraJumpedLastFrame = false;
+                  cameraJumpStreak = 0;
+                  suppressCameraUpdateFrames = 0;
+                } catch(_) {}
+                setPlaying(true);
+                scheduleRaf();
+              }
+              if (shouldRunStartupCountdown()) {
+                var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
+                // WARM-UP STRATEGY: Start playback immediately WITH the countdown.
+                // Speed ramps from 0 to full over the countdown duration (easeInCubic).
+                // The countdown overlay hides this warm-up phase from the user.
+                // By the time the countdown finishes, the camera is already moving
+                // at full speed — no visible velocity jump.
+                startupSpeedRampDuration = countdownSeconds;
+                startupSpeedRampRemaining = countdownSeconds;
+                startupSuppressProgressLine = true;
+                // Start playback now (during countdown) — the speed ramp ensures
+                // the marker starts moving very slowly and gradually accelerates.
+                beginPlayback();
+                // Run the countdown overlay in parallel (purely visual)
+                runStartupCountdown(countdownSeconds).then(function() {
+                  // Countdown finished — enable progress line drawing
+                  startupSuppressProgressLine = false;
+                  progressNeedLineInit = true;
+                  progressLineCooldown = 999;
+                }).catch(function() {
+                  startupSuppressProgressLine = false;
+                  progressNeedLineInit = true;
+                });
+              } else {
+                beginPlayback();
+              }
             });
           }).catch(function() {
             // Fallback: just animate and start
@@ -10553,23 +10877,27 @@
         // apply text-allow-overlap + text-ignore-placement on all symbol layers to prevent
         // label collision recalculation while camera is moving fast.
         // On stop/pause: restore saved values.
+        // NOTE: On play-start these are already applied during the countdown (see moveend handler)
+        // to avoid a label-shift flash. This block still runs to handle resume-after-pause and stop.
         try {
-          var _st = map.getStyle();
-          var _layers = (_st && _st.layers) ? _st.layers : [];
-          for (var _li = 0; _li < _layers.length; _li++) {
-            var _lyr = _layers[_li];
-            if (!_lyr || !_lyr.id) continue;
-            if (!map.getLayer(_lyr.id)) continue;
-            if (_lyr.type === 'raster') {
-              try {
-                map.setPaintProperty(_lyr.id, 'raster-fade-duration', playing ? 0 : 300);
-              } catch(_) {}
-            }
-            if (_lyr.type === 'symbol') {
-              try {
-                map.setLayoutProperty(_lyr.id, 'text-allow-overlap', playing ? true : false);
-                map.setLayoutProperty(_lyr.id, 'text-ignore-placement', playing ? true : false);
-              } catch(_) {}
+          if (!playing) {
+            var _st = map.getStyle();
+            var _layers = (_st && _st.layers) ? _st.layers : [];
+            for (var _li = 0; _li < _layers.length; _li++) {
+              var _lyr = _layers[_li];
+              if (!_lyr || !_lyr.id) continue;
+              if (!map.getLayer(_lyr.id)) continue;
+              if (_lyr.type === 'raster') {
+                try {
+                  map.setPaintProperty(_lyr.id, 'raster-fade-duration', 300);
+                } catch(_) {}
+              }
+              if (_lyr.type === 'symbol') {
+                try {
+                  map.setLayoutProperty(_lyr.id, 'text-allow-overlap', false);
+                  map.setLayoutProperty(_lyr.id, 'text-ignore-placement', false);
+                } catch(_) {}
+              }
             }
           }
         } catch (_) {}
@@ -10646,6 +10974,9 @@
         progressLastDistance = privacyEnabled ? privacyStartD : 0;
         progressNeedLineInit = true;
         progressLineVisible = null;
+        startupSpeedRampRemaining = 0;
+        startupSpeedRampDuration = 0;
+        startupSuppressProgressLine = false;
         markerLayerVisible = null;
         lastMarkerPx = null;
         lastMarkerDistance = null;
@@ -10953,7 +11284,7 @@
 
         // update progressive route up to current position
         var routeProgSrc = map.getSource('fgpx-route-progress');
-        if (routeProgSrc) {
+        if (routeProgSrc && !startupSuppressProgressLine) {
           // Keep progress cadence synchronized with camera/marker cadence.
           var progressDistThreshold = cadence.progressDistance;
           if (hasTerrain && speed >= 80) {
@@ -11109,138 +11440,172 @@
         }
         // update camera bearing aimed forward with smoothing and turn-rate clamp
         cameraJumpedThisFrame = false; // reset per-frame flag
-        var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
-        var remainingAhead = Math.max(0, dMaxAhead - d);
-        var targetBearing = (bearing != null) ? bearing : 0;
-        // In the last meters, keep heading stable to avoid a final-frame bearing snap.
-        if (remainingAhead > 8) {
-          // Use farther lookahead points weighted toward the distance for cinematic smoothness.
-          // This makes the camera anticipate turns rather than react to them.
-          var ahead40 = positionAtDistance(Math.min(dMaxAhead, d + 40));
-          var ahead80 = positionAtDistance(Math.min(dMaxAhead, d + 80));
-          var ahead150 = positionAtDistance(Math.min(dMaxAhead, d + 150));
-          var ahead250 = positionAtDistance(Math.min(dMaxAhead, d + 250));
-          var b40 = bearingBetween(pos, ahead40);
-          var b80 = bearingBetween(pos, ahead80);
-          var b150 = bearingBetween(pos, ahead150);
-          var b250 = bearingBetween(pos, ahead250);
-          // Weighted circular mean: favor farther points for smoother anticipation
-          var w40 = 0.2, w80 = 0.3, w150 = 0.3, w250 = 0.2;
-          var rad40 = b40 * Math.PI / 180, rad80 = b80 * Math.PI / 180;
-          var rad150 = b150 * Math.PI / 180, rad250 = b250 * Math.PI / 180;
-          var vx = Math.cos(rad40) * w40 + Math.cos(rad80) * w80 + Math.cos(rad150) * w150 + Math.cos(rad250) * w250;
-          var vy = Math.sin(rad40) * w40 + Math.sin(rad80) * w80 + Math.sin(rad150) * w150 + Math.sin(rad250) * w250;
-          targetBearing = Math.atan2(vy, vx) * 180 / Math.PI;
-          targetBearing = normalizeAngle(targetBearing);
-        }
-        // Temporal smoothing on target bearing — low alpha for cinematic gentle turns.
-        // Camera heading changes feel fluid rather than reactive.
-        if (targetBearingSmooth == null) {
-          targetBearingSmooth = targetBearing;
-        } else {
-          var deltaTB = shortestAngleDelta(targetBearingSmooth, targetBearing);
-          var bearingAlpha = hasTerrain ? 0.06 : 0.10;
-          targetBearingSmooth = normalizeAngle(targetBearingSmooth + deltaTB * bearingAlpha);
-        }
-        targetBearing = targetBearingSmooth;
-        if (bearing == null) bearing = targetBearing;
-        var delta = shortestAngleDelta(bearing, targetBearing);
-        // Adaptive max turn rate (deg/s) — lower values produce gentler, more cinematic pans
-        var pitchNow = 0; try { if (typeof map.getPitch === 'function') pitchNow = map.getPitch(); } catch(_) {}
-        var zoomNow = defaultZoom; try { if (typeof map.getZoom === 'function') zoomNow = map.getZoom(); } catch(_) {}
-        var pitchFactor = 1 - Math.min(1, (pitchNow / 60)) * 0.35; // up to -35%
-        var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.2; // up to -20%
-        var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
-        var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
-        var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
-        // Always apply the rate-limited step — the step itself is already bounded by
-        // maxTurnRate*dt so additional gating causes accumulate-then-snap stutter.
-        bearing = normalizeAngle(bearing + step);
-        // Cinematic camera: track a point AHEAD of current position so the camera
-        // shows where the rider is going, not where they are. This creates an elastic
-        // trailing effect — the camera smoothly anticipates rather than chases.
-        var cameraLookaheadD = Math.min(remainingAhead * 0.4, hasTerrain ? 35 : 50);
-        var cameraTarget = cameraLookaheadD > 2 ? positionAtDistance(Math.min(dMaxAhead, d + cameraLookaheadD)) : pos;
-        // Low-pass filter with reduced alpha for gentler, more elastic following
-        var followAlpha = Math.max(0.006, Math.min(0.028, (lastFrameDt || 0.016) * 0.45));
-        var nextCenterLng = cameraCenter[0] + (cameraTarget[0] - cameraCenter[0]) * followAlpha;
-        var nextCenterLat = cameraCenter[1] + (cameraTarget[1] - cameraCenter[1]) * followAlpha;
-        // Ease terrain pitch down near the end to reduce final-frame mesh churn
-        var nextPitch = null;
-        if (hasTerrain && remainingAhead < 120) {
-          var endPitchFactor = Math.max(0, Math.min(1, remainingAhead / 120));
-          var defaultPitchNow = (window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30);
-          nextPitch = Math.max(0, defaultPitchNow * endPitchFactor);
-        }
-        // Calculate on-screen movement to avoid unnecessary repaints
-        var prevPx = map.project(cameraCenter);
-        var nextPx = map.project([nextCenterLng, nextCenterLat]);
-        var movePx = Math.hypot((nextPx.x - prevPx.x), (nextPx.y - prevPx.y));
-        var bearingDeltaAbs = Math.abs(shortestAngleDelta(appliedBearing == null ? bearing : appliedBearing, bearing));
-        // Balanced thresholds + hysteresis to reduce jumpTo bursts and terrain shimmer.
-        var moveThresholdPx = cadence.cameraMoveThreshold;
-        var rotateThresholdDeg = cadence.cameraRotateThreshold;
-        var cameraInterval = cadence.cameraInterval;
-        var streakBoost = Math.min(0.2, cameraJumpStreak * 0.06);
-        var hysteresisFactor = cameraJumpedLastFrame ? Math.min(1.3, 1.1 + streakBoost) : 1.0;
-        var moveGate = moveThresholdPx * hysteresisFactor;
-        var rotateGate = rotateThresholdDeg * hysteresisFactor;
-        var needCameraUpdate = forceCameraUpdate || (cameraCooldown >= cameraInterval) || (movePx > (moveGate * 2.0)) || (bearingDeltaAbs > (rotateGate * 2.0));
-        // When position is nearly stationary, lower rotate gate so small heading
-        // changes still produce smooth rotation rather than accumulate-then-snap.
-        var effectiveRotateGate = (movePx < 0.5) ? rotateGate * 0.3 : rotateGate;
-        if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > effectiveRotateGate || forceCameraUpdate)) {
-          cameraCenter[0] = nextCenterLng;
-          cameraCenter[1] = nextCenterLat;
-          var camOpts = { center: cameraCenter, bearing: bearing };
-          if (nextPitch != null) camOpts.pitch = nextPitch;
-          if (map && typeof map.jumpTo === 'function') {
-            map.jumpTo(camOpts);
-          } else if (map && typeof map.setCenter === 'function') {
-            map.setCenter(cameraCenter);
-            if (typeof map.setBearing === 'function' && isFinite(bearing)) map.setBearing(bearing);
-            if (nextPitch != null && typeof map.setPitch === 'function') map.setPitch(nextPitch);
-          }
-          appliedBearing = bearing;
+        if (suppressCameraUpdateFrames > 0) {
+          suppressCameraUpdateFrames--;
+          try {
+            if (typeof map.getCenter === 'function') {
+              var _cc = map.getCenter();
+              if (_cc && isFinite(_cc.lng) && isFinite(_cc.lat)) {
+                cameraCenter[0] = _cc.lng;
+                cameraCenter[1] = _cc.lat;
+              }
+            }
+            if (typeof map.getBearing === 'function') {
+              var _bb = Number(map.getBearing());
+              if (isFinite(_bb)) {
+                bearing = normalizeAngle(_bb);
+                appliedBearing = bearing;
+                targetBearingSmooth = bearing;
+              }
+            }
+          } catch(_) {}
           forceCameraUpdate = false;
           cameraCooldown = 0;
-          cameraJumpedThisFrame = true; // signal to defer progress line setData
-          dbgCameraJumpCount++;
-          // Dynamic edge prefetch at ~5–10 Hz; widen margin/zoom during larger rotations
-          if (prefetchEnabled) {
-            vpLastPrefetch += (lastFrameDt || 0.016);
-            var extra = (bearingDeltaAbs > 1.0);
-            var terrainPrefetchInterval = extra ? 0.24 : 0.34;
-            var flatPrefetchInterval = extra ? 0.1 : 0.18;
-            if (!extra) {
-              var zoomDelta = 0;
-              try { zoomDelta = Math.abs((map.getZoom ? map.getZoom() : defaultZoom) - zoomNow); } catch(_) { zoomDelta = 0; }
-              if (zoomDelta < 0.05) {
-                terrainPrefetchInterval = 0.5;
-                flatPrefetchInterval = 0.5;
+        } else {
+          var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
+          var remainingAhead = Math.max(0, dMaxAhead - d);
+          var targetBearing = (bearing != null) ? bearing : 0;
+          // In the last meters, keep heading stable to avoid a final-frame bearing snap.
+          if (remainingAhead > 8) {
+            // Use farther lookahead points weighted toward the distance for cinematic smoothness.
+            // This makes the camera anticipate turns rather than react to them.
+            var ahead40 = positionAtDistance(Math.min(dMaxAhead, d + 40));
+            var ahead80 = positionAtDistance(Math.min(dMaxAhead, d + 80));
+            var ahead150 = positionAtDistance(Math.min(dMaxAhead, d + 150));
+            var ahead250 = positionAtDistance(Math.min(dMaxAhead, d + 250));
+            var b40 = bearingBetween(pos, ahead40);
+            var b80 = bearingBetween(pos, ahead80);
+            var b150 = bearingBetween(pos, ahead150);
+            var b250 = bearingBetween(pos, ahead250);
+            // Weighted circular mean: favor farther points for smoother anticipation
+            var w40 = 0.2, w80 = 0.3, w150 = 0.3, w250 = 0.2;
+            var rad40 = b40 * Math.PI / 180, rad80 = b80 * Math.PI / 180;
+            var rad150 = b150 * Math.PI / 180, rad250 = b250 * Math.PI / 180;
+            var vx = Math.cos(rad40) * w40 + Math.cos(rad80) * w80 + Math.cos(rad150) * w150 + Math.cos(rad250) * w250;
+            var vy = Math.sin(rad40) * w40 + Math.sin(rad80) * w80 + Math.sin(rad150) * w150 + Math.sin(rad250) * w250;
+            targetBearing = Math.atan2(vy, vx) * 180 / Math.PI;
+            targetBearing = normalizeAngle(targetBearing);
+          }
+          // Temporal smoothing on target bearing — low alpha for cinematic gentle turns.
+          // Camera heading changes feel fluid rather than reactive.
+          if (targetBearingSmooth == null) {
+            targetBearingSmooth = targetBearing;
+          } else {
+            var deltaTB = shortestAngleDelta(targetBearingSmooth, targetBearing);
+            // During startup ramp: higher alpha so bearing tracks tightly (hidden by countdown)
+            var bearingAlpha = (startupSpeedRampRemaining > 0) ? 0.5 : (hasTerrain ? 0.06 : 0.10);
+            targetBearingSmooth = normalizeAngle(targetBearingSmooth + deltaTB * bearingAlpha);
+          }
+          targetBearing = targetBearingSmooth;
+          if (bearing == null) bearing = targetBearing;
+          var delta = shortestAngleDelta(bearing, targetBearing);
+          // Adaptive max turn rate (deg/s) — lower values produce gentler, more cinematic pans
+          var pitchNow = 0; try { if (typeof map.getPitch === 'function') pitchNow = map.getPitch(); } catch(_) {}
+          var zoomNow = defaultZoom; try { if (typeof map.getZoom === 'function') zoomNow = map.getZoom(); } catch(_) {}
+          var pitchFactor = 1 - Math.min(1, (pitchNow / 60)) * 0.35; // up to -35%
+          var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.2; // up to -20%
+          var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
+          // During startup ramp: no turn rate limit — let bearing snap to target freely
+          if (startupSpeedRampRemaining > 0) maxTurnRate = 360;
+          var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
+          var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
+          // Always apply the rate-limited step — the step itself is already bounded by
+          // maxTurnRate*dt so additional gating causes accumulate-then-snap stutter.
+          bearing = normalizeAngle(bearing + step);
+          // Cinematic camera: track a point AHEAD of current position so the camera
+          // shows where the rider is going, not where they are. This creates an elastic
+          // trailing effect — the camera smoothly anticipates rather than chases.
+          var lookaheadFactor = 0.4;
+          var cameraLookaheadD = Math.min(remainingAhead * lookaheadFactor, hasTerrain ? 35 : 50);
+          var cameraTarget = cameraLookaheadD > 2 ? positionAtDistance(Math.min(dMaxAhead, d + cameraLookaheadD)) : pos;
+          // During startup speed ramp: bypass low-pass filter entirely.
+          // The speed ramp itself provides smooth acceleration, so no filtering needed.
+          // This ensures zero camera lag during warm-up → seamless handoff when ramp ends.
+          var followAlpha;
+          if (startupSpeedRampRemaining > 0) {
+            followAlpha = 1.0; // direct tracking — no lag
+          } else {
+            followAlpha = Math.max(0.006, Math.min(0.028, (lastFrameDt || 0.016) * 0.45));
+          }
+          var nextCenterLng = cameraCenter[0] + (cameraTarget[0] - cameraCenter[0]) * followAlpha;
+          var nextCenterLat = cameraCenter[1] + (cameraTarget[1] - cameraCenter[1]) * followAlpha;
+          // Ease terrain pitch down near the end to reduce final-frame mesh churn
+          var nextPitch = null;
+          if (hasTerrain && remainingAhead < 120) {
+            var endPitchFactor = Math.max(0, Math.min(1, remainingAhead / 120));
+            var defaultPitchNow = (window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30);
+            nextPitch = Math.max(0, defaultPitchNow * endPitchFactor);
+          }
+          // Calculate on-screen movement to avoid unnecessary repaints
+          var prevPx = map.project(cameraCenter);
+          var nextPx = map.project([nextCenterLng, nextCenterLat]);
+          var movePx = Math.hypot((nextPx.x - prevPx.x), (nextPx.y - prevPx.y));
+          var bearingDeltaAbs = Math.abs(shortestAngleDelta(appliedBearing == null ? bearing : appliedBearing, bearing));
+          // Balanced thresholds + hysteresis to reduce jumpTo bursts and terrain shimmer.
+          var moveThresholdPx = cadence.cameraMoveThreshold;
+          var rotateThresholdDeg = cadence.cameraRotateThreshold;
+          var cameraInterval = cadence.cameraInterval;
+          var streakBoost = Math.min(0.2, cameraJumpStreak * 0.06);
+          var hysteresisFactor = cameraJumpedLastFrame ? Math.min(1.3, 1.1 + streakBoost) : 1.0;
+          var moveGate = moveThresholdPx * hysteresisFactor;
+          var rotateGate = rotateThresholdDeg * hysteresisFactor;
+          var needCameraUpdate = forceCameraUpdate || (cameraCooldown >= cameraInterval) || (movePx > (moveGate * 2.0)) || (bearingDeltaAbs > (rotateGate * 2.0));
+          // When position is nearly stationary, lower rotate gate so small heading
+          // changes still produce smooth rotation rather than accumulate-then-snap.
+          var effectiveRotateGate = (movePx < 0.5) ? rotateGate * 0.3 : rotateGate;
+          if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > effectiveRotateGate || forceCameraUpdate)) {
+            cameraCenter[0] = nextCenterLng;
+            cameraCenter[1] = nextCenterLat;
+            var camOpts = { center: cameraCenter, bearing: bearing };
+            if (nextPitch != null) camOpts.pitch = nextPitch;
+            if (map && typeof map.jumpTo === 'function') {
+              map.jumpTo(camOpts);
+            } else if (map && typeof map.setCenter === 'function') {
+              map.setCenter(cameraCenter);
+              if (typeof map.setBearing === 'function' && isFinite(bearing)) map.setBearing(bearing);
+              if (nextPitch != null && typeof map.setPitch === 'function') map.setPitch(nextPitch);
+            }
+            appliedBearing = bearing;
+            forceCameraUpdate = false;
+            cameraCooldown = 0;
+            cameraJumpedThisFrame = true; // signal to defer progress line setData
+            dbgCameraJumpCount++;
+            // Dynamic edge prefetch at ~5–10 Hz; widen margin/zoom during larger rotations
+            if (prefetchEnabled) {
+              vpLastPrefetch += (lastFrameDt || 0.016);
+              var extra = (bearingDeltaAbs > 1.0);
+              var terrainPrefetchInterval = extra ? 0.24 : 0.34;
+              var flatPrefetchInterval = extra ? 0.1 : 0.18;
+              if (!extra) {
+                var zoomDelta = 0;
+                try { zoomDelta = Math.abs((map.getZoom ? map.getZoom() : defaultZoom) - zoomNow); } catch(_) { zoomDelta = 0; }
+                if (zoomDelta < 0.05) {
+                  terrainPrefetchInterval = 0.5;
+                  flatPrefetchInterval = 0.5;
+                }
               }
-            }
-            var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
-            if (vpLastPrefetch >= prefetchInterval) {
-              // Widen bearing margin: prefetch with bearing + 15° lookahead to cover
-              // tiles that upcoming bearing changes will expose (reduces terrain flickering).
-              var prefetchBearing = bearing;
-              if (targetBearingSmooth != null) {
-                var bearingLookahead = shortestAngleDelta(bearing, targetBearingSmooth) * 0.5;
-                prefetchBearing = normalizeAngle(bearing + bearingLookahead + (bearingDeltaAbs > 0.5 ? Math.sign(bearingLookahead) * 15 : 0));
+              var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
+              if (vpLastPrefetch >= prefetchInterval) {
+                // Widen bearing margin: prefetch with bearing + 15° lookahead to cover
+                // tiles that upcoming bearing changes will expose (reduces terrain flickering).
+                var prefetchBearing = bearing;
+                if (targetBearingSmooth != null) {
+                  var bearingLookahead = shortestAngleDelta(bearing, targetBearingSmooth) * 0.5;
+                  prefetchBearing = normalizeAngle(bearing + bearingLookahead + (bearingDeltaAbs > 0.5 ? Math.sign(bearingLookahead) * 15 : 0));
+                }
+                prefetchViewportTiles(extra ? (hasTerrain ? 0.25 : 0.35) : (hasTerrain ? 0.2 : 0.25), hasTerrain ? false : extra, prefetchBearing);
+                vpLastPrefetch = 0;
               }
-              prefetchViewportTiles(extra ? (hasTerrain ? 0.25 : 0.35) : (hasTerrain ? 0.2 : 0.25), hasTerrain ? false : extra, prefetchBearing);
-              vpLastPrefetch = 0;
-            }
-            // Forward-direction prefetch along the route (~1 Hz): warms tiles 500-1000m ahead
-            // at current zoom + 1 so high-speed playback sees sharp tiles instead of stretched parents.
-            forwardPrefetchCooldown += (lastFrameDt || 0.016);
-            if (forwardPrefetchCooldown >= 1.0) {
-              forwardPrefetchCooldown = 0;
-              try { prefetchForwardRoute(d, speed); } catch(_) {}
-            }
-            if (typeof map.setPrefetchZoomDelta === 'function') {
-              map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : (hasTerrain ? 4 : 4));
+              // Forward-direction prefetch along the route (~1 Hz): warms tiles 500-1000m ahead
+              // at current zoom + 1 so high-speed playback sees sharp tiles instead of stretched parents.
+              forwardPrefetchCooldown += (lastFrameDt || 0.016);
+              if (forwardPrefetchCooldown >= 1.0) {
+                forwardPrefetchCooldown = 0;
+                try { prefetchForwardRoute(d, speed); } catch(_) {}
+              }
+              if (typeof map.setPrefetchZoomDelta === 'function') {
+                map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : (hasTerrain ? 4 : 4));
+              }
             }
           }
         }
@@ -11394,9 +11759,24 @@
         
         // Overlay rendering is now handled by map 'render' event
 
+        // Apply startup speed ramp: easeInCubic from 0 to 1 over ramp duration.
+        // This prevents the jarring 0-to-full-speed jump when playback begins.
+        var effectiveSpeed = speed;
+        if (startupSpeedRampRemaining > 0) {
+          startupSpeedRampRemaining = Math.max(0, startupSpeedRampRemaining - dt);
+          var rampProgress = 1 - (startupSpeedRampRemaining / Math.max(0.001, startupSpeedRampDuration));
+          // easeInCubic: slow start, fast finish — feels like natural acceleration
+          var rampFactor = rampProgress * rampProgress * rampProgress;
+          effectiveSpeed = speed * rampFactor;
+          if (startupSpeedRampRemaining <= 0) {
+            startupSpeedRampRemaining = 0;
+            startupSpeedRampDuration = 0;
+          }
+        }
+
         if (hasTimestamps && totalDuration > 0) {
           // time-based
-          tOffset += dt * speed;
+          tOffset += dt * effectiveSpeed;
           var frac = Math.min(1, tOffset / totalDuration);
           // map time to distance using timeOffsets ~ cumDist relation
           var targetTime = frac * totalDuration;
@@ -11413,7 +11793,7 @@
           progress = d / totalDistance;
         } else {
           // distance-based at constant speed: 15 km/h baseline scaled by multiplier
-          var speedMs = (15 / 3.6) * speed; // meters per second
+          var speedMs = (15 / 3.6) * effectiveSpeed; // meters per second
           var dProg = (speedMs * dt) / totalDistance;
           progress = Math.min(1, progress + dProg);
         }
