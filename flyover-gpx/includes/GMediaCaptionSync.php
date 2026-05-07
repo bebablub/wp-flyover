@@ -318,7 +318,21 @@ final class GMediaCaptionSync
 
         $result['scanned'] = count($attachmentIds);
         $result['next_offset'] = $offset + $result['scanned'];
-        $result['done'] = ($result['scanned'] < $limit);
+        // If fewer than limit, or next batch would be empty, mark as done
+        if ($result['scanned'] < $limit) {
+            $result['done'] = true;
+        } else {
+            // Check if there are more attachments in the next batch
+            $nextBatch = self::fetchAttachmentIdsBatch($result['next_offset'], 1);
+            if (is_array($nextBatch) && count($nextBatch) === 0) {
+                $result['done'] = true;
+            } else if ($nextBatch === null) {
+                // Defensive: treat null as done (no more attachments)
+                $result['done'] = true;
+            } else {
+                $result['done'] = false;
+            }
+        }
 
         if ($attachmentIds === []) {
             $result['done'] = true;
