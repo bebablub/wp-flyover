@@ -21,10 +21,9 @@ final class AssetManager
 	private static $assetDefinitions = [
 		'maplibre-gl-js' => [
 			'type' => 'script',
-			'primary' => 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js',
+			'primary' => 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',
 			'fallbacks' => [
-				'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',
-				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.js',
+				'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js',
 			],
 			'version' => '5.24.0',
 			'deps' => [],
@@ -33,22 +32,20 @@ final class AssetManager
 		],
 		'maplibre-gl-css' => [
 			'type' => 'style',
-			'primary' => 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css',
+			'primary' => 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css',
 			'fallbacks' => [
-				'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css',
-				'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.css',
+				'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css',
 			],
 			'version' => '5.24.0',
 			'deps' => [],
 		],
 		'chartjs' => [
 			'type' => 'script',
-			'primary' => 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+			'primary' => 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js',
 			'fallbacks' => [
-				'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js',
-				'https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js',
+				'https://unpkg.com/chart.js@4.5.1/dist/chart.umd.min.js',
 			],
-			'version' => '4.4.1',
+			'version' => '4.5.1',
 			'deps' => [],
 			'in_footer' => true,
 			'integrity' => '', // SRI hash if available
@@ -236,7 +233,7 @@ final class AssetManager
 		$chartSrc = \apply_filters('fgpx_chartjs_src', '');
 		if (\is_string($chartSrc) && $chartSrc !== '') {
 			\wp_deregister_script('chartjs');
-			\wp_register_script('chartjs', $chartSrc, [], '4.4.1', true);
+			\wp_register_script('chartjs', $chartSrc, [], '4.5.1', true);
 		}
 	}
 
