@@ -2672,9 +2672,15 @@ final class Admin
 			$maxWeatherSamples = 250;
 			$samplesTruncated = false;
 			if ($requestedSampleCount > $maxWeatherSamples) {
-				$samples = \array_slice($samples, 0, $maxWeatherSamples);
+				// Select evenly distributed indices to preserve full-route coverage
+				$step = ($requestedSampleCount - 1) / ($maxWeatherSamples - 1);
+				$selected = [];
+				for ($si = 0; $si < $maxWeatherSamples; $si++) {
+					$selected[] = $samples[(int) round($si * $step)];
+				}
+				$samples = $selected;
 				$samplesTruncated = true;
-				ErrorHandler::info('Weather sample list truncated', [
+				ErrorHandler::info('Weather samples distributed evenly', [
 					'post_id' => $postId,
 					'requested_samples' => $requestedSampleCount,
 					'used_samples' => \count($samples),
@@ -2688,6 +2694,16 @@ final class Admin
 			// Fetch weather data for samples
 			$weatherMeta = [];
 			$weatherPoints = self::fetchWeatherForSamples($samples, $weatherMeta);
+
+			// If every API call failed, surface the error rather than silently saving empty data
+			if (empty($weatherPoints)) {
+				ErrorHandler::warning('Weather enrichment: all API calls failed, no weather data saved', [
+					'post_id' => $postId,
+					'samples_attempted' => count($samples),
+				]);
+				\set_transient('fgpx_weather_error_' . $postId, __('No weather data could be fetched from Open-Meteo. Please try again later.', 'flyover-gpx'), 60);
+				return false;
+			}
 
 			// Save weather data
 			$weatherFeatureCollection = [
@@ -2925,8 +2941,17 @@ final class Admin
 		$uniqueCoordsTruncated = false;
 
 		// Limit unique coordinates to keep API usage bounded while covering long routes better.
+		// Use evenly distributed selection so the full route gets weather coverage.
 		if (count($uniqueCoords) > $maxUniqueCoords) {
-			$uniqueCoords = array_slice($uniqueCoords, 0, $maxUniqueCoords, true);
+			$allCoordKeys = array_keys($uniqueCoords);
+			$totalCoords  = count($allCoordKeys);
+			$coordStep    = ($totalCoords - 1) / ($maxUniqueCoords - 1);
+			$selectedCoords = [];
+			for ($ci = 0; $ci < $maxUniqueCoords; $ci++) {
+				$key = $allCoordKeys[(int) round($ci * $coordStep)];
+				$selectedCoords[$key] = $uniqueCoords[$key];
+			}
+			$uniqueCoords = $selectedCoords;
 			$uniqueCoordsTruncated = true;
 		}
 
@@ -4183,22 +4208,27 @@ final class Admin
 			if (isset($_GET['fgpx_weather_enriched']) || isset($_GET['fgpx_weather_errors'])) {
 				$enriched = isset($_GET['fgpx_weather_enriched']) ? (int) $_GET['fgpx_weather_enriched'] : 0;
 				$errors = isset($_GET['fgpx_weather_errors']) ? (int) $_GET['fgpx_weather_errors'] : 0;
-				
+				$weatherDeferred = isset($_GET['fgpx_weather_deferred']) ? (int) $_GET['fgpx_weather_deferred'] : 0;
+
 				if ($enriched > 0 && $errors === 0) {
-					echo '<div class="notice notice-success is-dismissible"><p>' . 
+					echo '<div class="notice notice-success is-dismissible"><p>' .
 						sprintf(
 							_n('%d track enriched with weather data.', '%d tracks enriched with weather data.', $enriched, 'flyover-gpx'),
 							$enriched
-						) . '</p></div>';
+						)
+						. ($weatherDeferred > 0 ? ' ' . sprintf(__('Skipped %d additional tracks (bulk limit: 25 per action).', 'flyover-gpx'), $weatherDeferred) : '')
+						. '</p></div>';
 				} elseif ($enriched > 0 && $errors > 0) {
-					echo '<div class="notice notice-warning is-dismissible"><p>' . 
+					echo '<div class="notice notice-warning is-dismissible"><p>' .
 						sprintf(
 							__('%1$d tracks enriched successfully, %2$d failed.', 'flyover-gpx'),
 							$enriched,
 							$errors
-						) . '</p></div>';
+						)
+						. ($weatherDeferred > 0 ? ' ' . sprintf(__('Skipped %d additional tracks (bulk limit: 25 per action).', 'flyover-gpx'), $weatherDeferred) : '')
+						. '</p></div>';
 				} elseif ($errors > 0) {
-					echo '<div class="notice notice-error is-dismissible"><p>' . 
+					echo '<div class="notice notice-error is-dismissible"><p>' .
 						sprintf(
 							_n('%d track failed to enrich with weather data.', '%d tracks failed to enrich with weather data.', $errors, 'flyover-gpx'),
 							$errors
@@ -4646,6 +4676,18 @@ final class Admin
 
 		$processed = 0;
 		$errors = 0;
+		$deferred = 0;
+		$maxEnrichPerRequest = 25;
+
+		if (count($post_ids) > $maxEnrichPerRequest) {
+			$deferred = count($post_ids) - $maxEnrichPerRequest;
+			$post_ids = array_slice($post_ids, 0, $maxEnrichPerRequest);
+			ErrorHandler::info('Bulk weather enrichment capped for safety', [
+				'total_requested' => $deferred + $maxEnrichPerRequest,
+				'processing' => $maxEnrichPerRequest,
+				'deferred' => $deferred,
+			]);
+		}
 
 		foreach ($post_ids as $post_id) {
 			$post = \get_post((int) $post_id);
@@ -4680,10 +4722,14 @@ final class Admin
 		}
 
 		// Add query args to show results
-		$redirect_to = \add_query_arg([
+		$queryArgs = [
 			'fgpx_weather_enriched' => $processed,
 			'fgpx_weather_errors' => $errors,
-		], $redirect_to);
+		];
+		if ($deferred > 0) {
+			$queryArgs['fgpx_weather_deferred'] = $deferred;
+		}
+		$redirect_to = \add_query_arg($queryArgs, $redirect_to);
 
 		return $redirect_to;
 	}
