@@ -27,7 +27,7 @@ final class AssetManagerConfigTest extends TestCase
         $assetManagerFile = dirname(__DIR__, 2) . '/includes/AssetManager.php';
         $source = (string) file_get_contents($assetManagerFile);
 
-        $this->assertStringContainsString("\\wp_register_script('chartjs', $chartSrc, [], '4.5.1', true);", $source);
-        $this->assertStringNotContainsString("\\wp_register_script('chartjs', $chartSrc, [], '4.4.1', true);", $source);
+        $this->assertStringContainsString("\\wp_register_script('chartjs', \$chartSrc, [], '4.5.1', true);", $source);
+        $this->assertStringNotContainsString("\\wp_register_script('chartjs', \$chartSrc, [], '4.4.1', true);", $source);
     }
 }
