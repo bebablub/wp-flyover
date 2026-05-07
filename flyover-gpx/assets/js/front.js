@@ -529,6 +529,9 @@
     // Chart tabs container
     var chartTabs = createEl('div', 'fgpx-chart-tabs');
     chartTabs.style.cssText = 'display:flex;border-bottom:1px solid #ddd;background:#f8f9fa;margin-bottom:0';
+    var chartTabsHint = createEl('div', 'fgpx-chart-tabs-hint');
+    chartTabsHint.textContent = (I18N.swipeTabsHint || 'Swipe to see more tabs');
+    chartTabsHint.setAttribute('aria-hidden', 'true');
     
     // Chart legend controls (for All Data tab)
     var chartLegend = createEl('div', 'fgpx-chart-legend');
@@ -613,6 +616,7 @@
     weatherOverviewPanel.appendChild(weatherOverviewPlayhead);
     statsChart.appendChild(stats);
     statsChart.appendChild(chartTabs);
+    statsChart.appendChild(chartTabsHint);
     statsChart.appendChild(chartLegend);
     statsChart.appendChild(chartWrap);
     statsChart.appendChild(mediaPanel);
@@ -6100,6 +6104,10 @@
       var overlay = document.createElement('div');
       overlay.className = 'fgpx-photo-overlay';
       overlay.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#2a2a2a;z-index:9999;pointer-events:auto;opacity:0;transition:opacity .25s ease';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-label', 'Photo viewer');
+      overlay.setAttribute('aria-hidden', 'true');
       var overlayImg = document.createElement('img');
       overlayImg.style.cssText = 'max-width:90%;max-height:100%;object-fit:contain;box-shadow:0 2px 10px rgba(0,0,0,.5)';
       overlay.appendChild(overlayImg);
@@ -6116,9 +6124,11 @@
       overlayClose.className = 'fgpx-photo-overlay-close';
       overlayClose.type = 'button';
       overlayClose.textContent = '×';
+      overlayClose.setAttribute('aria-label', 'Close photo viewer');
       overlayClose.style.cssText = 'position:absolute;top:12px;right:14px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.45);background:rgba(0,0,0,0.55);color:#fff;font-size:24px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center';
       overlay.appendChild(overlayClose);
       ui.mapEl.appendChild(overlay);
+      var overlayLastFocusedElement = null;
       function updateOverlayViewerControls() {
       }
       function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
@@ -6163,6 +6173,8 @@
         }
 
         overlay.style.display = 'flex'; 
+        overlay.setAttribute('aria-hidden', 'false');
+        overlayLastFocusedElement = document.activeElement;
         
         // During recording, use dark grey background to match map layer
         if (videoRecorder && videoRecorder.isRecording) {
@@ -6173,6 +6185,7 @@
         
         try { overlay.offsetHeight; } catch(_) {} 
         overlay.style.opacity = '1'; 
+        try { overlayClose.focus({ preventScroll: true }); } catch(_) { try { overlayClose.focus(); } catch(__) {} }
         updateOverlayViewerControls();
       }
       function hideOverlay() {
@@ -6193,6 +6206,7 @@
               if (doneFired) return;
               doneFired = true; 
               overlay.style.display = 'none'; 
+              overlay.setAttribute('aria-hidden', 'true');
               overlayImg.src = ''; 
               overlayCaption.textContent = ''; 
               overlayCaption.style.display = 'none';
@@ -6216,6 +6230,10 @@
                 videoRecorder.clearPhotoOverlay();
               }
               DBG.log('overlay hide done');
+              if (overlayLastFocusedElement && typeof overlayLastFocusedElement.focus === 'function' && document.contains(overlayLastFocusedElement)) {
+                try { overlayLastFocusedElement.focus({ preventScroll: true }); } catch(_) { try { overlayLastFocusedElement.focus(); } catch(__) {} }
+              }
+              overlayLastFocusedElement = null;
               resolve();
             };
             overlay.addEventListener('transitionend', done);
@@ -6224,6 +6242,7 @@
             }, 500); // Increased timeout to ensure map layer is cleared
           } catch(_) {
             overlay.style.display = 'none'; 
+            overlay.setAttribute('aria-hidden', 'true');
             overlayImg.src = ''; 
             overlayCaption.textContent = ''; 
             overlayCaption.style.display = 'none';
@@ -6245,6 +6264,10 @@
               DBG.log('hideOverlay (catch): Force clearing photo overlay (not recording but videoRecorder exists)');
               videoRecorder.clearPhotoOverlay();
             }
+            if (overlayLastFocusedElement && typeof overlayLastFocusedElement.focus === 'function' && document.contains(overlayLastFocusedElement)) {
+              try { overlayLastFocusedElement.focus({ preventScroll: true }); } catch(_) { try { overlayLastFocusedElement.focus(); } catch(__) {} }
+            }
+            overlayLastFocusedElement = null;
             resolve();
           }
         });
@@ -6410,6 +6433,11 @@
       // ESC to close
       var onOverlayKeydown = function(e){
         if (!document.contains(root)) return;
+        if (overlay.style.display !== 'none' && (e.key === 'Tab' || e.code === 'Tab')) {
+          e.preventDefault();
+          try { overlayClose.focus({ preventScroll: true }); } catch(_) { try { overlayClose.focus(); } catch(__) {} }
+          return;
+        }
         if (overlay.style.display !== 'none' && (e.key === 'Escape' || e.code === 'Escape')) { 
           hideOverlay().then(function() { 
             overlayActive = false; 

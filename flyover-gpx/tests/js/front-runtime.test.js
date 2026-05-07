@@ -559,6 +559,12 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC.includes("tabElevation.addEventListener('click', function() { window.switchChartTab('elevation'); });")).toBe(false);
   });
 
+  test('mobile chart tabs include a swipe hint element', () => {
+    expect(FRONT_SRC.includes("var chartTabsHint = createEl('div', 'fgpx-chart-tabs-hint');")).toBe(true);
+    expect(FRONT_SRC.includes("chartTabsHint.textContent = (I18N.swipeTabsHint || 'Swipe to see more tabs');")).toBe(true);
+    expect(FRONT_SRC.includes('statsChart.appendChild(chartTabsHint);')).toBe(true);
+  });
+
   test('media tab listener is only added if FGPX.photosEnabled, using queueTabUntilReady', () => {
     expect(FRONT_SRC.includes("if (FGPX.photosEnabled) {")).toBe(true);
     expect(FRONT_SRC.includes("tabMedia.addEventListener('click', queueTabUntilReady('media'));")).toBe(true);

@@ -74,6 +74,19 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertStringContainsString('JSON decode error for weather summary in AJAX endpoint', $source);
     }
 
+    public function test_track_request_strategy_and_host_post_are_normalized_for_cache_stability(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString('private static function normalize_track_strategy(string $strategy): string', $source);
+        $this->assertStringContainsString("return \$strategy === 'latest_embed' ? 'latest_embed' : '';", $source);
+        $this->assertStringContainsString('private static function normalize_host_post_id(int $hostPostId): int', $source);
+        $this->assertStringContainsString("\$hostPostForCache = self::normalize_host_post_id((int) \$request->get_param('host_post'));", $source);
+        $this->assertStringContainsString("\$strategy = self::normalize_track_strategy((string) \$request->get_param('strategy'));", $source);
+        $this->assertStringNotContainsString('_hp_', $source);
+    }
+
     public function test_corrupted_geojson_returns_explicit_server_errors_in_rest_and_ajax(): void
     {
         $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';

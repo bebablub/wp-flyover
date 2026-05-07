@@ -22,6 +22,28 @@ final class Rest
     }
 
     /**
+     * Normalize external strategy input so cache keys cannot be exploded by arbitrary values.
+     */
+    private static function normalize_track_strategy(string $strategy): string
+    {
+        $strategy = \sanitize_key($strategy);
+        return $strategy === 'latest_embed' ? 'latest_embed' : '';
+    }
+
+    /**
+     * Normalize host post input used in cache variants.
+     */
+    private static function normalize_host_post_id(int $hostPostId): int
+    {
+        if ($hostPostId <= 0) {
+            return 0;
+        }
+
+        $post = \get_post($hostPostId);
+        return $post ? $hostPostId : 0;
+    }
+
+    /**
      * Compress coordinates using relative encoding for smaller payloads.
      * Reduces coordinate precision while maintaining visual accuracy.
      *
@@ -436,8 +458,8 @@ final class Rest
         $simplifyEnabled = (string) \get_option('fgpx_backend_simplify_enabled', '0') === '1';
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
-        $hostPostForCache = (int) $request->get_param('host_post');
-        $strategy = \sanitize_key((string) $request->get_param('strategy'));
+        $hostPostForCache = self::normalize_host_post_id((int) $request->get_param('host_post'));
+        $strategy = self::normalize_track_strategy((string) $request->get_param('strategy'));
         $resolvedHostPostForCache = $hostPostForCache;
         if ($resolvedHostPostForCache === 0 && $strategy === 'latest_embed') {
             $resolvedHostPostForCache = $this->find_latest_embedding_post_id($id);
@@ -454,7 +476,7 @@ final class Rest
         }
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_rh_' . $resolvedHostPostForCache . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_rh_' . $resolvedHostPostForCache . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
 
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -888,8 +910,8 @@ final class Rest
             \wp_send_json(['message' => 'Forbidden'], 403);
         }
 
-        $hostPostForCache = isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0;
-        $strategy = \sanitize_key((string) ($_GET['strategy'] ?? ''));
+        $hostPostForCache = self::normalize_host_post_id(isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0);
+        $strategy = self::normalize_track_strategy((string) ($_GET['strategy'] ?? ''));
         $hostPost = $hostPostForCache;
         
         // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
@@ -917,7 +939,7 @@ final class Rest
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
         
-        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_hp_' . $hostPostForCache . '_rh_' . $hostPost . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
+        $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_rh_' . $hostPost . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
             header('Cache-Control: public, max-age=300');

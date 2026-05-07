@@ -206,6 +206,21 @@ final class Admin
 	}
 
 	/**
+	 * Validate HH:MM 24h clock values.
+	 */
+	private function isValidClockTime(string $value): bool
+	{
+		if (!\preg_match('/^(\d{2}):(\d{2})$/', $value, $matches)) {
+			return false;
+		}
+
+		$hours = (int) $matches[1];
+		$minutes = (int) $matches[2];
+
+		return $hours >= 0 && $hours <= 23 && $minutes >= 0 && $minutes <= 59;
+	}
+
+	/**
 	 * Safely get and sanitize a text field from POST data.
 	 * 
 	 * @param string $field The POST field name
@@ -2606,11 +2621,11 @@ final class Admin
 		\update_option('fgpx_theme_mode', $themeMode, true);
 		if (isset($_POST['fgpx_theme_auto_dark_start'])) {
 			$start = \sanitize_text_field((string) $_POST['fgpx_theme_auto_dark_start']);
-			\update_option('fgpx_theme_auto_dark_start', \preg_match('/^\d{2}:\d{2}$/', $start) ? $start : '22:00', true);
+			\update_option('fgpx_theme_auto_dark_start', $this->isValidClockTime($start) ? $start : '22:00', true);
 		}
 		if (isset($_POST['fgpx_theme_auto_dark_end'])) {
 			$end = \sanitize_text_field((string) $_POST['fgpx_theme_auto_dark_end']);
-			\update_option('fgpx_theme_auto_dark_end', \preg_match('/^\d{2}:\d{2}$/', $end) ? $end : '06:00', true);
+			\update_option('fgpx_theme_auto_dark_end', $this->isValidClockTime($end) ? $end : '06:00', true);
 		}
 		\wp_safe_redirect(\add_query_arg(['page' => 'flyover-gpx', 'updated' => 1], \admin_url('options-general.php')));
 		exit;

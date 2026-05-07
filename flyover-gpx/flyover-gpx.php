@@ -143,7 +143,13 @@ require_once FGPX_DIR_PATH . 'includes/CLI.php';             // Command-line int
  */
 \register_deactivation_hook(FGPX_FILE, static function (): void {
     global $wpdb;
+    $assetTransientLike = $wpdb->esc_like('_transient_fgpx_asset_') . '%';
+    $assetTimeoutTransientLike = $wpdb->esc_like('_transient_timeout_fgpx_asset_') . '%';
     $wpdb->query(
-        "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_fgpx\\_asset\\_%' OR option_name LIKE '_transient_timeout_fgpx\\_asset\\_%'"
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $assetTransientLike,
+            $assetTimeoutTransientLike
+        )
     );
 });

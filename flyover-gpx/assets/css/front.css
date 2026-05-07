@@ -1181,6 +1181,17 @@
   font-weight: 600;
 }
 
+.fgpx .fgpx-chart-tabs-hint {
+  display: none;
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #6b7280;
+  background: linear-gradient(180deg, rgba(248,249,250,0.95) 0%, rgba(248,249,250,0.7) 100%);
+  border-bottom: 1px solid #e5e7eb;
+  text-align: center;
+}
+
 /* Responsive */
 @media (max-width: 680px) {
   .fgpx-weather-cinema {
@@ -1203,6 +1214,9 @@
     display: flex;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  .fgpx .fgpx-chart-tabs-hint {
+    display: block;
   }
   .fgpx .fgpx-chart-tabs .fgpx-chart-tab {
     flex: 0 0 auto;

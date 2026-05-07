@@ -133,4 +133,14 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString("'unique_coords_truncated' => !empty(\$weatherMeta['unique_coords_truncated'])", $source);
         $this->assertStringContainsString('Coverage Limited:', $source);
     }
+
+    public function test_theme_auto_dark_times_require_valid_24h_clock_values(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('private function isValidClockTime(string $value): bool', $source);
+        $this->assertStringContainsString("\$this->isValidClockTime(\$start) ? \$start : '22:00'", $source);
+        $this->assertStringContainsString("\$this->isValidClockTime(\$end) ? \$end : '06:00'", $source);
+    }
 }
