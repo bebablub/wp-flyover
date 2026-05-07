@@ -26,7 +26,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - Dark mode‑friendly UI
 - Gallery with tile/list view, Searchable, filterable, orderable
 - Timeline with horizontal and vertical view, overlay player
-- Admin tools: Add New Track page, sortable stats, live preview
+- Admin tools: Add New Track page, sortable stats, live preview, usage statistics
 - Configurable defaults (height, zoom, pitch, chart colors, elevation coloring)
 - Custom styling: inline style.json or vector style URL; OSM raster fallback
 - Backend GPX simplification enabled by default with dynamic targets for large tracks
@@ -52,40 +52,39 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 ### Screenshots
 
 <div align="center" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin: 20px 0;">
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot1.jpg" alt="Main interface with map and charts" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Main interface with map and charts</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot2.jpg" alt="Photos on map" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Photos on map</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot3.jpg" alt="Weather & Wind analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather & Wind analysis</p>
   </div>
-  </div>
-    <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot9.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Simulation Tab</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot4.jpg" alt="Elevation highlighted on map" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Elevation highlighted on map</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot5.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Weather overlay</p>
   </div>
-    <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot8.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Gallery: Grid view</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot6.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Admin Panel: Plugin settings</p>
   </div>
-  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px;">
+  <div style="flex: 0 0 30%; min-width: 250px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center;">
     <img src="demo/screenshot7.jpg" alt="Weather overlay" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
     <p style="text-align: center; margin: 8px 0 0; color: #666; font-size: 0.9em;">Admin Panel: Track edit</p>
   </div>
@@ -220,112 +219,47 @@ This will fetch the MapTiler satellite style (which includes terrain/DEM by defa
 
 
 
-Embed a browsable track gallery with inline player and social sharing:
+
+## Track Gallery & Timeline
+
+Embed a browsable track gallery or timeline with inline player:
 
 ```text
 [flyover_gpx_gallery]
-```
-
-Parameters (all optional):
-
-- `per_page` (optional): Number of tracks shown before "Load more". Range 4–48. Default `12`.
-- `height` (optional): Player height when a track is opened. Default `625px`.
-- `style` (optional): Map style for the player — `raster` (default) or `vector`.
-- `style_url` (optional): MapLibre style URL when `style="vector"`.
-- `show_view_toggle` (optional): Show grid/list toggle buttons. Accepts `1|0|true|false`. Default `1`.
-- `show_search` (optional): Show search input. Accepts `1|0|true|false`. Default `1`.
-- `default_sort` (optional): Initial sort key. One of `newest|distance|duration|gain|title`. Default `newest`.
-- `photo_order_mode` (optional): Photo ordering for the inline player. One of `geo_first|time_first`. Default from admin setting.
-
-Default resolution order:
-
-- Shortcode attribute value (if provided)
-- Admin Gallery defaults (Settings → Flyover GPX)
-- Built-in fallback
-
-Features:
-
-- Grid and list card view with distance, duration, elevation gain, and upload date
-- Full-text search across title and metadata
-- Sort by newest, distance, duration, elevation gain, or title
-- Inline player panel — opens below the list when a track is selected
-- Sharing: Facebook, Twitter/X, WhatsApp buttons + copy-link button (copies share URL with `#track-{id}` hash)
-- Shared URLs include a `#track-{id}` hash that auto-opens the correct track on page load
-- Multiple `[flyover_gpx_gallery]` shortcodes on the same page are fully isolated
-- **Photo enrichment from embedding posts** – When opening a track from the gallery, the player automatically loads photos from the latest post that embeds the track, providing richer visual context
-
-#### Photo Enrichment from Embedding Posts
-
-When you open a track in the gallery player, the plugin automatically searches for the most recent published post that contains the same track shortcode and loads photos from that post instead of (or in addition to) the track's own attachments. This feature enriches tracks with contextual photos from blog posts, reviews, or articles that reference them.
-
-**How it works:**
-
-1. Gallery player detects the **latest embedding post** — the most recent published post that contains `[flyover_gpx id="123"]` (the track shortcode)
-2. Photos are collected from that post in this order:
-   - Direct media attachments to the post
-   - Images in gallery blocks
-   - Inline images in post content
-   - Fallback: track's own attached images if the embedding post has no photos
-3. Each photo includes its **source post reference** — the player UI indicates "📷 Photo from linked post" when viewing photos enriched from an embedding post
-4. **Cache strategy**: Photos are cached for 6 hours. If you delete or unpublish the embedding post, the cache is automatically invalidated
-
-**Example:**
-
-- Track: "Downtown Bike Trail" has 5 attached photos
-- Blog post: "My Saturday Ride" embeds this track with 12 photos
-- Gallery result: Player shows the 12 photos from the blog post when opening the track from the gallery
-
-**Tips:**
-
-- Create posts with `[flyover_gpx id="123"]` to embed tracks alongside journey photos, observations, or race reports
-- The plugin automatically picks the **latest post** by publish date; if multiple posts embed the same track, the newest one is used
-- For consistent photo experience: upload photos to the post that embeds the track using the WordPress gallery block or inline images
-- Photos are deduplicated by approximate location (~10m precision) to avoid duplicate markers on the map
-
-Examples:
-
-```text
-[flyover_gpx_gallery]
-[flyover_gpx_gallery per_page="6" height="500px"]
-[flyover_gpx_gallery show_view_toggle="0"]
-[flyover_gpx_gallery show_search="0" default_sort="distance"]
-[flyover_gpx_gallery photo_order_mode="time_first"]
-```
----
-
-## Timeline View
-Embed a browsable timeline of all tracks with inline player and month/year navigation:
-
-```text
 [flyover_gpx_timeline]
 ```
 
-Parameters (all optional):
+**Common options:**
 
-- `height` (timeline height, e.g. `400px`, default `400px`)
-- `per_month` (max tracks per month, default `12`)
-- `style` (`raster` or `vector`)
-- `style_url` (MapLibre style URL)
-- `show_search` (`1` or `0`, default `1`)
-- `default_sort` (`newest|distance|duration|gain|title`, default `newest`)
+- `height`: Player or timeline height (e.g. `625px`, `400px`)
+- `style`: `raster` (default) or `vector`
+- `style_url`: MapLibre style URL (for `vector`)
+- `show_search`: Show search input (`1`/`0`, default `1`)
+- `default_sort`: `newest|distance|duration|gain|title` (default `newest`)
 
-Default resolution order:
-- Shortcode attribute value (if provided)
-- Admin Timeline defaults (Settings → Flyover GPX)
-- Built-in fallback
+**Gallery only:**
+- `per_page`: Tracks per page (4–48, default `12`)
+- `show_view_toggle`: Show grid/list toggle (`1`/`0`, default `1`)
+- `photo_order_mode`: `geo_first|time_first`
 
-Features:
-- Horizontal scrollable timeline with month/year headers
-- Hover preview and quick open in inline player
-- Keyboard navigation, mobile/desktop responsive
-- Card style, hover effect, and title font match gallery
-- Debug logging toggle (respects admin setting)
+**Timeline only:**
+- `per_month`: Max tracks per month (default `12`)
 
-Example:
+**Features:**
+- Grid/list or timeline view with inline player
+- Search, sort, and filter tracks
+- Social sharing and deep-linking
+- Gallery: loads photos from latest embedding post for richer context
+- Timeline: horizontal scroll, month/year headers, responsive design
+
+**Examples:**
 ```text
+[flyover_gpx_gallery per_page="6" height="500px" show_view_toggle="0"]
 [flyover_gpx_timeline height="350px" per_month="8" style="vector" show_search="0"]
 ```
----
+
+See plugin settings for more defaults and options.
+
 ### Inline Style JSON (Admin)
 
 You can paste a complete MapLibre `style.json` into Settings → Flyover GPX → Shortcode Defaults → “Inline style JSON (optional)”.
@@ -363,7 +297,7 @@ Example minimal style JSON with OSM raster source (only for dev, does not provid
 }
 ```
 
-Example style for 3D terrain rendering and points of interrest (for all features):
+Example style for 3D terrain rendering and points of interest (short version):
 
 ```json
 {
@@ -372,44 +306,38 @@ Example style for 3D terrain rendering and points of interrest (for all features
   "sources": {
     "terrain": {
       "type": "raster-dem",
-      "url": "https://maps.6bes.de/tiles/terrain-rgb-v2/tiles.json?key={{API_KEY}}",
-      "tileSize": 512
+      "tiles": [
+        "https://maps.6bes.de/tiles/terrain-rgb-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}"
+      ],
+      "tileSize": 512,
+      "minzoom": 0,
+      "maxzoom": 14
     },
     "satellite": {
       "type": "raster",
       "tiles": [
         "https://maps.6bes.de/maps/satellite/{z}/{x}/{y}.jpg?key={{API_KEY}}"
       ],
-      "tileSize": 512
+      "tileSize": 512,
+      "minzoom": 0,
+      "maxzoom": 14
     },
     "openmaptiles": {
       "type": "vector",
-      "url": "https://maps.6bes.de/tiles/v3/tiles.json?key={{API_KEY}}"
+      "tiles": [
+        "https://maps.6bes.de/tiles/v3/{z}/{x}/{y}.pbf?key={{API_KEY}}"
+      ],
+      "minzoom": 0,
+      "maxzoom": 14
     }
   },
   "layers": [
     {
       "id": "satellite",
       "type": "raster",
-      "source": "satellite"
-    },
-    {
-      "id": "cycleways",
-      "type": "line",
-      "source": "openmaptiles",
-      "source-layer": "transportation",
-      "filter": [
-        "any",
-        ["==", ["get", "class"], "cycleway"],
-        [
-          "all",
-          ["==", ["get", "class"], "path"],
-          ["in", ["get", "bicycle"], ["literal", ["yes", "designated", "official"]]]
-        ]
-      ],
+      "source": "satellite",
       "paint": {
-        "line-color": "#00c853",
-        "line-width": 2
+        "raster-fade-duration": 0
       }
     },
     {
@@ -417,33 +345,19 @@ Example style for 3D terrain rendering and points of interrest (for all features
       "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "place",
+      "minzoom": 4,
       "layout": {
         "text-field": ["get", "name"],
         "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
         "text-size": 14,
-        "text-anchor": "center"
+        "text-anchor": "center",
+        "text-allow-overlap": false,
+        "text-ignore-placement": false
       },
       "paint": {
         "text-color": "#ffffff",
         "text-halo-color": "#000000",
         "text-halo-width": 1
-      }
-    },
-    {
-      "id": "water-name-labels",
-      "type": "symbol",
-      "source": "openmaptiles",
-      "source-layer": "water_name",
-      "layout": {
-        "text-field": ["get", "name"],
-        "text-font": ["Open Sans Italic", "Arial Unicode MS Regular"],
-        "text-size": 12,
-        "symbol-placement": "line"
-      },
-      "paint": {
-        "text-color": "#4FC3F7",
-        "text-halo-color": "#000000",
-        "text-halo-width": 0.5
       }
     }
   ]
@@ -496,28 +410,24 @@ Downstripped raster style (fewest requests, no API key, no labels)
 }
 ```
 
-Notes
-- These styles intentionally remove labels/icons to eliminate glyph and sprite requests.
-- Using 512px raster tiles and capping maxzoom saves requests, especially at higher zooms.
-- If you need satellite, swap the `tiles` URL under `osm` with a satellite raster provider, but check usage terms/quotas.
-- For the fewest requests overall, use the “Raster Minimal” style and disable tile prefetching in the plugin settings.
+
+**Notes:**
+- Remote style URL fails? Falls back to OSM raster.
+- Multiple embeds per page: first uses `fgpx-app`, others `fgpx-app-N`.
+- Disable tile prefetching to reduce extra requests.
 
 ## REST API
 
 - Base: `/wp-json/fgpx/v1`
 - Endpoint: `GET /track/{id}`
-```json
+
+**Response fields (all always present, may be empty/null):**
+
+```jsonc
 {
   "id": 123,
   "name": "my-ride.gpx",
-  "stats": {
-    "total_distance_m": 42195.3,
-    "moving_time_s": 10800,
-    "average_speed_m_s": 3.9,
-    "elevation_gain_m": 520,
-    "min_elevation_m": 120,
-    "max_elevation_m": 980
-  },
+  "stats": { /* summary stats, may be empty object */ },
   "geojson": {
     "type": "LineString",
     "coordinates": [ [lon, lat, ele], ... ],
@@ -547,11 +457,26 @@ Notes
       "lon": 11.381095,
       "timestamp": "2025-08-24T11:28:47+00:00",
       "thumbUrl": "https://.../IMG_2025...-225x300.jpg",
-      "fullUrl": "https://.../IMG_2025...-768x1024.jpg"
+      "fullUrl": "https://.../IMG_2025...-768x1024.jpg",
+      "source_post_id": 0,
+      "source_post_title": ""
     }
-  ]
+  ],
+  "photoOrderMode": "geo_first",
+  "waypoints": [ /* array of POIs, may be empty */ ],
+  "source_post_id": 0,
+  "source_post_title": "",
+  "weather": { /* GeoJSON FeatureCollection or empty */ },
+  "weatherSummary": null
 }
 ```
+
+- All fields are always present, but may be empty or null if not available.
+- `geojson` contains the full track geometry and all per-point arrays in `properties`.
+- `photos` includes extra fields for source post reference.
+- `weather` and `weatherSummary` are always present (may be empty/null).
+- `waypoints` is always present (may be empty array).
+- `photoOrderMode`, `source_post_id`, `source_post_title` are always present.
 
 `estimatedPower` is `true` when power values were computed on the backend (instead of read from the GPX stream).
 
@@ -665,34 +590,27 @@ Build/Install locally:
 composer install
 ```
 
-Folder layout:
+Folder layout (main files/folders):
 
 ```text
 flyover-gpx/
   flyover-gpx.php
-  includes/
-    Options.php
-    ErrorHandler.php
-    AssetManager.php
-    DatabaseOptimizer.php
-    Plugin.php
-    Rest.php
-    Admin.php
-    CLI.php
-  assets/
-    css/front.css
-    js/front.js
   composer.json
+  package.json
+  includes/           # All PHP classes (Admin, Plugin, Rest, etc.)
+  assets/
+    css/              # Stylesheets (front, gallery, admin, etc.)
+    js/               # JavaScript (front, gallery, lazy, etc.)
+  tests/              # PHPUnit and Jest tests
+  vendor/             # Composer dependencies
 ```
 
 ## Limitations & Notes
 
-- One player instance per page (container id is fixed to `fgpx-app`).
 - Upload limit: 20MB per GPX file.
 - Large tracks are simplified on the backend by default; dynamic targets avoid over/under‑simplification.
 - Local caching is best‑effort and expires automatically; the player gracefully falls back to live fetch.
 - Weather data is cached server‑side (≈2h) to limit API calls.
-- Chart zoom is unavailable for polar charts (wind rose) by design.
 - Video recording requires a modern browser with MediaRecorder API support.
 - Style resolution: Inline JSON (if provided) always takes precedence over remote URL, which takes precedence over OSM fallback.
 
