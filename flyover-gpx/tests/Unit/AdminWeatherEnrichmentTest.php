@@ -187,7 +187,22 @@ final class AdminWeatherEnrichmentTest extends TestCase
     public function test_fetch_returns_partial_weather_when_only_some_coords_succeed(): void
     {
         $responses = [
-            json_encode(['hourly' => ['time' => [0], 'rain' => [1.0], 'wind_speed_10m' => [10.0], 'wind_direction_10m' => [90.0], 'temperature_80m' => [15.0], 'cloud_cover' => [20.0], 'snowfall' => [0.0], 'dew_point_2m' => [10.0], 'temperature_2m' => [15.0], 'relative_humidity_2m' => [70.0]]]),
+            [
+                'body' => json_encode([
+                    'hourly' => [
+                        'time' => [0],
+                        'rain' => [1.0],
+                        'wind_speed_10m' => [10.0],
+                        'wind_direction_10m' => [90.0],
+                        'temperature_80m' => [15.0],
+                        'cloud_cover' => [20.0],
+                        'snowfall' => [0.0],
+                        'dew_point_2m' => [10.0],
+                        'temperature_2m' => [15.0],
+                        'relative_humidity_2m' => [70.0],
+                    ],
+                ])
+            ],
             new \WP_Error('timeout', 'Timeout'),
         ];
         $callIdx = 0;
@@ -254,7 +269,7 @@ final class AdminWeatherEnrichmentTest extends TestCase
         $source    = (string) file_get_contents($adminFile);
 
         $this->assertStringContainsString('$maxEnrichPerRequest = 25', $source);
-        $this->assertStringContainsString("'fgpx_weather_deferred' => \$deferred", $source);
+        $this->assertStringContainsString("\$queryArgs['fgpx_weather_deferred'] = \$deferred;", $source);
         $this->assertStringContainsString('Bulk weather enrichment capped for safety', $source);
     }
 

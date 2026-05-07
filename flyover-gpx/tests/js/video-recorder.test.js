@@ -19,6 +19,7 @@ function loadFront() {
 describe('VideoRecorder.js', () => {
   let originalWindowFetch;
   let mockMap;
+  let mockTrack;
   
   beforeAll(() => {
     originalWindowFetch = window.fetch;
@@ -32,6 +33,11 @@ describe('VideoRecorder.js', () => {
     jest.restoreAllMocks();
     
     // Mock MapLibre map with canvas support
+    mockTrack = {
+      stop: jest.fn(),
+      readyState: 'live'
+    };
+
     mockMap = {
       getCanvas: jest.fn(() => {
         const canvas = document.createElement('canvas');
@@ -40,9 +46,7 @@ describe('VideoRecorder.js', () => {
         canvas.captureStream = jest.fn(() => {
           // Mock MediaStream
           return {
-            getTracks: jest.fn(() => [{
-              stop: jest.fn()
-            }])
+            getTracks: jest.fn(() => [mockTrack])
           };
         });
         return canvas;
@@ -102,7 +106,7 @@ describe('VideoRecorder.js', () => {
   test('object URL cleanup timeout is 10 seconds (not 60)', () => {
     const code = FRONT_SRC;
     // Find the scheduleObjectUrlCleanup implementation
-    const match = code.match(/scheduleObjectUrlCleanup.*?setTimeout\([^,]+,\s*(\d+)/);
+    const match = code.match(/scheduleObjectUrlCleanup[\s\S]*?setTimeout\([\s\S]*?,\s*(\d+)/);
     expect(match).toBeTruthy();
     expect(parseInt(match[1], 10)).toBe(10000);
   });
@@ -414,7 +418,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const showCompletionSection = code.match(/showCompletionMessage[\s\S]*?^      \};/m);
+    const showCompletionSection = code.match(/VideoRecorder\.prototype\.showCompletionMessage = function\(\) \{[\s\S]*?^      \};/m);
     expect(showCompletionSection).toBeTruthy();
     
     // Modal implementation must exist
@@ -470,7 +474,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const stopSection = code.match(/VideoRecorder\.prototype\.stop[\s\S]*?^      \};/m);
+    const stopSection = code.match(/VideoRecorder\.prototype\.stop = function\(\) \{[\s\S]*?^      \};/m);
     expect(stopSection).toBeTruthy();
     expect(stopSection[0]).toContain('mediaRecorder.state');
     expect(stopSection[0]).toContain('recording');
@@ -484,7 +488,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const stopSection = code.match(/VideoRecorder\.prototype\.stop[\s\S]*?^      \};/m);
+    const stopSection = code.match(/VideoRecorder\.prototype\.stop = function\(\) \{[\s\S]*?^      \};/m);
     expect(stopSection).toBeTruthy();
     expect(stopSection[0]).toContain('catch (error)');
     expect(stopSection[0]).toContain('this.restoreTextMarkers()');
@@ -512,7 +516,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const startSection = code.match(/VideoRecorder\.prototype\.start[\s\S]*?^      \};/m);
+    const startSection = code.match(/VideoRecorder\.prototype\.start = function\(\) \{[\s\S]*?^      \};/m);
     expect(startSection).toBeTruthy();
     expect(startSection[0]).toContain('showInitError');
     expect(startSection[0]).toContain('catch');
@@ -569,7 +573,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const estimateSection = code.match(/calculateEstimatedSize[\s\S]*?return.*?;/);
+    const estimateSection = code.match(/VideoRecorder\.prototype\.calculateEstimatedSize = function\(\) \{[\s\S]*?return.*?;/);
     expect(estimateSection).toBeTruthy();
     expect(estimateSection[0]).toContain('containerOverhead');
     expect(estimateSection[0]).toContain('encodingOverhead');
@@ -602,7 +606,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const modal = code.match(/showCompletionMessage[\s\S]*?ffmpegCmd/);
+    const modal = code.match(/VideoRecorder\.prototype\.showCompletionMessage = function\(\) \{[\s\S]*?ffmpegCmd/);
     expect(modal).toBeTruthy();
     expect(modal[0]).toContain('ffmpeg -f concat');
     expect(modal[0]).toContain('filelist.txt');
@@ -617,7 +621,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
       'utf8'
     );
     
-    const copySection = code.match(/ffmpegCmd[\s\S]*?navigator.clipboard/);
+    const copySection = code.match(/VideoRecorder\.prototype\.showCompletionMessage = function\(\) \{[\s\S]*?Copied!/);
     expect(copySection).toBeTruthy();
     expect(copySection[0]).toContain('navigator.clipboard.writeText');
     expect(copySection[0]).toContain('Copied!');

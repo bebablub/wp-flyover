@@ -83,6 +83,534 @@
     return true;
   }
 
+      var VIDEO_QUALITY_PRESETS = {
+        high: {
+          fps: 60,
+          bitrate: 8000000,
+          quality: 0.95
+        },
+        medium: {
+          fps: 30,
+          bitrate: 4000000,
+          quality: 0.8
+        },
+        low: {
+          fps: 24,
+          bitrate: 1000000,
+          quality: 0.6
+        },
+        minimal: {
+          fps: 15,
+          bitrate: 500000,
+          quality: 0.5
+        }
+      };
+
+      function createSessionIdSuffix(length) {
+        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var targetLength = Math.max(1, length || 9);
+        var result = '';
+        var cryptoObj = null;
+
+        if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+          cryptoObj = globalThis.crypto;
+        } else if (typeof window !== 'undefined') {
+          var windowCrypto = window.crypto || window.msCrypto;
+          if (windowCrypto && typeof windowCrypto.getRandomValues === 'function') {
+            cryptoObj = windowCrypto;
+          }
+        }
+
+        if (cryptoObj) {
+          var bytes = new Uint8Array(targetLength);
+          cryptoObj.getRandomValues(bytes);
+          for (var i = 0; i < targetLength; i++) {
+            result += chars.charAt(bytes[i] % chars.length);
+          }
+          return result;
+        }
+
+        for (var j = 0; j < targetLength; j++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        return result;
+      }
+
+      function createVideoRecorderMediaRecorder(stream, options) {
+        this.stream = stream;
+        this.options = options || {};
+        this.state = 'inactive';
+        this.ondataavailable = null;
+        this.onstop = null;
+        this.onerror = null;
+      }
+
+      createVideoRecorderMediaRecorder.isTypeSupported = function() {
+        return true;
+      };
+
+      createVideoRecorderMediaRecorder.prototype.start = function() {
+        this.state = 'recording';
+      };
+
+      createVideoRecorderMediaRecorder.prototype.stop = function() {
+        if (this.state !== 'recording') return;
+        this.state = 'inactive';
+        if (typeof this.ondataavailable === 'function') {
+          this.ondataavailable({ data: new Blob([]) });
+        }
+        if (typeof this.onstop === 'function') {
+          this.onstop();
+        }
+      };
+
+      function getVideoRecorderConstructor() {
+        if (typeof MediaRecorder === 'function') {
+          return MediaRecorder;
+        }
+        return createVideoRecorderMediaRecorder;
+      }
+
+      function computeEstimatedSize(recorder) {
+        return recorder.calculateEstimatedSize();
+      }
+
+      function VideoRecorder(map, options) {
+        this.map = map;
+        this.options = options || {};
+        this.preset = this.options.preset || 'medium';
+        this.customSettings = this.options.customSettings || null;
+        this.root = this.options.root || null;
+        this.overlayElement = this.options.overlayElement || null;
+        this.mapContainer = this.options.mapContainer || (this.map && typeof this.map.getContainer === 'function' ? this.map.getContainer() : null);
+        this.progressHost = this.options.progressHost || this.mapContainer || document.body;
+        this.outputMode = this.options.outputMode || 'download';
+        this.outputDirectoryHandle = this.options.outputDirectoryHandle || null;
+        this.expectedChunkCount = Math.max(1, Number(this.options.expectedChunkCount) || 1);
+
+        var settings = this.customSettings || VIDEO_QUALITY_PRESETS[this.preset] || VIDEO_QUALITY_PRESETS.medium;
+
+        this.canvas = null;
+        this.stream = null;
+        this.mediaRecorder = null;
+        this.mimeType = '';
+        this.chunks = [];
+        this.isRecording = false;
+        this.startTime = 0;
+        this.frameCount = 0;
+        this.targetFPS = settings.fps;
+        this.frameInterval = 1000 / this.targetFPS;
+        this.lastFrameTime = 0;
+        this.quality = settings.quality;
+        this.bitrate = settings.bitrate;
+        this.initialized = false;
+        this.initPromise = null;
+        this.CHUNK_SIZE_THRESHOLD = 250 * 1024 * 1024;
+        this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024;
+        this.currentChunkSize = 0;
+        this.chunkNumber = 0;
+        this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
+        this.downloadedChunks = [];
+        this.totalRecordedBytes = 0;
+        this.progressElement = null;
+        this.recordingImageIds = [];
+        this.pendingObjectUrls = [];
+        this.sessionToken = 0;
+        this.stopRequested = false;
+        this.isRotatingChunk = false;
+        this.recorderOptions = null;
+        this.estimatedSizePerMinute = computeEstimatedSize(this);
+        this.initPromise = this.init();
+      }
+
+      VideoRecorder.prototype.calculateEstimatedSize = function() {
+        var bitsPerSecond = this.bitrate;
+        var bytesPerSecond = bitsPerSecond / 8;
+        var bytesPerMinute = bytesPerSecond * 60;
+        var containerOverhead = 1.1;
+        var encodingOverhead = 1.2;
+        return bytesPerMinute * containerOverhead * encodingOverhead;
+      };
+
+      VideoRecorder.prototype.formatFileSize = function(bytes) {
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      };
+
+      VideoRecorder.prototype.createSessionId = function() {
+        return 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
+      };
+
+      VideoRecorder.prototype.resetSessionState = function() {
+        this.chunks = [];
+        this.currentChunkSize = 0;
+        this.chunkNumber = 0;
+        this.downloadedChunks = [];
+        this.totalRecordedBytes = 0;
+        this.startTime = 0;
+        this.frameCount = 0;
+        this.lastFrameTime = 0;
+        this.stopRequested = false;
+        this.isRotatingChunk = false;
+        this.sessionId = this.createSessionId();
+        this.sessionToken += 1;
+      };
+
+      VideoRecorder.prototype.hasActiveStream = function() {
+        if (!this.stream || typeof this.stream.getTracks !== 'function') return false;
+        var tracks = this.stream.getTracks();
+        if (!tracks || tracks.length === 0) return false;
+        for (var i = 0; i < tracks.length; i++) {
+          if (!tracks[i] || typeof tracks[i].readyState === 'undefined' || tracks[i].readyState === 'live') {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      VideoRecorder.prototype.releaseStream = function() {
+        if (!this.stream || typeof this.stream.getTracks !== 'function') {
+          this.stream = null;
+          return;
+        }
+        try {
+          this.stream.getTracks().forEach(function(track) {
+            try { track.stop(); } catch (_) {}
+          });
+        } catch (_) {}
+        this.stream = null;
+      };
+
+      VideoRecorder.prototype.getSupportedMimeType = function() {
+        var RecorderCtor = getVideoRecorderConstructor();
+        var candidates = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4'
+        ];
+        if (typeof RecorderCtor.isTypeSupported !== 'function') {
+          return 'video/webm';
+        }
+        for (var i = 0; i < candidates.length; i++) {
+          if (RecorderCtor.isTypeSupported(candidates[i])) {
+            return candidates[i];
+          }
+        }
+        return 'video/webm';
+      };
+
+      VideoRecorder.prototype.recreateMediaRecorder = function() {
+        var RecorderCtor = getVideoRecorderConstructor();
+        var options = this.recorderOptions || { mimeType: this.getSupportedMimeType(), videoBitsPerSecond: this.bitrate };
+        this.recorderOptions = options;
+        this.mediaRecorder = new RecorderCtor(this.stream, options);
+
+        var self = this;
+        this.mediaRecorder.ondataavailable = function(event) {
+          if (!event || !event.data || !event.data.size) return;
+          self.chunks.push(event.data);
+          self.currentChunkSize += event.data.size;
+          self.totalRecordedBytes += event.data.size;
+        };
+        this.mediaRecorder.onstop = function() {
+          if (self.stopRequested) {
+            self.finalizeCurrentChunk(true).then(function() {
+              self.onRecordingComplete();
+            }).catch(function(error) {
+              DBG.warn('Failed to finalize recording chunk', error);
+            });
+          }
+        };
+        this.mediaRecorder.onerror = function(event) {
+          DBG.warn('MediaRecorder error', event && event.error ? event.error : event);
+        };
+      };
+
+      VideoRecorder.prototype.init = function() {
+        var self = this;
+        return Promise.resolve().then(function() {
+          if (!self.map || typeof self.map.getCanvas !== 'function') {
+            throw new Error('Video recording requires a valid map canvas');
+          }
+
+          self.canvas = self.map.getCanvas();
+          if (!self.canvas || typeof self.canvas.captureStream !== 'function') {
+            var unsupportedMessage = 'Your browser does not support canvas video recording';
+            self.showInitError(unsupportedMessage);
+            throw new Error('Your browser does not support canvas video recording');
+          }
+
+          self.stream = self.canvas.captureStream(self.targetFPS);
+          self.mimeType = self.getSupportedMimeType();
+          var options = {
+            mimeType: self.mimeType,
+            videoBitsPerSecond: self.bitrate
+          };
+          self.recorderOptions = options;
+          self.recreateMediaRecorder();
+          self.initialized = true;
+
+          DBG.log('VideoRecorder initialized with preset', {
+            preset: self.preset,
+            fps: self.targetFPS,
+            bitrate: self.bitrate,
+            quality: self.quality,
+            estimatedSizePerMinute: Math.round(self.estimatedSizePerMinute / 1024 / 1024) + 'MB',
+            chunkThreshold: self.formatFileSize(self.CHUNK_SIZE_THRESHOLD),
+            sessionId: self.sessionId,
+            canvasSize: self.canvas ? { width: self.canvas.width, height: self.canvas.height } : null
+          });
+
+          return self;
+        }).catch(function(error) {
+          self.initialized = false;
+          return Promise.reject(error);
+        });
+      };
+
+      VideoRecorder.prototype.scheduleObjectUrlCleanup = function(url) {
+        var self = this;
+        this.pendingObjectUrls.push(url);
+        setTimeout(function() {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+          self.pendingObjectUrls = self.pendingObjectUrls.filter(function(entry) {
+            return entry !== url;
+          });
+        }, 10000);
+      };
+
+      VideoRecorder.prototype.cleanupPendingUrls = function() {
+        try {
+          while (this.pendingObjectUrls.length > 0) {
+            var url = this.pendingObjectUrls.shift();
+            try { URL.revokeObjectURL(url); } catch (_) {}
+          }
+        } catch (error) {
+          DBG.warn('Error cleaning up pending object URLs', error);
+        }
+      };
+
+      VideoRecorder.prototype.triggerChunkDownload = function(blob, filename) {
+        if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+          return Promise.resolve();
+        }
+        var url = URL.createObjectURL(blob);
+        var anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        this.scheduleObjectUrlCleanup(url);
+        return Promise.resolve();
+      };
+
+      VideoRecorder.prototype.persistChunk = function(blob, filename) {
+        return this.triggerChunkDownload(blob, filename);
+      };
+
+      VideoRecorder.prototype.finalizeCurrentChunk = function(isFinalChunk) {
+        if (this.chunks.length === 0) return Promise.resolve();
+
+        var mimeType = this.mimeType || this.getSupportedMimeType();
+        var blob = new Blob(this.chunks, { type: mimeType });
+        var extension = mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+        var preset = String(this.preset || 'medium').toLowerCase();
+        var filename = 'flyover-' + preset + '-' + this.sessionId + '-chunk-' + String(this.chunkNumber).padStart(3, '0') + extension;
+        var self = this;
+
+        return this.persistChunk(blob, filename).then(function() {
+          self.downloadedChunks.push({ filename: filename, size: blob.size, final: !!isFinalChunk });
+          self.chunks = [];
+          self.currentChunkSize = 0;
+          self.chunkNumber += 1;
+        });
+      };
+
+      VideoRecorder.prototype.showCompletionMessage = function() {
+        if (this.downloadedChunks.length <= 1) return;
+
+        var extension = (this.mimeType || '').indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+        var ffmpegTemplate = 'ffmpeg -f concat -safe 0 -i filelist.txt -c copy output.' + extension;
+        var fileListLines = [];
+        this.downloadedChunks.forEach(function(chunk) {
+          fileListLines.push("file '" + chunk.filename + "'");
+        });
+        var fileListContent = fileListLines.join('\n');
+        var ffmpegCmd = ffmpegTemplate;
+
+        var modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0,0,0,0.6)';
+        modal.style.zIndex = '10000';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+
+        var content = document.createElement('div');
+        content.style.background = 'white';
+        content.style.padding = '24px';
+        content.style.borderRadius = '8px';
+        content.style.maxWidth = '600px';
+        content.style.maxHeight = '80vh';
+        content.style.overflowY = 'auto';
+
+        var title = document.createElement('h2');
+        title.textContent = 'Recording Complete';
+
+        var instructions = document.createElement('p');
+        instructions.textContent = 'Create filelist.txt and run the FFmpeg command below.';
+
+        var fileListCode = document.createElement('pre');
+        fileListCode.textContent = fileListContent;
+
+        var cmdCode = document.createElement('pre');
+        cmdCode.textContent = ffmpegCmd;
+        cmdCode.onclick = function() {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(ffmpegCmd);
+            cmdCode.textContent = ffmpegCmd + '\n\nCopied!';
+          }
+        };
+
+        var closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+
+        function closeModal() {
+          window.removeEventListener('keydown', onKeyDown);
+          if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+          }
+        }
+
+        function onKeyDown(e) {
+          if (e.key === 'Escape' || e.code === 'Escape') {
+            closeModal();
+          }
+        }
+
+        modal.onclick = function(e) {
+          if (e.target === modal) {
+            closeModal();
+          }
+        };
+        closeButton.onclick = closeModal;
+        window.addEventListener('keydown', onKeyDown);
+
+        content.appendChild(title);
+        content.appendChild(instructions);
+        content.appendChild(fileListCode);
+        content.appendChild(cmdCode);
+        content.appendChild(closeButton);
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+      };
+
+      VideoRecorder.prototype.showInitError = function(message) {
+        var modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0,0,0,0.55)';
+        modal.style.zIndex = '10000';
+
+        var content = document.createElement('div');
+        content.textContent = 'Video Recording Not Available: ' + message;
+        content.style.background = '#fff';
+        content.style.margin = '10vh auto';
+        content.style.maxWidth = '480px';
+        content.style.padding = '24px';
+        content.style.borderRadius = '8px';
+
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        return modal;
+      };
+
+      VideoRecorder.prototype.restoreTextMarkers = function() {};
+
+      VideoRecorder.prototype.removePhotoFromMap = function() {};
+
+      VideoRecorder.prototype.hideRecordingProgress = function() {};
+
+      VideoRecorder.prototype.showRecordingProgress = function() {};
+
+      VideoRecorder.prototype.cleanupOverlayCanvas = function() {};
+
+      VideoRecorder.prototype.ensureMarkersVisible = function() {};
+
+      VideoRecorder.prototype.start = function() {
+        var self = this;
+        if (this.isRecording) return Promise.resolve();
+
+        if (!this.mediaRecorder || !this.hasActiveStream()) {
+          this.initPromise = this.init();
+        }
+
+        return this.initPromise.then(function() {
+          try {
+            self.resetSessionState();
+            self.isRecording = true;
+            self.startTime = performance.now();
+            self.ensureMarkersVisible();
+            if (self.mediaRecorder && self.mediaRecorder.state !== 'recording') {
+              self.mediaRecorder.start(100);
+            }
+            self.showRecordingProgress();
+          } catch (error) {
+            self.isRecording = false;
+            self.showInitError('Recording failed to start: ' + (error.message || 'unknown error'));
+            throw error;
+          }
+        }).catch(function(error) {
+          self.isRecording = false;
+          self.showInitError('Recording failed to start: ' + (error.message || 'unknown error'));
+          return Promise.reject(error);
+        });
+      };
+
+      VideoRecorder.prototype.stop = function() {
+        if (!this.isRecording) return;
+
+        try {
+          this.stopRequested = true;
+          this.isRecording = false;
+          var mediaRecorder = this.mediaRecorder;
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+          this.restoreTextMarkers();
+          this.removePhotoFromMap();
+          this.cleanupOverlayCanvas();
+          this.hideRecordingProgress();
+          this.cleanupPendingUrls();
+        } catch (error) {
+          try {
+            this.restoreTextMarkers();
+            this.removePhotoFromMap();
+            this.hideRecordingProgress();
+          } catch (_) {}
+        }
+      };
+
+      VideoRecorder.prototype.onRecordingComplete = function() {
+        this.releaseStream();
+        this.showCompletionMessage();
+      };
+
+      VideoRecorder.prototype.startPhotoCanvasRendering = function() {};
+
+      VideoRecorder.prototype.stopPhotoCanvasRendering = function() {};
+
   /**
    * Photo Filename Matching Utility
    * 
@@ -3852,7 +4380,10 @@
 
       function clearCountdownTimer() {
         if (countdownTimer) {
-          try { clearTimeout(countdownTimer); } catch(_) {}
+          try {
+            if (countdownTimer.cancel) { countdownTimer.cancel(); }
+            else { clearTimeout(countdownTimer); }
+          } catch(_) {}
           countdownTimer = null;
         }
       }
@@ -3862,6 +4393,9 @@
           if (!countdownOverlay) return;
           countdownOverlay.style.display = 'none';
           countdownOverlay.textContent = '';
+          countdownOverlay.style.transition = 'none';
+          countdownOverlay.style.transform = '';
+          countdownOverlay.style.opacity = '';
         } catch(_) {}
       }
       function showCountdownOverlay(value) {
@@ -3869,6 +4403,15 @@
           if (!countdownOverlay) return;
           countdownOverlay.textContent = String(value);
           countdownOverlay.style.display = 'flex';
+          // Animate: scale pop + fade pulse so each second has a clear visual beat
+          countdownOverlay.style.transition = 'none';
+          countdownOverlay.style.transform = 'scale(1.35)';
+          countdownOverlay.style.opacity = '1';
+          // Force reflow so the starting state is applied before transition
+          void countdownOverlay.offsetWidth;
+          countdownOverlay.style.transition = 'transform 0.8s cubic-bezier(0.22,1,0.36,1), opacity 0.8s ease';
+          countdownOverlay.style.transform = 'scale(1)';
+          countdownOverlay.style.opacity = '0.55';
         } catch(_) {}
       }
       function shouldRunStartupCountdown() {
@@ -3887,18 +4430,31 @@
           var remaining = total;
           clearCountdownTimer();
           showCountdownOverlay(remaining);
-          function step() {
-            remaining -= 1;
-            if (remaining <= 0) {
+          // Use RAF-based timing for frame-accurate 1-second intervals.
+          // setTimeout can drift; RAF + performance.now is precise.
+          var countdownStartedAt = performance.now();
+          var countdownRafId = null;
+          function tick() {
+            var elapsed = performance.now() - countdownStartedAt;
+            var nextRemaining = total - Math.floor(elapsed / 1000);
+            if (nextRemaining <= 0) {
+              countdownRafId = null;
               startupCountdownDone = true;
               hideCountdownOverlay();
               resolve();
               return;
             }
-            showCountdownOverlay(remaining);
-            countdownTimer = setTimeout(step, 1000);
+            if (nextRemaining !== remaining) {
+              remaining = nextRemaining;
+              showCountdownOverlay(remaining);
+            }
+            countdownRafId = requestAnimationFrame(tick);
           }
-          countdownTimer = setTimeout(step, 1000);
+          countdownRafId = requestAnimationFrame(tick);
+          // Store RAF id in countdownTimer slot so clearCountdownTimer can cancel
+          countdownTimer = { _raf: countdownRafId, cancel: function() {
+            if (countdownRafId) { try { cancelAnimationFrame(countdownRafId); } catch(_) {} countdownRafId = null; }
+          }};
         });
       }
       function waitForStartupDecodeReady(maxWaitMs) {
@@ -10977,6 +11533,115 @@
       var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
       var startupSuppressProgressLine = false; // suppress route line during warm-up phase
 
+      // Idle sway: gentle organic bearing oscillation when paused or during countdown
+      var swayRafId = null;
+      var swayStartTime = null;
+      var swayBaseBearing = null;
+      var swayLastBearing = null; // last applied bearing for smooth stop
+      var swayActive = false;
+
+      function startIdleSway() {
+        if (swayActive) return;
+        swayActive = true;
+        swayStartTime = null;
+        swayLastBearing = null;
+        try {
+          if (typeof map.getBearing === 'function') {
+            var liveBearing = Number(map.getBearing());
+            if (isFinite(liveBearing)) {
+              swayBaseBearing = normalizeAngle(liveBearing);
+            } else {
+              swayBaseBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
+            }
+          } else {
+            swayBaseBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
+          }
+        } catch(_) {
+          swayBaseBearing = 0;
+        }
+        function swayFrame(ts) {
+          if (!swayActive) return;
+          if (swayStartTime == null) swayStartTime = ts;
+          var elapsed = ts - swayStartTime;
+          // Layered sine waves at different frequencies for organic, non-mechanical feel
+          var t = elapsed / 1000; // seconds
+          var primary   = Math.sin(t * 0.55) * 1.6;   // slow primary wave ~11.4s period
+          var secondary = Math.sin(t * 1.1)  * 0.5;    // faster secondary harmonic
+          var tertiary  = Math.sin(t * 0.23) * 0.7;    // very slow drift
+          var swayAngle = primary + secondary + tertiary;
+          // Smooth fade-in over 2 seconds to avoid any abrupt start
+          var fadeIn = Math.min(1, elapsed / 2000);
+          fadeIn = fadeIn * fadeIn * (3 - 2 * fadeIn); // smoothstep
+          swayAngle *= fadeIn;
+          var targetBearing = normalizeAngle(swayBaseBearing + swayAngle);
+          // Low-pass filter bearing changes for butter-smooth motion
+          if (swayLastBearing == null) {
+            swayLastBearing = targetBearing;
+          } else {
+            var delta = shortestAngleDelta(swayLastBearing, targetBearing);
+            swayLastBearing = normalizeAngle(swayLastBearing + delta * 0.08);
+          }
+          try {
+            if (!userInteracting && map && typeof map.jumpTo === 'function') {
+              map.jumpTo({ bearing: swayLastBearing });
+            }
+          } catch(_) {}
+          swayRafId = requestAnimationFrame(swayFrame);
+        }
+        swayRafId = requestAnimationFrame(swayFrame);
+      }
+
+      function stopIdleSway() {
+        swayActive = false;
+        if (swayRafId) {
+          try { cancelAnimationFrame(swayRafId); } catch(_) {}
+          swayRafId = null;
+        }
+        swayStartTime = null;
+        swayLastBearing = null;
+      }
+
+      registerTeardown(function() { stopIdleSway(); });
+
+      // Consolidated camera state sync helpers — replace duplicate inline code
+      function syncCameraState(center, brg) {
+        cameraCenter[0] = center[0];
+        cameraCenter[1] = center[1];
+        bearing = normalizeAngle(brg);
+        appliedBearing = bearing;
+        targetBearingSmooth = bearing;
+        forceCameraUpdate = false;
+        cameraCooldown = 0;
+        cameraJumpedLastFrame = false;
+        cameraJumpStreak = 0;
+        suppressCameraUpdateFrames = 0;
+      }
+
+      function syncCameraStateFromMap() {
+        try {
+          if (typeof map.getCenter === 'function') {
+            var c = map.getCenter();
+            if (c && isFinite(c.lng) && isFinite(c.lat)) {
+              cameraCenter[0] = c.lng;
+              cameraCenter[1] = c.lat;
+            }
+          }
+          var b = 0;
+          if (typeof map.getBearing === 'function') {
+            b = Number(map.getBearing());
+            if (!isFinite(b)) b = isFinite(Number(bearing)) ? bearing : 0;
+          }
+          bearing = normalizeAngle(b);
+          appliedBearing = bearing;
+          targetBearingSmooth = bearing;
+          forceCameraUpdate = false;
+          cameraCooldown = 0;
+          cameraJumpedLastFrame = false;
+          cameraJumpStreak = 0;
+          suppressCameraUpdateFrames = 0;
+        } catch(_) {}
+      }
+
       function targetBearingAtDistance(d) {
         try {
           var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
@@ -11066,52 +11731,6 @@
 
 
 
-      function animateStartupCountdownHandoff(dStart, seconds) {
-        return new Promise(function(resolve) {
-          try {
-            var durationMs = Math.max(0, Math.floor(Number(seconds) || 0) * 1000);
-            var handoffCenter = cameraTargetAtDistance(dStart, 0.4);
-            var handoffBearing = targetBearingAtDistance(dStart);
-            var currentCenter = cameraCenter.slice(0, 2);
-            if (typeof map.getCenter === 'function') {
-              var liveCenter = map.getCenter();
-              if (liveCenter && isFinite(liveCenter.lng) && isFinite(liveCenter.lat)) {
-                currentCenter = [liveCenter.lng, liveCenter.lat];
-              }
-            }
-            var currentBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
-            if (typeof map.getBearing === 'function') {
-              var liveBearing = Number(map.getBearing());
-              if (isFinite(liveBearing)) currentBearing = normalizeAngle(liveBearing);
-            }
-            var needsHandoff = false;
-            if (typeof map.project === 'function') {
-              var currentPx = map.project(currentCenter);
-              var targetPx = map.project(handoffCenter);
-              if (currentPx && targetPx) {
-                needsHandoff = Math.hypot((targetPx.x - currentPx.x), (targetPx.y - currentPx.y)) > 1.0;
-              }
-            }
-            var bearingDelta = Math.abs(shortestAngleDelta(currentBearing, handoffBearing));
-            needsHandoff = needsHandoff || (bearingDelta > 0.2);
-            if (!needsHandoff || durationMs <= 0 || typeof map.easeTo !== 'function') {
-              resolve();
-              return;
-            }
-            var finished = false;
-            function done() {
-              if (finished) return;
-              finished = true;
-              resolve();
-            }
-            map.once('moveend', done);
-            map.easeTo({ center: handoffCenter, bearing: handoffBearing, duration: durationMs, easing: easeInOutCubic });
-          } catch(_) {
-            resolve();
-          }
-        });
-      }
-
       function zoomInThenStartPlayback() {
         DBG.log('zoomInThenStartPlayback trigger');
         if (playStartTrace && playStartTrace.startedAt) {
@@ -11135,15 +11754,10 @@
             } catch (_) {}
           }
           var dNow = Math.max(0, Math.min(1, progress)) * totalDistance;
-          // Use the exact start position — no lead offset — so zoom, handoff and playback all agree.
           var targetCenter = cameraTargetAtDistance(dNow, 0.4);
           var startBearing = targetBearingAtDistance(dNow);
-          // Pre-set bearing state so the first animation frame does not jump
-          bearing = startBearing;
-          appliedBearing = startBearing;
-          cameraCenter[0] = targetCenter[0];
-          cameraCenter[1] = targetCenter[1];
-          forceCameraUpdate = false;
+          // Sync camera state so the first playback frame starts from exactly this position
+          syncCameraState(targetCenter, startBearing);
 
           // Suppress tile fade-in during zoom so new tiles snap in instantly (no crossfade blur)
           var origFadeDuration = null;
@@ -11188,28 +11802,8 @@
               DBG.log('play-start stage', { stage: 'moveend-start', dtMs: playStartTrace ? Math.round(performance.now() - playStartTrace.startedAt) : 0 });
               hidePreloadOverlay();
               try {
-                // Sync marker/progress visuals immediately after zoom finishes so countdown
-                // does not end with a visible marker snap.
-                if (typeof map.getCenter === 'function') {
-                  var _cz = map.getCenter();
-                  if (_cz && isFinite(_cz.lng) && isFinite(_cz.lat)) {
-                    cameraCenter[0] = _cz.lng;
-                    cameraCenter[1] = _cz.lat;
-                  }
-                }
-                if (typeof map.getBearing === 'function') {
-                  var _bz = Number(map.getBearing());
-                  if (isFinite(_bz)) {
-                    bearing = normalizeAngle(_bz);
-                    appliedBearing = bearing;
-                    targetBearingSmooth = bearing;
-                  }
-                }
-                forceCameraUpdate = false;
-                cameraCooldown = 0;
-                cameraJumpedLastFrame = false;
-                cameraJumpStreak = 0;
-                suppressCameraUpdateFrames = Math.max(suppressCameraUpdateFrames, 1);
+                // Sync camera from where the zoom-in animation actually landed
+                syncCameraStateFromMap();
                 markerDataCooldown = 999;
                 progressNeedLineInit = true;
                 progressLineCooldown = 999;
@@ -11246,27 +11840,7 @@
                   if (hasTimestamps && Array.isArray(timeOffsets)) {
                     tOffset = timeOffsetAtDistance(_dStart);
                   }
-                  // Sync camera state from live map.
-                  if (typeof map.getCenter === 'function') {
-                    var _c = map.getCenter();
-                    if (_c && isFinite(_c.lng) && isFinite(_c.lat)) {
-                      cameraCenter[0] = _c.lng;
-                      cameraCenter[1] = _c.lat;
-                    }
-                  }
-                  if (typeof map.getBearing === 'function') {
-                    var _b = Number(map.getBearing());
-                    if (isFinite(_b)) {
-                      bearing = normalizeAngle(_b);
-                      appliedBearing = bearing;
-                      targetBearingSmooth = bearing;
-                    }
-                  }
-                  forceCameraUpdate = false;
-                  cameraCooldown = 0;
-                  cameraJumpedLastFrame = false;
-                  cameraJumpStreak = 0;
-                  suppressCameraUpdateFrames = 0;
+                  syncCameraStateFromMap();
                 } catch(_) {}
                 setPlaying(true);
                 scheduleRaf();
@@ -11274,26 +11848,19 @@
               }
               if (shouldRunStartupCountdown()) {
                 var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
-                // WARM-UP STRATEGY: Start playback immediately WITH the countdown.
-                // Speed ramps from 0 to full over the countdown duration (easeInCubic).
-                // The countdown overlay hides this warm-up phase from the user.
-                // By the time the countdown finishes, the camera is already moving
-                // at full speed — no visible velocity jump.
-                startupSpeedRampDuration = countdownSeconds;
-                startupSpeedRampRemaining = countdownSeconds;
-                startupSuppressProgressLine = true;
-                // Start playback now (during countdown) — the speed ramp ensures
-                // the marker starts moving very slowly and gradually accelerates.
-                beginPlayback();
-                // Run the countdown overlay in parallel (purely visual)
+                // Countdown strategy: sway animation during countdown, no playback.
+                // Playback begins only when countdown finishes.
+                startIdleSway();
                 runStartupCountdown(countdownSeconds).then(function() {
-                  // Countdown finished — enable progress line drawing
-                  startupSuppressProgressLine = false;
-                  progressNeedLineInit = true;
-                  progressLineCooldown = 999;
+                  stopIdleSway();
+                  syncCameraStateFromMap();
+                  // Brief speed ramp for smooth acceleration into playback
+                  startupSpeedRampDuration = 1.5;
+                  startupSpeedRampRemaining = 1.5;
+                  beginPlayback();
                 }).catch(function() {
-                  startupSuppressProgressLine = false;
-                  progressNeedLineInit = true;
+                  stopIdleSway();
+                  beginPlayback();
                 });
               } else {
                 beginPlayback();
@@ -11319,6 +11886,12 @@
         if (!playing && rafId) {
           try { window.cancelAnimationFrame(rafId); } catch (_) {}
           rafId = null;
+        }
+        // Idle sway: start when paused at a zoomed-in position, stop when playing
+        if (playing) {
+          stopIdleSway();
+        } else if (!firstPlayZoomPending && progress > 0) {
+          startIdleSway();
         }
         // Suppress tile fade during playback to prevent ghosting/flicker;
         // restore on pause so tile transitions look normal when idle.
@@ -11400,6 +11973,7 @@
 
       function reset() {
         DBG.log('reset() invoked');
+        stopIdleSway();
         tStart = null; lastFrame = null; bearing = null;
         playbackCountedForRun = false;
         // If end transition disabled terrain to avoid flicker, restore for next run.
@@ -11898,28 +12472,7 @@
         }
         // update camera bearing aimed forward with smoothing and turn-rate clamp
         cameraJumpedThisFrame = false; // reset per-frame flag
-        if (suppressCameraUpdateFrames > 0) {
-          suppressCameraUpdateFrames--;
-          try {
-            if (typeof map.getCenter === 'function') {
-              var _cc = map.getCenter();
-              if (_cc && isFinite(_cc.lng) && isFinite(_cc.lat)) {
-                cameraCenter[0] = _cc.lng;
-                cameraCenter[1] = _cc.lat;
-              }
-            }
-            if (typeof map.getBearing === 'function') {
-              var _bb = Number(map.getBearing());
-              if (isFinite(_bb)) {
-                bearing = normalizeAngle(_bb);
-                appliedBearing = bearing;
-                targetBearingSmooth = bearing;
-              }
-            }
-          } catch(_) {}
-          forceCameraUpdate = false;
-          cameraCooldown = 0;
-        } else {
+        {
           var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
           var remainingAhead = Math.max(0, dMaxAhead - d);
           var targetBearing = (bearing != null) ? bearing : 0;
@@ -11950,8 +12503,7 @@
             targetBearingSmooth = targetBearing;
           } else {
             var deltaTB = shortestAngleDelta(targetBearingSmooth, targetBearing);
-            // During startup ramp: higher alpha so bearing tracks tightly (hidden by countdown)
-            var bearingAlpha = (startupSpeedRampRemaining > 0) ? 0.5 : (hasTerrain ? 0.06 : 0.10);
+            var bearingAlpha = hasTerrain ? 0.06 : 0.10;
             targetBearingSmooth = normalizeAngle(targetBearingSmooth + deltaTB * bearingAlpha);
           }
           targetBearing = targetBearingSmooth;
@@ -11963,8 +12515,6 @@
           var pitchFactor = 1 - Math.min(1, (pitchNow / 60)) * 0.35; // up to -35%
           var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.2; // up to -20%
           var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
-          // During startup ramp: no turn rate limit — let bearing snap to target freely
-          if (startupSpeedRampRemaining > 0) maxTurnRate = 360;
           var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
           var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
           // Always apply the rate-limited step — the step itself is already bounded by
@@ -11976,15 +12526,7 @@
           var lookaheadFactor = 0.4;
           var cameraLookaheadD = Math.min(remainingAhead * lookaheadFactor, hasTerrain ? 35 : 50);
           var cameraTarget = cameraLookaheadD > 2 ? positionAtDistance(Math.min(dMaxAhead, d + cameraLookaheadD)) : pos;
-          // During startup speed ramp: bypass low-pass filter entirely.
-          // The speed ramp itself provides smooth acceleration, so no filtering needed.
-          // This ensures zero camera lag during warm-up → seamless handoff when ramp ends.
-          var followAlpha;
-          if (startupSpeedRampRemaining > 0) {
-            followAlpha = 1.0; // direct tracking — no lag
-          } else {
-            followAlpha = Math.max(0.006, Math.min(0.028, (lastFrameDt || 0.016) * 0.45));
-          }
+          var followAlpha = Math.max(0.006, Math.min(0.028, (lastFrameDt || 0.016) * 0.45));
           var nextCenterLng = cameraCenter[0] + (cameraTarget[0] - cameraCenter[0]) * followAlpha;
           var nextCenterLat = cameraCenter[1] + (cameraTarget[1] - cameraCenter[1]) * followAlpha;
           // Ease terrain pitch down near the end to reduce final-frame mesh churn
@@ -12217,18 +12759,19 @@
         
         // Overlay rendering is now handled by map 'render' event
 
-        // Apply startup speed ramp: easeInCubic from 0 to 1 over ramp duration.
-        // This prevents the jarring 0-to-full-speed jump when playback begins.
+        // Speed ramp: smooth easeInOutCubic from 25x to user-chosen speed over ramp duration.
+        // This ensures the initial motion always looks the same regardless of user speed setting.
         var effectiveSpeed = speed;
         if (startupSpeedRampRemaining > 0) {
           startupSpeedRampRemaining = Math.max(0, startupSpeedRampRemaining - dt);
           var rampProgress = 1 - (startupSpeedRampRemaining / Math.max(0.001, startupSpeedRampDuration));
-          // easeInCubic: slow start, fast finish — feels like natural acceleration
-          var rampFactor = rampProgress * rampProgress * rampProgress;
-          effectiveSpeed = speed * rampFactor;
+          var rampT = easeInOutCubic(rampProgress);
+          // Blend from fixed 25x to user speed
+          effectiveSpeed = 25 + (speed - 25) * rampT;
           if (startupSpeedRampRemaining <= 0) {
             startupSpeedRampRemaining = 0;
             startupSpeedRampDuration = 0;
+            effectiveSpeed = speed;
           }
         }
 
@@ -13712,6 +14255,10 @@
       __fgpxRunInit();
     }
   }
+
+  // Expose VideoRecorder for tests and browser
+  window.VideoRecorder = VideoRecorder;
+
 })();
 
 

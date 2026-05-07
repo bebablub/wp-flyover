@@ -2971,7 +2971,9 @@ final class Admin
 		}
 
 		// Determine date range
-		$timestamps = array_filter(array_column($samples, 'time_unix'));
+		$timestamps = array_values(array_filter(array_column($samples, 'time_unix'), static function ($timestamp): bool {
+			return $timestamp !== null;
+		}));
 		if (!empty($timestamps)) {
 			$startDate = date('Y-m-d', min($timestamps) - 43200); // -12h padding
 			$endDate = date('Y-m-d', max($timestamps) + 43200);   // +12h padding
@@ -3099,7 +3101,7 @@ final class Admin
 	 */
 	private static function getRainForTimestamp(?array $weatherData, ?int $timestamp): float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['rain'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['rain'])) {
 			return 0.0;
 		}
 
@@ -3133,7 +3135,7 @@ final class Admin
 	 */
 	private static function getTemperatureForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['temperature_80m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['temperature_80m'])) {
 			return null;
 		}
 
@@ -3167,7 +3169,7 @@ final class Admin
 	 */
 	private static function getWindSpeedForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['wind_speed_10m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['wind_speed_10m'])) {
 			return null;
 		}
 
@@ -3201,7 +3203,7 @@ final class Admin
 	 */
 	private static function getWindDirectionForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['wind_direction_10m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['wind_direction_10m'])) {
 			return null;
 		}
 
@@ -3235,7 +3237,7 @@ final class Admin
 	 */
 	private static function getCloudCoverForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['cloud_cover'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['cloud_cover'])) {
 			return null;
 		}
 
@@ -3265,7 +3267,7 @@ final class Admin
 	 */
 	private static function getSnowfallForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['snowfall'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['snowfall'])) {
 			return null;
 		}
 
@@ -3295,7 +3297,7 @@ final class Admin
 	 */
 	private static function getDewPointForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['dew_point_2m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['dew_point_2m'])) {
 			return null;
 		}
 
@@ -3325,7 +3327,7 @@ final class Admin
 	 */
 	private static function getTemperature2mForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['temperature_2m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['temperature_2m'])) {
 			return null;
 		}
 
@@ -3355,7 +3357,7 @@ final class Admin
 	 */
 	private static function getRelativeHumidityForTimestamp(?array $weatherData, ?int $timestamp): ?float
 	{
-		if (!$weatherData || !$timestamp || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['relative_humidity_2m'])) {
+		if (!$weatherData || $timestamp === null || !isset($weatherData['hourly']['time']) || !isset($weatherData['hourly']['relative_humidity_2m'])) {
 			return null;
 		}
 
@@ -3982,7 +3984,7 @@ final class Admin
 				}
 
 				$timestamp = isset($timestamps[$i]) ? strtotime($timestamps[$i]) : null;
-				if (!$timestamp) {
+				if ($timestamp === null || $timestamp === false) {
 					$windSpeeds[] = null;
 					$windDirections[] = null;
 					$windImpacts[] = null;
