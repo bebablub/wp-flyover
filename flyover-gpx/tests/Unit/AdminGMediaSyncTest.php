@@ -31,6 +31,7 @@ final class AdminGMediaSyncTest extends TestCase
         $GLOBALS['fgpx_test_transients'] = [];
         $GLOBALS['fgpx_test_wp_verify_nonce'] = null;
         $GLOBALS['fgpx_test_current_user_can'] = null;
+        $GLOBALS['fgpx_test_wp_update_post'] = null;
         $GLOBALS['gmDB'] = new \GmediaDB();
         $_POST = [];
     }
@@ -46,6 +47,7 @@ final class AdminGMediaSyncTest extends TestCase
         unset($GLOBALS['fgpx_test_transients']);
         unset($GLOBALS['fgpx_test_wp_verify_nonce']);
         unset($GLOBALS['fgpx_test_current_user_can']);
+        unset($GLOBALS['fgpx_test_wp_update_post']);
 
         $_POST = [];
     }
@@ -195,6 +197,158 @@ final class AdminGMediaSyncTest extends TestCase
         }
     }
 
+    public function test_ajax_sync_gmedia_caption_chunk_mode_returns_progress_payload(): void
+    {
+        $admin = new Admin();
+
+        $GLOBALS['fgpx_test_wp_verify_nonce'] = static function (): bool {
+            return true;
+        };
+        $GLOBALS['fgpx_test_current_user_can'] = static function (): bool {
+            return true;
+        };
+
+        $wpdb = $this->buildSuccessfulSyncWpdb();
+        $wpdb->gmediaRows = [
+            (object) ['ID' => 7, 'gmuid' => 'first.jpg', 'title' => 'First title', 'modified' => '2026-01-01 10:00:00'],
+            (object) ['ID' => 8, 'gmuid' => 'second.jpg', 'title' => 'Second title', 'modified' => '2026-01-01 10:00:00'],
+        ];
+        $wpdb->attachmentIds = [321, 322];
+
+        $GLOBALS['fgpx_test_posts'][321] = [
+            'ID' => 321,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][321]['_wp_attached_file'] = '2026/04/first.jpg';
+
+        $GLOBALS['fgpx_test_posts'][322] = [
+            'ID' => 322,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][322]['_wp_attached_file'] = '2026/04/second.jpg';
+
+        $_POST = [
+            'nonce' => 'ok',
+            'mode' => 'chunk',
+            'overwrite' => '1',
+            'offset' => '0',
+            'limit' => '1',
+            'updated_so_far' => '0',
+        ];
+
+        try {
+            $admin->ajax_sync_gmedia_caption();
+            $this->fail('Expected AJAX response exception');
+        } catch (FGPX_Test_Ajax_Response $response) {
+            $this->assertTrue($response->success);
+            $this->assertSame(200, $response->status);
+            $this->assertFalse((bool) ($response->data['done'] ?? true));
+            $this->assertSame(1, (int) ($response->data['updated_total'] ?? 0));
+            $this->assertSame(1, (int) ($response->data['result']['next_offset'] ?? 0));
+            $this->assertSame('First title', (string) \wp_get_attachment_caption(321));
+            $this->assertSame('', (string) \wp_get_attachment_caption(322));
+        }
+    }
+
+    public function test_ajax_sync_gmedia_caption_returns_partial_success_when_some_updates_fail(): void
+    {
+        $admin = new Admin();
+
+        $GLOBALS['fgpx_test_wp_verify_nonce'] = static function (): bool {
+            return true;
+        };
+        $GLOBALS['fgpx_test_current_user_can'] = static function (): bool {
+            return true;
+        };
+
+        $wpdb = $this->buildSuccessfulSyncWpdb();
+        $wpdb->gmediaRows = [
+            (object) ['ID' => 8, 'gmuid' => 'ok.jpg', 'title' => 'Synced title', 'modified' => '2026-01-01 10:00:00'],
+            (object) ['ID' => 9, 'gmuid' => 'fail.jpg', 'title' => 'Will fail', 'modified' => '2026-01-01 10:00:00'],
+        ];
+        $wpdb->attachmentIds = [321, 322];
+        $wpdb->trackIds = [99];
+
+        $GLOBALS['fgpx_test_posts'][321] = [
+            'ID' => 321,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][321]['_wp_attached_file'] = '2026/04/ok.jpg';
+
+        $GLOBALS['fgpx_test_posts'][322] = [
+            'ID' => 322,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][322]['_wp_attached_file'] = '2026/04/fail.jpg';
+
+        $GLOBALS['fgpx_test_posts'][99] = [
+            'ID' => 99,
+            'post_type' => 'fgpx_track',
+            'post_status' => 'publish',
+            'post_modified_gmt' => '2026-04-20 10:00:00',
+        ];
+
+        $GLOBALS['fgpx_test_wp_update_post'] = static function (array $postarr, bool $wp_error) {
+            $postId = isset($postarr['ID']) ? (int) $postarr['ID'] : 0;
+            if ($postId === 322) {
+                return $wp_error ? new \WP_Error('update_failed', 'Simulated write failure') : 0;
+            }
+
+            if ($postId <= 0) {
+                return $wp_error ? new \WP_Error('invalid_post', 'Invalid post ID.') : 0;
+            }
+
+            $existing = $GLOBALS['fgpx_test_posts'][$postId] ?? [];
+            if ($existing instanceof \WP_Post) {
+                $existing = get_object_vars($existing);
+            }
+            if (!is_array($existing)) {
+                $existing = [];
+            }
+
+            foreach ($postarr as $key => $value) {
+                if ($key === 'ID') {
+                    continue;
+                }
+                $existing[(string) $key] = $value;
+            }
+
+            $existing['ID'] = $postId;
+            $GLOBALS['fgpx_test_posts'][$postId] = new \WP_Post($existing);
+
+            return $postId;
+        };
+
+        $_POST = [
+            'nonce' => 'ok',
+            'overwrite' => '1',
+        ];
+
+        try {
+            $admin->ajax_sync_gmedia_caption();
+            $this->fail('Expected AJAX response exception');
+        } catch (FGPX_Test_Ajax_Response $response) {
+            $this->assertTrue($response->success);
+            $this->assertSame(200, $response->status);
+            $this->assertTrue((bool) ($response->data['partial'] ?? false));
+            $this->assertSame(1, (int) ($response->data['result']['updated'] ?? 0));
+            $this->assertSame(1, (int) ($response->data['result']['errors'] ?? 0));
+            $this->assertSame('Synced title', (string) \wp_get_attachment_caption(321));
+        }
+    }
+
     /**
      * @return object
      */
@@ -251,7 +405,14 @@ final class AdminGMediaSyncTest extends TestCase
             public function get_col(string $query): array
             {
                 if (strpos($query, "post_type = 'attachment'") !== false) {
-                    return $this->attachmentIds;
+                    $offset = 0;
+                    $limit = count($this->attachmentIds);
+                    if (preg_match('/LIMIT\s+(\d+)\s+OFFSET\s+(\d+)/i', $query, $m) === 1) {
+                        $limit = (int) $m[1];
+                        $offset = (int) $m[2];
+                    }
+
+                    return array_values(array_slice($this->attachmentIds, $offset, $limit));
                 }
 
                 if (strpos($query, '|post_type=fgpx_track') !== false) {

@@ -3421,6 +3421,8 @@ final class Admin
 			'gmediaSyncDefaultOverwrite' => true,
 			'gmediaSyncConfirmRun' => (string) \__('Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.', 'flyover-gpx'),
 			'gmediaSyncConfirmOverwrite' => (string) \__('Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.', 'flyover-gpx'),
+			'gmediaSyncBatchSize' => 250,
+			'gmediaSyncPauseMs' => 80,
 			'snapshotWidth' => 1200,
 			'snapshotHeight' => 630,
 			'bulkMaxTracks' => 25,
@@ -4118,6 +4120,9 @@ final class Admin
 				&& !isset($_GET['fgpx_gmedia_unavailable'])
 			) {
 				$gmediaDetection = GMediaCaptionSync::detect();
+				// Only show the proactive notice when Grand Media is actually active.
+				// When it is not installed/active, skip the warning entirely — users will
+				// get a clear inline error if they try to use the sync action.
 				if (!empty($gmediaDetection['active'])) {
 					$version = (string) ($gmediaDetection['version'] ?? 'unknown');
 					$dbVersion = (string) ($gmediaDetection['dbVersion'] ?? 'unknown');
@@ -4126,14 +4131,6 @@ final class Admin
 							\__('Grand Media detected (plugin version: %1$s, DB version: %2$s). Caption sync is ready.', 'flyover-gpx'),
 							\esc_html($version),
 							\esc_html($dbVersion)
-						)
-						. '</p></div>';
-				} else {
-					$reason = (string) ($gmediaDetection['reason'] ?? \__('Grand Media is not available.', 'flyover-gpx'));
-					echo '<div class="notice notice-warning is-dismissible"><p>'
-						. sprintf(
-							\__('Grand Media sync unavailable: %s', 'flyover-gpx'),
-							\esc_html($reason)
 						)
 						. '</p></div>';
 				}
@@ -4748,7 +4745,53 @@ final class Admin
 			\wp_send_json_error(['message' => 'Insufficient permissions'], 403);
 		}
 
+		$mode = isset($_POST['mode']) ? \sanitize_key((string) $_POST['mode']) : 'full';
 		$overwrite = !isset($_POST['overwrite']) || (string) $_POST['overwrite'] !== '0';
+
+		if ($mode === 'chunk') {
+			$offset = isset($_POST['offset']) ? max(0, (int) $_POST['offset']) : 0;
+			$limit = isset($_POST['limit']) ? max(1, min(1000, (int) $_POST['limit'])) : 250;
+			$updatedSoFar = isset($_POST['updated_so_far']) ? max(0, (int) $_POST['updated_so_far']) : 0;
+
+			try {
+				$sync = GMediaCaptionSync::syncCaptionsChunk($overwrite, $offset, $limit);
+			} catch (\Throwable $e) {
+				\wp_send_json_error([
+					'message' => 'GMedia caption sync batch failed unexpectedly.',
+				], 500);
+			}
+
+			if (!(bool) ($sync['available'] ?? false)) {
+				\wp_send_json_error([
+					'message' => (string) ($sync['message'] ?? 'Grand Media is not available.'),
+					'result' => $sync,
+				], 400);
+			}
+
+			if (!empty($sync['fatal'])) {
+				\wp_send_json_error([
+					'message' => (string) ($sync['message'] ?? 'Caption sync batch failed.'),
+					'result' => $sync,
+				], 500);
+			}
+
+			$chunkUpdated = (int) ($sync['updated'] ?? 0);
+			$updatedTotal = $updatedSoFar + $chunkUpdated;
+			$done = !empty($sync['done']);
+
+			if ($done && $updatedTotal > 0) {
+				$this->invalidate_all_track_caches_after_caption_sync();
+			}
+
+			\wp_send_json_success([
+				'message' => (string) ($sync['message'] ?? 'Caption sync batch finished.'),
+				'result' => $sync,
+				'partial' => ((int) ($sync['errors'] ?? 0) > 0),
+				'done' => $done,
+				'updated_total' => $updatedTotal,
+			]);
+		}
+
 		try {
 			$sync = GMediaCaptionSync::syncCaptions($overwrite);
 		} catch (\Throwable $e) {
@@ -4764,15 +4807,26 @@ final class Admin
 			], 400);
 		}
 
-		if ((int) ($sync['errors'] ?? 0) > 0) {
+		$updated = (int) ($sync['updated'] ?? 0);
+		$errors = (int) ($sync['errors'] ?? 0);
+
+		if ($updated > 0) {
+			$this->invalidate_all_track_caches_after_caption_sync();
+		}
+
+		if ($errors > 0 && $updated <= 0) {
 			\wp_send_json_error([
 				'message' => (string) ($sync['message'] ?? 'Caption sync finished with errors.'),
 				'result' => $sync,
 			], 500);
 		}
 
-		if ((int) ($sync['updated'] ?? 0) > 0) {
-			$this->invalidate_all_track_caches_after_caption_sync();
+		if ($errors > 0) {
+			\wp_send_json_success([
+				'message' => (string) ($sync['message'] ?? 'Caption sync finished with some errors.'),
+				'result' => $sync,
+				'partial' => true,
+			]);
 		}
 
 		\wp_send_json_success([

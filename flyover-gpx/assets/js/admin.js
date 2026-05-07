@@ -173,7 +173,7 @@
             });
         });
 
-        $('.fgpx-sync-gmedia-caption').on('click', function(e) {
+        $('.fgpx-sync-gmedia-caption').on('click', async function(e) {
             e.preventDefault();
 
             const $link = $(this);
@@ -181,15 +181,17 @@
             const nonce = String($link.data('nonce') || '');
             const gmediaAvailable = !!previewCfg.gmediaSyncAvailable;
             const gmediaReason = String(previewCfg.gmediaSyncReason || '').trim();
-            const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now?');
+            const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.');
             const confirmOverwrite = String(previewCfg.gmediaSyncConfirmOverwrite || 'Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.');
+            const batchSize = Number(previewCfg.gmediaSyncBatchSize) > 0 ? Number(previewCfg.gmediaSyncBatchSize) : 250;
+            const pauseMs = Number(previewCfg.gmediaSyncPauseMs) >= 0 ? Number(previewCfg.gmediaSyncPauseMs) : 80;
 
             if (!gmediaAvailable) {
                 showAdminNotice(gmediaReason || 'Grand Media is not available. Install and activate Grand Media before syncing captions.', 'error');
                 return;
             }
 
-            if (!postId || !nonce) {
+            if (!nonce) {
                 showAdminNotice('Invalid data for GMedia caption sync.', 'error');
                 return;
             }
@@ -202,53 +204,105 @@
 
             $link.css('pointer-events', 'none').attr('aria-disabled', 'true');
             const originalText = $link.text();
-            $link.text('Syncing...');
+            $link.text('Syncing 0...').css('color', '');
 
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'fgpx_sync_gmedia_caption',
-                    post_id: postId,
-                    nonce: nonce,
-                    overwrite: overwrite ? '1' : '0'
-                },
-                success: function(response) {
-                    if (response && response.success) {
-                        $link.text('✓ Synced').css('color', '#46b450');
-                        const message = response.data && response.data.message
-                            ? String(response.data.message)
-                            : 'GMedia caption sync finished.';
-                        showAdminNotice(message, 'success');
-                    } else {
-                        $link.text('✗ Failed').css('color', '#dc3232');
-                        const message = response && response.data && response.data.message
+            const totals = {
+                scanned: 0,
+                matched: 0,
+                updated: 0,
+                unchanged: 0,
+                unmatched: 0,
+                duplicates: 0,
+                errors: 0
+            };
+
+            let offset = 0;
+            let updatedTotal = 0;
+            let done = false;
+            let hadPartial = false;
+
+            try {
+                for (let guard = 0; guard < 10000; guard += 1) {
+                    const response = await $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'fgpx_sync_gmedia_caption',
+                            mode: 'chunk',
+                            nonce: nonce,
+                            overwrite: overwrite ? '1' : '0',
+                            offset: String(offset),
+                            limit: String(batchSize),
+                            updated_so_far: String(updatedTotal)
+                        }
+                    });
+
+                    if (!(response && response.success)) {
+                        const fallbackMessage = response && response.data && response.data.message
                             ? String(response.data.message)
                             : 'GMedia caption sync failed.';
-                        showAdminNotice(message, 'error');
+                        throw { responseText: JSON.stringify({ data: { message: fallbackMessage } }) };
                     }
-                },
-                error: function(xhr) {
-                    $link.text('✗ Error').css('color', '#dc3232');
-                    let message = 'Network error during GMedia caption sync.';
-                    try {
-                        const parsed = JSON.parse(xhr.responseText || '{}');
-                        if (parsed && parsed.data && parsed.data.message) {
-                            message = String(parsed.data.message);
-                        }
-                    } catch (_) {}
 
-                    showAdminNotice(message, 'error');
-                },
-                complete: function() {
-                    setTimeout(function() {
-                        $link.css('pointer-events', '').removeAttr('aria-disabled');
-                        if ($link.text() === 'Syncing...') {
-                            $link.text(originalText);
+                    const payload = response.data || {};
+                    const chunk = payload.result || {};
+                    totals.scanned += Number(chunk.scanned || 0);
+                    totals.matched += Number(chunk.matched || 0);
+                    totals.updated += Number(chunk.updated || 0);
+                    totals.unchanged += Number(chunk.unchanged || 0);
+                    totals.unmatched += Number(chunk.unmatched || 0);
+                    totals.duplicates += Number(chunk.duplicates || 0);
+                    totals.errors += Number(chunk.errors || 0);
+
+                    updatedTotal = Number(payload.updated_total != null ? payload.updated_total : (updatedTotal + Number(chunk.updated || 0)));
+                    offset = (chunk.next_offset != null) ? Number(chunk.next_offset) : offset;
+                    done = !!(payload.done || chunk.done);
+                    hadPartial = hadPartial || !!payload.partial;
+
+                    if (!done) {
+                        $link.text('Syncing ' + totals.scanned + '...');
+                        if (pauseMs > 0) {
+                            await new Promise(function(resolve) {
+                                setTimeout(resolve, pauseMs);
+                            });
                         }
-                    }, 1500);
+                        continue;
+                    }
+
+                    const message = 'Caption sync finished: '
+                        + totals.scanned + ' scanned, '
+                        + totals.matched + ' matched, '
+                        + totals.updated + ' updated, '
+                        + totals.unchanged + ' unchanged, '
+                        + totals.unmatched + ' unmatched, '
+                        + totals.duplicates + ' duplicate filename matches, '
+                        + totals.errors + ' errors.';
+
+                    $link.text(hadPartial ? '⚠ Partial' : '✓ Synced').css('color', hadPartial ? '#dba617' : '#46b450');
+                    showAdminNotice(message, hadPartial ? 'warning' : 'success');
+                    return;
                 }
-            });
+
+                throw { responseText: JSON.stringify({ data: { message: 'GMedia caption sync stopped: too many batches.' } }) };
+            } catch (xhr) {
+                $link.text('✗ Error').css('color', '#dc3232');
+                let message = 'Network error during GMedia caption sync.';
+                try {
+                    const parsed = JSON.parse(xhr.responseText || '{}');
+                    if (parsed && parsed.data && parsed.data.message) {
+                        message = String(parsed.data.message);
+                    }
+                } catch (_) {}
+
+                showAdminNotice(message, 'error');
+            } finally {
+                setTimeout(function() {
+                    $link.css('pointer-events', '').removeAttr('aria-disabled');
+                    if (String($link.text() || '').indexOf('Syncing ') === 0) {
+                        $link.text(originalText);
+                    }
+                }, 1500);
+            }
         });
 
         $('.fgpx-generate-preview').on('click', async function(e) {
@@ -516,7 +570,7 @@
                     return;
                 }
 
-                const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now?');
+                const confirmRun = String(previewCfg.gmediaSyncConfirmRun || 'Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.');
                 const confirmOverwrite = String(previewCfg.gmediaSyncConfirmOverwrite || 'Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.');
                 if (!confirm(confirmRun)) {
                     e.preventDefault();

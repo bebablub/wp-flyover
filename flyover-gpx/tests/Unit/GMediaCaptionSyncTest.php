@@ -27,6 +27,7 @@ final class GMediaCaptionSyncTest extends TestCase
         $GLOBALS['fgpx_test_posts'] = [];
         $GLOBALS['fgpx_test_post_meta'] = [];
         $GLOBALS['fgpx_test_attachment_urls'] = [];
+        $GLOBALS['fgpx_test_transients'] = [];
         $GLOBALS['gmDB'] = new \GmediaDB();
     }
 
@@ -34,7 +35,7 @@ final class GMediaCaptionSyncTest extends TestCase
     {
         $GLOBALS['wpdb'] = $this->previousWpdb;
         unset($GLOBALS['gmDB']);
-        unset($GLOBALS['fgpx_test_posts'], $GLOBALS['fgpx_test_post_meta'], $GLOBALS['fgpx_test_attachment_urls']);
+        unset($GLOBALS['fgpx_test_posts'], $GLOBALS['fgpx_test_post_meta'], $GLOBALS['fgpx_test_attachment_urls'], $GLOBALS['fgpx_test_transients']);
     }
 
     public function test_detect_reports_unavailable_when_gmedia_runtime_missing(): void
@@ -118,6 +119,55 @@ final class GMediaCaptionSyncTest extends TestCase
         $this->assertSame('Keep original caption', (string) \wp_get_attachment_caption(777));
     }
 
+    public function test_sync_captions_chunk_returns_cursor_for_next_batch(): void
+    {
+        $wpdb = $this->buildSyncWpdb();
+
+        $wpdb->gmediaRows = [
+            (object) ['ID' => 71, 'gmuid' => 'one.jpg', 'title' => 'One', 'modified' => '2026-01-02 10:00:00'],
+            (object) ['ID' => 72, 'gmuid' => 'two.jpg', 'title' => 'Two', 'modified' => '2026-01-02 10:00:00'],
+        ];
+        $wpdb->attachmentIds = [601, 602];
+
+        $GLOBALS['fgpx_test_posts'][601] = [
+            'ID' => 601,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][601]['_wp_attached_file'] = '2026/04/one.jpg';
+
+        $GLOBALS['fgpx_test_posts'][602] = [
+            'ID' => 602,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'image/jpeg',
+            'post_excerpt' => '',
+        ];
+        $GLOBALS['fgpx_test_post_meta'][602]['_wp_attached_file'] = '2026/04/two.jpg';
+
+        $chunk = GMediaCaptionSync::syncCaptionsChunk(true, 0, 1);
+
+        $this->assertTrue((bool) $chunk['available']);
+        $this->assertFalse((bool) $chunk['done'], 'First of 2 should not be done');
+        $this->assertSame(1, (int) $chunk['scanned']);
+        $this->assertSame(1, (int) $chunk['updated']);
+        $this->assertSame(1, (int) $chunk['next_offset']);
+        $this->assertSame('One', (string) \wp_get_attachment_caption(601));
+        $this->assertSame('', (string) \wp_get_attachment_caption(602));
+
+        $chunk2 = GMediaCaptionSync::syncCaptionsChunk(true, 1, 1);
+
+        $this->assertTrue((bool) $chunk2['done'], 'Second of 2 should be done');
+        $this->assertSame(1, (int) $chunk2['updated']);
+        $this->assertSame(2, (int) $chunk2['next_offset']);
+        $this->assertSame('Two', (string) \wp_get_attachment_caption(602));
+        // Transient cache cleaned up after done: the map key should no longer exist.
+        $transientKey = 'fgpx_gmedia_caption_map_' . md5('wp_gmedia');
+        $this->assertArrayNotHasKey($transientKey, $GLOBALS['fgpx_test_transients'] ?? []);
+    }
+
     /**
      * @return object
      */
@@ -163,7 +213,14 @@ final class GMediaCaptionSyncTest extends TestCase
             public function get_col(string $query): array
             {
                 if (strpos($query, "post_type = 'attachment'") !== false) {
-                    return $this->attachmentIds;
+                    $offset = 0;
+                    $limit = count($this->attachmentIds);
+                    if (preg_match('/LIMIT\s+(\d+)\s+OFFSET\s+(\d+)/i', $query, $m) === 1) {
+                        $limit = (int) $m[1];
+                        $offset = (int) $m[2];
+                    }
+
+                    return array_values(array_slice($this->attachmentIds, $offset, $limit));
                 }
 
                 return [];
