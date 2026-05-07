@@ -105,6 +105,9 @@ final class CLI
 	 * [--daynight-map-color=<color>]
 	 * : Optional night overlay color override (hex color).
 	 *
+	 * [--gpx-download=<on|off>]
+	 * : Optional GPX download button override (on/off).
+	 *
 	 * [--publish]
 	 * : If --post is provided, publish that post after inserting the shortcode.
 	 *
@@ -169,12 +172,16 @@ final class CLI
 		update_post_meta($postId, 'fgpx_moving_time_s', (float) ($parse['stats']['moving_time_s'] ?? 0));
 		update_post_meta($postId, 'fgpx_elevation_gain_m', (float) ($parse['stats']['elevation_gain_m'] ?? 0));
 		update_post_meta($postId, 'fgpx_max_speed_m_s', (float) ($parse['stats']['max_speed_m_s'] ?? 0));
+		update_post_meta($postId, 'fgpx_activity_date_unix', (int) ($parse['activity_date_unix'] ?? time()));
+		if (!empty($parse['waypoints'])) {
+			update_post_meta($postId, 'fgpx_waypoints', $parse['waypoints']);
+		}
 
 		// Enrich with weather data if enabled
 		\FGpx\Admin::enrichWithWeather($postId, $parse['geojson']);
 
 		// Interpolate wind data if enabled (after weather enrichment, matching web upload behavior)
-		$geojsonArray = \json_decode((string) \get_post_meta($postId, 'fgpx_geojson', true), true);
+		$geojsonArray = \json_decode($parse['geojson'], true);
 		if (\is_array($geojsonArray)) {
 			\FGpx\Admin::interpolateWindDataForTrack($postId, $geojsonArray);
 			\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
@@ -258,6 +265,7 @@ final class CLI
 			$addColorParam('wind-rose-color-east', 'wind_rose_color_east');
 			$addColorParam('wind-rose-color-west', 'wind_rose_color_west');
 			$addColorParam('daynight-map-color', 'daynight_map_color');
+			$addBooleanParam('gpx-download', 'gpx_download');
 			
 			$short .= ']';
 			$newContent = (string) ($hostPost->post_content ?? '');
@@ -305,14 +313,6 @@ final class CLI
 		}
 
 		// Query tracks without activity date
-		$query = new \WP_Query([
-			'post_type' => 'fgpx_track',
-			'post_status' => 'publish',
-			'posts_per_page' => $limit > 0 ? $limit : -1,
-			'fields' => 'ids',
-			'no_found_rows' => false,
-		]);
-
 		$query_args = [
 			'post_type' => 'fgpx_track',
 			'post_status' => 'publish',
@@ -325,10 +325,6 @@ final class CLI
 				],
 			],
 		];
-
-		if ($limit > 0) {
-			$query_args['posts_per_page'] = $limit;
-		}
 
 		$posts = \get_posts($query_args);
 		$total = count($posts);
@@ -430,8 +426,10 @@ final class CLI
 		if (\is_wp_error($parse)) {
 			return null;
 		}
-		// Encode geojson to JSON string to match existing import() contract
+		// Encode geojson to JSON string; preserve activity_date_unix and waypoints for import()
 		$parse['geojson'] = \wp_json_encode($parse['geojson']);
+		$parse['activity_date_unix'] = (int) ($parse['activity_date_unix'] ?? time());
+		$parse['waypoints'] = $parse['waypoints'] ?? [];
 		return $parse;
 	}
 }
