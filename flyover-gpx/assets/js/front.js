@@ -4266,6 +4266,13 @@
         this.options = options || {};
         this.preset = this.options.preset || 'medium';
         this.customSettings = this.options.customSettings || null;
+        this.root = this.options.root || null;
+        this.overlayElement = this.options.overlayElement || null;
+        this.mapContainer = this.options.mapContainer || (this.map && typeof this.map.getContainer === 'function' ? this.map.getContainer() : null);
+        this.progressHost = this.options.progressHost || this.mapContainer || document.body;
+        this.outputMode = this.options.outputMode || 'download';
+        this.outputDirectoryHandle = this.options.outputDirectoryHandle || null;
+        this.expectedChunkCount = Math.max(1, Number(this.options.expectedChunkCount) || 1);
         
         // Apply preset or custom settings
         var settings = this.customSettings || VIDEO_QUALITY_PRESETS[this.preset];
@@ -4278,6 +4285,7 @@
         this.canvas = null;
         this.stream = null;
         this.mediaRecorder = null;
+        this.mimeType = '';
         this.chunks = [];
         this.isRecording = false;
         this.startTime = 0;
@@ -4297,6 +4305,12 @@
         this.chunkNumber = 0;
         this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
         this.downloadedChunks = [];
+        this.totalRecordedBytes = 0;
+        this.progressElement = null;
+        this.recordingImageIds = [];
+        this.pendingObjectUrls = [];
+        this.sessionToken = 0;
+        this.stopRequested = false;
         // Recorder rotation state to ensure each chunk starts with fresh headers
         this.isRotatingChunk = false;
         this.recorderOptions = null;
@@ -4316,6 +4330,157 @@
         
         this.initPromise = this.init();
       }
+
+      VideoRecorder.prototype.createSessionId = function() {
+        return 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
+      };
+
+      VideoRecorder.prototype.resetSessionState = function() {
+        this.chunks = [];
+        this.currentChunkSize = 0;
+        this.chunkNumber = 0;
+        this.downloadedChunks = [];
+        this.totalRecordedBytes = 0;
+        this.startTime = 0;
+        this.frameCount = 0;
+        this.lastFrameTime = 0;
+        this.stopRequested = false;
+        this.isRotatingChunk = false;
+        this.sessionId = this.createSessionId();
+        this.sessionToken += 1;
+      };
+
+      VideoRecorder.prototype.hasActiveStream = function() {
+        if (!this.stream || typeof this.stream.getTracks !== 'function') return false;
+        var tracks = this.stream.getTracks();
+        if (!tracks || tracks.length === 0) return false;
+        for (var i = 0; i < tracks.length; i++) {
+          if (tracks[i] && tracks[i].readyState === 'live') return true;
+        }
+        return false;
+      };
+
+      VideoRecorder.prototype.releaseStream = function() {
+        if (!this.stream || typeof this.stream.getTracks !== 'function') return;
+        try {
+          this.stream.getTracks().forEach(function(track) {
+            try { track.stop(); } catch (_) {}
+          });
+        } catch (_) {}
+        this.stream = null;
+      };
+
+      VideoRecorder.prototype.getOverlayElement = function() {
+        if (this.overlayElement && this.overlayElement.isConnected) {
+          return this.overlayElement;
+        }
+        if (this.mapContainer && typeof this.mapContainer.querySelector === 'function') {
+          return this.mapContainer.querySelector('.fgpx-photo-overlay');
+        }
+        return null;
+      };
+
+      VideoRecorder.prototype.getMarkerElements = function() {
+        if (!this.mapContainer || typeof this.mapContainer.querySelectorAll !== 'function') {
+          return [];
+        }
+        return this.mapContainer.querySelectorAll('.maplibregl-marker');
+      };
+
+      VideoRecorder.prototype.recreateMediaRecorder = function() {
+        var opts = this.recorderOptions || { mimeType: this.getSupportedMimeType(), videoBitsPerSecond: this.bitrate };
+        this.mediaRecorder = new MediaRecorder(this.stream, opts);
+        this.setupEventHandlers();
+      };
+
+      VideoRecorder.prototype.scheduleObjectUrlCleanup = function(url) {
+        var self = this;
+        this.pendingObjectUrls.push(url);
+        setTimeout(function() {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+          self.pendingObjectUrls = self.pendingObjectUrls.filter(function(entry) { return entry !== url; });
+        }, 10000); // 10 seconds: enough time for download to complete, quick cleanup
+      };
+
+      VideoRecorder.prototype.writeChunkToDirectory = function(blob, filename) {
+        var self = this;
+        if (!this.outputDirectoryHandle) {
+          return Promise.reject(new Error('No output directory selected'));
+        }
+        return this.outputDirectoryHandle.getFileHandle(filename, { create: true })
+          .then(function(fileHandle) {
+            return fileHandle.createWritable();
+          })
+          .then(function(writable) {
+            return writable.write(blob).then(function() {
+              return writable.close();
+            }, function(error) {
+              try { return writable.abort().finally(function() { throw error; }); } catch (_) { throw error; }
+            });
+          })
+          .catch(function(error) {
+            DBG.warn('Failed to write recording chunk to selected directory, falling back to browser download', error);
+            self.outputMode = 'download';
+            self.outputDirectoryHandle = null;
+            return self.triggerChunkDownload(blob, filename);
+          });
+      };
+
+      VideoRecorder.prototype.triggerChunkDownload = function(blob, filename) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        this.scheduleObjectUrlCleanup(url);
+        return Promise.resolve();
+      };
+
+      VideoRecorder.prototype.persistChunk = function(blob, filename) {
+        if (this.outputMode === 'directory' && this.outputDirectoryHandle) {
+          return this.writeChunkToDirectory(blob, filename);
+        }
+        return this.triggerChunkDownload(blob, filename);
+      };
+
+      VideoRecorder.prototype.finalizeCurrentChunk = function(isFinalChunk) {
+        var self = this;
+        if (this.chunks.length === 0) return Promise.resolve();
+
+        var mimeType = this.mimeType || this.getSupportedMimeType();
+        var blob = new Blob(this.chunks, { type: mimeType });
+        var extension = mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+        var preset = this.preset.charAt(0).toUpperCase() + this.preset.slice(1);
+        var chunkPadded = String(this.chunkNumber).padStart(3, '0');
+        var filename = 'flyover-' + preset + '-' + this.sessionId + '-chunk-' + chunkPadded + extension;
+
+        return this.persistChunk(blob, filename).then(function() {
+          self.downloadedChunks.push({
+            number: self.chunkNumber,
+            filename: filename,
+            size: blob.size,
+            isFinal: !!isFinalChunk
+          });
+
+          DBG.log('Chunk persisted', {
+            chunkNumber: self.chunkNumber,
+            filename: filename,
+            size: self.formatFileSize(blob.size),
+            isFinal: !!isFinalChunk,
+            outputMode: self.outputMode,
+            sessionId: self.sessionId
+          });
+
+          self.chunks = [];
+          self.currentChunkSize = 0;
+          if (!isFinalChunk) {
+            self.chunkNumber += 1;
+          }
+        });
+      };
       
       VideoRecorder.prototype.init = function() {
         var self = this;
@@ -4333,7 +4498,10 @@
             resolve();
             
           } catch (error) {
+            var msg = error && error.message ? error.message : 'Video recording could not be initialized';
             DBG.warn('VideoRecorder init failed', error);
+            // Show user-facing error
+            self.showInitError(msg);
             reject(error);
           }
         });
@@ -4341,11 +4509,17 @@
       
       VideoRecorder.prototype.initWithCanvas = function() {
         try {
+          // Check browser support for canvas.captureStream()
+          if (typeof this.canvas.captureStream !== 'function') {
+            throw new Error('Your browser does not support canvas video recording. Please use Chrome, Firefox, or Edge.');
+          }
+          
           // Use direct canvas recording - this captures all map layers including photos!
           this.stream = this.canvas.captureStream(this.targetFPS);
           
           // Configure MediaRecorder with compression
           var mimeType = this.getSupportedMimeType();
+          this.mimeType = mimeType;
           var options = {
             mimeType: mimeType,
             videoBitsPerSecond: this.bitrate
@@ -4353,8 +4527,7 @@
           // Preserve options for recorder re-creation during rotation
           this.recorderOptions = options;
           
-          this.mediaRecorder = new MediaRecorder(this.stream, options);
-          this.setupEventHandlers();
+          this.recreateMediaRecorder();
           
           DBG.log('VideoRecorder initialized with canvas', { 
             preset: this.preset,
@@ -4468,7 +4641,7 @@
           if (event.data && event.data.size > 0) {
             self.chunks.push(event.data);
             self.currentChunkSize += event.data.size;
-            self.frameCount++;
+            self.totalRecordedBytes += event.data.size;
             
             // Rotate recorder at threshold to finalize a playable segment with fresh headers
             if (self.currentChunkSize >= self.CHUNK_SIZE_TARGET && self.chunks.length > 10 && !self.isRotatingChunk) {
@@ -4491,37 +4664,30 @@
         };
         
         this.mediaRecorder.onstop = function() {
-          DBG.log('MediaRecorder stopped', { rotating: !!self.isRotatingChunk });
-          if (self.isRotatingChunk) {
-            // We stopped to rotate at a chunk boundary: finalize and download this chunk
-            try {
-              self.downloadCurrentChunk();
-              self.chunks = [];
-              self.currentChunkSize = 0;
-              // Don't increment chunk number yet - do it after successful restart
-            } catch (error) {
-              DBG.warn('Failed to process rotated chunk', error);
-            } finally {
-              self.isRotatingChunk = false;
-            }
-            // Recreate and restart MediaRecorder to continue recording next chunk
-            try {
-              var opts = self.recorderOptions || { mimeType: self.getSupportedMimeType(), videoBitsPerSecond: self.bitrate };
-              self.mediaRecorder = new MediaRecorder(self.stream, opts);
-              self.setupEventHandlers();
-              // Start with small timeslice to keep memory usage low
-              self.mediaRecorder.start(100);
-              // Note: chunk number already incremented by downloadCurrentChunk()
-              DBG.log('MediaRecorder rotated and restarted', { nextChunkNumber: self.chunkNumber });
-            } catch (err) {
-              DBG.warn('Failed to restart MediaRecorder after rotation', err);
-              // Fallback: finalize recording if we cannot continue
+          var rotating = !!self.isRotatingChunk;
+          var shouldRestart = rotating && !self.stopRequested && self.isRecording;
+          self.isRotatingChunk = false;
+
+          DBG.log('MediaRecorder stopped', { rotating: rotating, restart: shouldRestart, stopRequested: !!self.stopRequested });
+
+          self.finalizeCurrentChunk(!shouldRestart)
+            .then(function() {
+              if (shouldRestart) {
+                try {
+                  self.recreateMediaRecorder();
+                  self.mediaRecorder.start(100);
+                  DBG.log('MediaRecorder rotated and restarted', { nextChunkNumber: self.chunkNumber });
+                  return;
+                } catch (err) {
+                  DBG.warn('Failed to restart MediaRecorder after rotation', err);
+                }
+              }
               self.onRecordingComplete();
-            }
-            return; // Do not finalize recording here
-          }
-          // Normal stop: finalize recording
-          self.onRecordingComplete();
+            })
+            .catch(function(error) {
+              DBG.warn('Failed to finalize recorder chunk', error);
+              self.onRecordingComplete();
+            });
         };
         
         this.mediaRecorder.onerror = function(event) {
@@ -4534,13 +4700,15 @@
         if (!this.isRecording) return;
         
         var self = this;
+        var sessionToken = this.sessionToken;
         
         // Store the original photo data for use in map layer
         this.currentPhotoData = photoData;
         
         // Wait longer for DOM overlay animation to complete and avoid distorted frames
         setTimeout(function() {
-          var overlay = document.querySelector('.fgpx-photo-overlay');
+          if (!self.isRecording || self.sessionToken !== sessionToken) return;
+          var overlay = self.getOverlayElement();
           var img = overlay ? overlay.querySelector('img') : null;
           
           // Only add to map if overlay is fully visible and stable
@@ -4563,7 +4731,7 @@
       
       VideoRecorder.prototype.addPhotoToMap = function() {
         try {
-          var overlay = document.querySelector('.fgpx-photo-overlay');
+          var overlay = this.getOverlayElement();
           if (!overlay) return;
           
           var isVisible = overlay.style.display !== 'none' && 
@@ -4590,12 +4758,16 @@
       VideoRecorder.prototype.addPhotoAsTopLayer = function(img, overlay) {
         try {
           var self = this;
+          var sessionToken = this.sessionToken;
           var originalImageUrl = (self.currentPhotoData && (self.currentPhotoData.fullUrl || self.currentPhotoData.thumbUrl)) || img.src;
           
           var center = this.map.getCenter();
           
           // Try symbol layer approach - this should not interact with terrain
           self.map.loadImage(originalImageUrl).then(function(response) {
+            if (!self.isRecording || self.sessionToken !== sessionToken) {
+              return;
+            }
             var image = response.data;
             
             // Calculate proper aspect ratio to match browser overlay
@@ -5008,6 +5180,10 @@
       VideoRecorder.prototype.start = function() {
         var self = this;
         if (this.isRecording) return Promise.resolve();
+
+        if (!this.mediaRecorder || !this.hasActiveStream()) {
+          this.initPromise = this.init();
+        }
         
         return this.initPromise.then(function() {
           if (!self.mediaRecorder) {
@@ -5015,11 +5191,9 @@
           }
           
           try {
-            self.chunks = [];
+            self.resetSessionState();
             self.isRecording = true;
             self.startTime = performance.now();
-            self.frameCount = 0;
-            self.lastFrameTime = 0;
             
             // Ensure all map markers are visible for recording
             self.ensureMarkersVisible();
@@ -5039,8 +5213,13 @@
           } catch (error) {
             DBG.warn('Failed to start recording', error);
             self.isRecording = false;
+            self.showInitError('Recording failed to start: ' + (error.message || 'unknown error'));
             throw error;
           }
+        }).catch(function(error) {
+          DBG.warn('Recording start rejected', error);
+          self.isRecording = false;
+          return Promise.reject(error);
         });
       };
       
@@ -5051,12 +5230,14 @@
       
       VideoRecorder.prototype.convertTextMarkersToLayers = function() {
         var self = this;
+        var sessionToken = this.sessionToken;
         this.recordingTextLayers = [];
         this.hiddenTextMarkers = [];
+        this.recordingImageIds = [];
         
         try {
           // Find all markers (text markers AND photo thumbnails)
-          var allMarkers = document.querySelectorAll('.maplibregl-marker');
+          var allMarkers = this.getMarkerElements();
           var convertedCount = 0;
           
           allMarkers.forEach(function(markerEl, index) {
@@ -5138,11 +5319,20 @@
                   });
                   
                   self.map.loadImage(img.src).then(function(response) {
+                    if (!self.isRecording || self.sessionToken !== sessionToken) {
+                      try {
+                        if (self.map.getSource(layerId)) {
+                          self.map.removeSource(layerId);
+                        }
+                      } catch (_) {}
+                      return;
+                    }
                     var image = response.data;
                     
                     var iconId = 'thumbnail-' + index;
                     if (!self.map.hasImage(iconId)) {
                       self.map.addImage(iconId, image);
+                      self.recordingImageIds.push(iconId);
                     }
                     
                     // Create a square cropped version of the image
@@ -5171,6 +5361,7 @@
                     var squareIconId = iconId + '-square';
                     if (!self.map.hasImage(squareIconId)) {
                       self.map.addImage(squareIconId, squareImage);
+                      self.recordingImageIds.push(squareIconId);
                     }
                     
                     self.map.addLayer({
@@ -5286,6 +5477,7 @@
                   var textIconId = 'text-marker-' + index;
                   if (!self.map.hasImage(textIconId)) {
                     self.map.addImage(textIconId, textImage);
+                    self.recordingImageIds.push(textIconId);
                   }
                   
                   // Create source and layer
@@ -5369,6 +5561,19 @@
             });
             this.recordingTextLayers = [];
           }
+
+          if (this.recordingImageIds) {
+            this.recordingImageIds.forEach(function(imageId) {
+              try {
+                if (self.map.hasImage(imageId)) {
+                  self.map.removeImage(imageId);
+                }
+              } catch (e) {
+                DBG.warn('Error removing recording image', imageId, e);
+              }
+            });
+            this.recordingImageIds = [];
+          }
           
           // Restore DOM marker visibility
           if (this.hiddenTextMarkers) {
@@ -5419,7 +5624,7 @@
       };
       
       VideoRecorder.prototype.drawMarkersToCanvas = function() {
-        var markers = document.querySelectorAll('.maplibregl-marker');
+        var markers = this.getMarkerElements();
         var mapRect = this.canvas.getBoundingClientRect();
         
         markers.forEach(function(marker) {
@@ -5500,8 +5705,13 @@
         if (!this.isRecording) return;
         
         try {
+          this.stopRequested = true;
           this.isRecording = false;
-          this.mediaRecorder.stop();
+          
+          // Safely stop the media recorder
+          if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+          }
           
           // Restore text markers first
           this.restoreTextMarkers();
@@ -5509,11 +5719,14 @@
           // Clean up map layers
           this.removePhotoFromMap();
           
-          // Clean up
+          // Clean up overlay canvas
           this.cleanupOverlayCanvas();
           
           // Hide recording progress
           this.hideRecordingProgress();
+          
+          // Clean up pending object URLs on explicit stop
+          this.cleanupPendingUrls();
           
           DBG.log('Video recording stopped', {
             preset: this.preset,
@@ -5521,6 +5734,23 @@
           });
         } catch (error) {
           DBG.warn('Failed to stop recording', error);
+          // Still try to clean up even if stop failed
+          try {
+            this.restoreTextMarkers();
+            this.removePhotoFromMap();
+            this.hideRecordingProgress();
+          } catch (_) {}
+        }
+      };
+      
+      VideoRecorder.prototype.cleanupPendingUrls = function() {
+        try {
+          while (this.pendingObjectUrls.length > 0) {
+            var url = this.pendingObjectUrls.shift();
+            try { URL.revokeObjectURL(url); } catch (_) {}
+          }
+        } catch (error) {
+          DBG.warn('Error cleaning up pending object URLs', error);
         }
       };
       
@@ -5536,15 +5766,10 @@
       
       VideoRecorder.prototype.onRecordingComplete = function() {
         try {
-          // Download any remaining chunks first
-          if (this.chunks.length > 0) {
-            this.downloadCurrentChunk(true); // Mark as final chunk
-          }
-          
           var totalSize = this.downloadedChunks.reduce(function(total, chunk) { 
             return total + chunk.size; 
           }, 0);
-          var duration = (performance.now() - this.startTime) / 1000;
+          var duration = Math.max((performance.now() - this.startTime) / 1000, 0.001);
           var actualBitrate = (totalSize * 8) / duration; // bits per second
           
           DBG.log('Recording complete', { 
@@ -5559,6 +5784,8 @@
             chunksDownloaded: this.downloadedChunks.length,
             sessionId: this.sessionId
           });
+
+          this.releaseStream();
           
           // Show completion message with reassembly instructions
           this.showCompletionMessage();
@@ -5569,53 +5796,7 @@
       };
       
       VideoRecorder.prototype.downloadCurrentChunk = function(isFinalChunk) {
-        if (this.chunks.length === 0) return;
-        
-        try {
-          var blob = new Blob(this.chunks, { type: this.getSupportedMimeType() });
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = url;
-          
-          // Create filename with chunk number for easy reassembly
-          var mimeType = this.getSupportedMimeType();
-          var extension = mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-          var preset = this.preset.charAt(0).toUpperCase() + this.preset.slice(1);
-          var chunkPadded = String(this.chunkNumber).padStart(3, '0');
-          
-          a.download = 'flyover-' + preset + '-' + this.sessionId + '-chunk-' + chunkPadded + extension;
-          
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          
-          // Store chunk info for completion message
-          this.downloadedChunks.push({
-            number: this.chunkNumber,
-            filename: a.download,
-            size: blob.size,
-            isFinal: !!isFinalChunk
-          });
-          
-          DBG.log('Chunk downloaded', { 
-            chunkNumber: this.chunkNumber,
-            filename: a.download,
-            size: this.formatFileSize(blob.size),
-            isFinal: !!isFinalChunk,
-            sessionId: this.sessionId
-          });
-          
-          // Reset for next chunk (but keep recording)
-          if (!isFinalChunk) {
-            this.chunks = [];
-            this.currentChunkSize = 0;
-            this.chunkNumber++;
-          }
-          
-        } catch (error) {
-          DBG.warn('Failed to download chunk', error);
-        }
+        return this.finalizeCurrentChunk(isFinalChunk);
       };
       
       VideoRecorder.prototype.downloadVideo = function(blob) {
@@ -5684,26 +5865,253 @@
       VideoRecorder.prototype.showCompletionMessage = function() {
         if (this.downloadedChunks.length <= 1) return; // Single file, no message needed
         
-        var message = 'Recording completed! Downloaded ' + this.downloadedChunks.length + ' chunks.\n\n';
-        message += 'To reassemble the video:\n';
-        message += '1. Ensure all chunks are in the same folder\n';
-        message += '2. Use a tool like FFmpeg or video editing software\n';
-        message += '3. Concatenate files in order: chunk-000, chunk-001, etc.\n\n';
-        message += 'Session ID: ' + this.sessionId + '\n';
-        message += 'Files downloaded:\n';
+        var self = this;
+        var extension = (this.mimeType || '').indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+        var ffmpegCmd = 'ffmpeg -f concat -safe 0 -i filelist.txt -c copy output.' + extension;
         
+        // Create file list content
+        var fileListLines = [];
         this.downloadedChunks.forEach(function(chunk) {
-          message += '- ' + chunk.filename + ' (' + this.formatFileSize(chunk.size) + ')\n';
-        }.bind(this));
+          fileListLines.push("file '" + chunk.filename + "'");
+        });
+        var fileListContent = fileListLines.join('\n');
         
-        alert(message);
+        // Create modal dialog instead of alert
+        var modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0,0,0,0.6)';
+        modal.style.zIndex = '10000';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.fontFamily = 'sans-serif';
         
-        DBG.log('Chunked recording completion message shown', {
+        var content = document.createElement('div');
+        content.style.background = 'white';
+        content.style.padding = '24px';
+        content.style.borderRadius = '8px';
+        content.style.maxWidth = '600px';
+        content.style.maxHeight = '80vh';
+        content.style.overflowY = 'auto';
+        content.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+        
+        var title = document.createElement('h2');
+        title.textContent = 'Recording Complete';
+        title.style.margin = '0 0 16px 0';
+        
+        var summary = document.createElement('p');
+        summary.textContent = this.downloadedChunks.length + ' chunk file' + (this.downloadedChunks.length !== 1 ? 's' : '') + ' downloaded.';
+        summary.style.fontWeight = 'bold';
+        summary.style.marginBottom = '16px';
+        
+        var instructionsHeading = document.createElement('h3');
+        instructionsHeading.textContent = 'To reassemble:';
+        instructionsHeading.style.marginTop = '16px';
+        instructionsHeading.style.marginBottom = '8px';
+        
+        var instructions = document.createElement('ol');
+        instructions.style.margin = '0';
+        instructions.style.paddingLeft = '20px';
+        var li1 = document.createElement('li');
+        li1.textContent = 'Keep all chunk files in the same folder';
+        var li2 = document.createElement('li');
+        li2.textContent = 'Create a file list filelist.txt with contents (see below)';
+        var li3 = document.createElement('li');
+        li3.textContent = 'Run the FFmpeg command (see below)';
+        instructions.appendChild(li1);
+        instructions.appendChild(li2);
+        instructions.appendChild(li3);
+        
+        var fileListLabel = document.createElement('h3');
+        fileListLabel.textContent = 'filelist.txt contents:';
+        fileListLabel.style.marginTop = '16px';
+        fileListLabel.style.marginBottom = '8px';
+        
+        var fileListCode = document.createElement('pre');
+        fileListCode.textContent = fileListContent;
+        fileListCode.style.background = '#f5f5f5';
+        fileListCode.style.padding = '12px';
+        fileListCode.style.borderRadius = '4px';
+        fileListCode.style.overflowX = 'auto';
+        fileListCode.style.fontSize = '12px';
+        fileListCode.style.margin = '0 0 16px 0';
+        
+        var cmdLabel = document.createElement('h3');
+        cmdLabel.textContent = 'FFmpeg command:';
+        cmdLabel.style.marginTop = '16px';
+        cmdLabel.style.marginBottom = '8px';
+        
+        var cmdCode = document.createElement('pre');
+        cmdCode.textContent = ffmpegCmd;
+        cmdCode.style.background = '#f5f5f5';
+        cmdCode.style.padding = '12px';
+        cmdCode.style.borderRadius = '4px';
+        cmdCode.style.overflowX = 'auto';
+        cmdCode.style.fontSize = '12px';
+        cmdCode.style.margin = '0 0 16px 0';
+        cmdCode.style.cursor = 'pointer';
+        cmdCode.style.border = '1px solid #ddd';
+        cmdCode.title = 'Click to copy';
+        cmdCode.onclick = function() {
+          navigator.clipboard.writeText(ffmpegCmd).then(function() {
+            var original = cmdCode.textContent;
+            cmdCode.textContent = 'Copied!';
+            setTimeout(function() { cmdCode.textContent = original; }, 2000);
+          }).catch(function() {
+            alert('Failed to copy. Please copy manually.');
+          });
+        };
+        
+        var filesHeading = document.createElement('h3');
+        filesHeading.textContent = 'Your files:';
+        filesHeading.style.marginTop = '16px';
+        filesHeading.style.marginBottom = '8px';
+        
+        var files = document.createElement('div');
+        this.downloadedChunks.forEach(function(chunk) {
+          var item = document.createElement('div');
+          item.style.padding = '6px 0';
+          item.style.fontSize = '13px';
+          item.style.color = '#555';
+          item.textContent = chunk.filename + ' (' + self.formatFileSize(chunk.size) + ')';
+          files.appendChild(item);
+        });
+        
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.style.padding = '10px 20px';
+        closeBtn.style.background = '#007bff';
+        closeBtn.style.color = 'white';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '4px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.fontSize = '14px';
+        closeBtn.style.marginTop = '16px';
+        closeBtn.onclick = function() { modal.remove(); };
+        
+        content.appendChild(title);
+        content.appendChild(summary);
+        content.appendChild(instructionsHeading);
+        content.appendChild(instructions);
+        content.appendChild(fileListLabel);
+        content.appendChild(fileListCode);
+        content.appendChild(cmdLabel);
+        content.appendChild(cmdCode);
+        content.appendChild(filesHeading);
+        content.appendChild(files);
+        content.appendChild(closeBtn);
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Keyboard and backdrop support
+        var dismissModal = function() {
+          modal.remove();
+        };
+        
+        // Click backdrop to close
+        modal.onclick = function(e) {
+          if (e.target === modal) {
+            dismissModal();
+          }
+        };
+        
+        // Escape key to close
+        var onKeyDown = function(e) {
+          if ((e.key === 'Escape' || e.code === 'Escape') && !e.defaultPrevented) {
+            e.preventDefault();
+            dismissModal();
+            window.removeEventListener('keydown', onKeyDown);
+          }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        
+        DBG.log('Chunked recording completion dialog shown', {
           totalChunks: this.downloadedChunks.length,
           sessionId: this.sessionId,
           files: this.downloadedChunks.map(function(c) { return c.filename; })
         });
       };
+      
+      VideoRecorder.prototype.showInitError = function(message) {
+        var modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0,0,0,0.6)';
+        modal.style.zIndex = '10000';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.fontFamily = 'sans-serif';
+        
+        var content = document.createElement('div');
+        content.style.background = 'white';
+        content.style.padding = '24px';
+        content.style.borderRadius = '8px';
+        content.style.maxWidth = '500px';
+        content.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+        content.style.borderLeft = '4px solid #dc3545';
+        
+        var title = document.createElement('h2');
+        title.textContent = 'Video Recording Not Available';
+        title.style.margin = '0 0 12px 0';
+        title.style.color = '#dc3545';
+        
+        var text = document.createElement('p');
+        text.textContent = message;
+        text.style.margin = '0 0 16px 0';
+        text.style.color = '#666';
+        text.style.lineHeight = '1.5';
+        
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = 'OK';
+        closeBtn.style.padding = '8px 16px';
+        closeBtn.style.background = '#dc3545';
+        closeBtn.style.color = 'white';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '4px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.onclick = function() { modal.remove(); };
+        
+        content.appendChild(title);
+        content.appendChild(text);
+        content.appendChild(closeBtn);
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Keyboard and backdrop support
+        var dismissModal = function() {
+          modal.remove();
+        };
+        
+        // Click backdrop to close
+        modal.onclick = function(e) {
+          if (e.target === modal) {
+            dismissModal();
+          }
+        };
+        
+        // Escape key to close
+        var onKeyDown = function(e) {
+          if ((e.key === 'Escape' || e.code === 'Escape') && !e.defaultPrevented) {
+            e.preventDefault();
+            dismissModal();
+            window.removeEventListener('keydown', onKeyDown);
+          }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        
+        DBG.warn('Video recorder init error shown to user', message);
+      };
+      
       
       // Removed complex canvas scaling - keep it simple and working!
       
@@ -5712,11 +6120,11 @@
         
         var currentTime = performance.now();
         var elapsed = (currentTime - this.startTime) / 1000; // seconds
-        var currentSize = this.chunks.reduce(function(total, chunk) { return total + chunk.size; }, 0);
+        var currentSize = this.totalRecordedBytes;
         var actualBitrate = elapsed > 0 ? (currentSize * 8) / elapsed : 0; // bits per second
         
         // Update progress UI if it exists
-        var progressElement = document.querySelector('.fgpx-recording-progress');
+        var progressElement = this.progressElement;
         if (progressElement) {
           progressElement.innerHTML = 
             '<div class="fgpx-progress-stats">' +
@@ -5729,7 +6137,7 @@
       
       VideoRecorder.prototype.showRecordingProgress = function() {
         // Create progress display if it doesn't exist
-        var existing = document.querySelector('.fgpx-recording-progress');
+        var existing = this.progressElement;
         if (existing) {
           existing.style.display = 'block';
           return;
@@ -5743,14 +6151,14 @@
           'z-index: 1000; font-family: monospace;';
         
         // Add to map container
-        var mapContainer = document.querySelector('.fgpx-map');
-        if (mapContainer) {
-          mapContainer.appendChild(progressDiv);
+        if (this.progressHost) {
+          this.progressHost.appendChild(progressDiv);
         }
+        this.progressElement = progressDiv;
       };
       
       VideoRecorder.prototype.hideRecordingProgress = function() {
-        var progressElement = document.querySelector('.fgpx-recording-progress');
+        var progressElement = this.progressElement;
         if (progressElement) {
           progressElement.style.display = 'none';
         }
@@ -12040,73 +12448,80 @@
         if (isRecording || preloadingInProgress) return;
         
         // Show quality selection modal first
-        showRecordingSettingsModal().then(function(selectedPreset) {
-          if (!selectedPreset) {
+        showRecordingSettingsModal().then(function(selection) {
+          if (!selection || !selection.preset) {
             DBG.log('Recording cancelled by user');
             return;
           }
           
-          selectedQualityPreset = selectedPreset;
-          
+          selectedQualityPreset = selection.preset;
+          var expectedChunkCount = Math.max(1, Number(selection.expectedChunkCount) || 1);
+          var outputConfig = selection.outputConfig || { mode: 'download', directoryHandle: null };
+
           try {
-            // Initialize video recorder with selected preset
-            if (!videoRecorder || videoRecorder.preset !== selectedQualityPreset) {
-              videoRecorder = new VideoRecorder(map, {
-                preset: selectedQualityPreset
-              });
-            }
+            // Initialize a fresh recorder per recording session so chunk/session state never leaks.
+            videoRecorder = new VideoRecorder(map, {
+              preset: selectedQualityPreset,
+              root: root,
+              overlayElement: overlay,
+              mapContainer: map.getContainer(),
+              progressHost: ui.mapEl,
+              expectedChunkCount: expectedChunkCount,
+              outputMode: outputConfig.mode,
+              outputDirectoryHandle: outputConfig.directoryHandle || null
+            });
           
-          // Update UI to show recording is starting
-          ui.controls.btnRecord.textContent = '⏹';
-          ui.controls.btnRecord.setAttribute('title', 'Stop Recording');
-          ui.controls.btnRecord.disabled = false;
+            // Update UI to show recording is starting
+            ui.controls.btnRecord.textContent = '⏹';
+            ui.controls.btnRecord.setAttribute('title', 'Stop Recording');
+            ui.controls.btnRecord.disabled = false;
           
-          // Disable other controls during recording
-          ui.controls.btnPlay.disabled = true;
-          ui.controls.btnPause.disabled = true;
-          ui.controls.btnRestart.disabled = true;
+            // Disable other controls during recording
+            ui.controls.btnPlay.disabled = true;
+            ui.controls.btnPause.disabled = true;
+            ui.controls.btnRestart.disabled = true;
           
-          // Hide splash overlay immediately when recording starts
-          hideSplash();
+            // Hide splash overlay immediately when recording starts
+            hideSplash();
           
-          // Start background playback if not already playing
-          if (!playing) {
-            // Start preloading if needed
-            if (prefetchEnabled && !preloadCompleted) {
-              tilePrefetchPromise = prefetchTilesForRoute();
-            }
+            // Start background playback if not already playing
+            if (!playing) {
+              // Start preloading if needed
+              if (prefetchEnabled && !preloadCompleted) {
+                tilePrefetchPromise = prefetchTilesForRoute();
+              }
             
-            // Start playback in background and only start recording after preloading
-            (tilePrefetchPromise || Promise.resolve()).then(function() {
-              // Now start recording after preloading is complete
+              // Start playback in background and only start recording after preloading
+              (tilePrefetchPromise || Promise.resolve()).then(function() {
+                // Now start recording after preloading is complete
+                videoRecorder.start().then(function() {
+                  isRecording = true;
+                
+                  if (firstPlayZoomPending) {
+                    // Start recording before zoom animation
+                    zoomInThenStartPlayback();
+                  } else {
+                    setPlaying(true);
+                    scheduleRaf();
+                  }
+                }).catch(function(error) {
+                  DBG.warn('Failed to start recording', error);
+                  isRecording = false;
+                  updateButtonStates();
+                });
+              });
+            } else {
+              // If already playing, start recording immediately
               videoRecorder.start().then(function() {
                 isRecording = true;
-                
-                if (firstPlayZoomPending) {
-                  // Start recording before zoom animation
-                  zoomInThenStartPlayback();
-                } else {
-                  setPlaying(true);
-                  scheduleRaf();
-                }
               }).catch(function(error) {
                 DBG.warn('Failed to start recording', error);
                 isRecording = false;
                 updateButtonStates();
               });
-            });
-          } else {
-            // If already playing, start recording immediately
-            videoRecorder.start().then(function() {
-              isRecording = true;
-            }).catch(function(error) {
-              DBG.warn('Failed to start recording', error);
-              isRecording = false;
-              updateButtonStates();
-            });
-          }
+            }
           
-            DBG.log('Recording started with preset:', selectedQualityPreset);
+            DBG.log('Recording started with preset:', selectedQualityPreset, 'outputMode:', outputConfig.mode, 'expectedChunks:', expectedChunkCount);
           } catch (error) {
             DBG.warn('Failed to start recording', error);
             isRecording = false;
@@ -12219,6 +12634,41 @@
         DBG.warn('Could not calculate track duration, using fallback');
         return 3 / currentSpeed; // fallback adjusted for speed
       }
+
+      function estimateExpectedSizeMbForPreset(presetKey, trackDurationMinutes) {
+        var preset = VIDEO_QUALITY_PRESETS[presetKey] || VIDEO_QUALITY_PRESETS.medium;
+        return (preset.bitrate / 8 * 60 * 1.3 * trackDurationMinutes) / (1024 * 1024);
+      }
+
+      function estimateExpectedChunkCount(presetKey, trackDurationMinutes) {
+        var estimatedSizeMb = estimateExpectedSizeMbForPreset(presetKey, trackDurationMinutes);
+        if (estimatedSizeMb <= 250) {
+          return 1;
+        }
+        return Math.ceil(estimatedSizeMb / 200);
+      }
+
+      function chooseRecordingOutput(expectedChunkCount) {
+        if (expectedChunkCount <= 1) {
+          return Promise.resolve({ mode: 'download', directoryHandle: null });
+        }
+
+        if (!window.isSecureContext || typeof window.showDirectoryPicker !== 'function') {
+          return Promise.resolve({ mode: 'download', directoryHandle: null });
+        }
+
+        return window.showDirectoryPicker({ id: 'fgpx-recordings', mode: 'readwrite' })
+          .then(function(directoryHandle) {
+            return { mode: 'directory', directoryHandle: directoryHandle };
+          })
+          .catch(function(error) {
+            if (error && error.name === 'AbortError') {
+              DBG.log('Recording directory picker dismissed, falling back to browser downloads');
+              return { mode: 'download', directoryHandle: null };
+            }
+            throw error;
+          });
+      }
       
       // Quality selection modal
       function showRecordingSettingsModal() {
@@ -12280,23 +12730,13 @@
             '<div class="fgpx-preset-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">' +
               Object.keys(VIDEO_QUALITY_PRESETS).map(function(key) {
                 var preset = VIDEO_QUALITY_PRESETS[key];
-                var estimatedSize = (preset.bitrate / 8 * 60 * 1.3 * trackDurationMinutes) / (1024 * 1024); // MB
+                var estimatedSize = estimateExpectedSizeMbForPreset(key, trackDurationMinutes);
                 var isRecommended = key === 'medium';
-                
-                // Calculate expected chunks for this preset
-                var tempRecorder = { 
-                  estimatedSizePerMinute: (preset.bitrate / 8 * 60 * 1.3) / (1024 * 1024), // MB per minute
-                  CHUNK_SIZE_THRESHOLD: 250, // MB
-                  CHUNK_SIZE_TARGET: 200 // MB
-                };
-                var expectedChunks = 1;
-                if (estimatedSize > tempRecorder.CHUNK_SIZE_THRESHOLD) {
-                  expectedChunks = Math.ceil(estimatedSize / tempRecorder.CHUNK_SIZE_TARGET);
-                }
+                var expectedChunks = estimateExpectedChunkCount(key, trackDurationMinutes);
                 
                 var chunkInfo = '';
                 if (expectedChunks > 1) {
-                  chunkInfo = '<div class="fgpx-preset-chunks" style="font-size: 11px; color: #e67e22; font-weight: bold; margin-bottom: 2px;">📁 ' + expectedChunks + ' chunks (>250MB)</div>';
+                  chunkInfo = '<div class="fgpx-preset-chunks" style="font-size: 11px; color: #e67e22; font-weight: bold; margin-bottom: 2px;">Chunked output: ' + expectedChunks + ' files</div>';
                 }
                 
                 return '<div class="fgpx-preset-card" data-preset="' + key + '" style="' +
@@ -12307,7 +12747,7 @@
                   (isRecommended ? '<div style="position: absolute; top: -8px; right: 8px; background: #007cba; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">RECOMMENDED</div>' : '') +
                   '<div class="fgpx-preset-name" style="font-weight: bold; color: #333; margin-bottom: 4px;">' + preset.name + '</div>' +
                   '<div class="fgpx-preset-specs" style="font-size: 12px; color: #666; margin-bottom: 4px;">' + 
-                    preset.resolution.width + 'x' + preset.resolution.height + ' • ' + preset.fps + 'fps • ' + Math.round(preset.bitrate / 1000000) + ' Mbps' +
+                    preset.fps + 'fps • ' + Math.round(preset.bitrate / 1000000) + ' Mbps • bitrate profile' +
                   '</div>' +
                   '<div class="fgpx-preset-size" style="font-size: 12px; color: #007cba; font-weight: bold; margin-bottom: 4px;">~' + Math.round(estimatedSize) + 'MB total</div>' +
                   chunkInfo +
@@ -12329,9 +12769,10 @@
               '</div>' +
               '<div class="fgpx-stat">' +
                 '<span class="fgpx-stat-label" style="display: block; font-size: 12px; color: #666;">Expected File Size:</span>' +
-                '<span class="fgpx-stat-value" id="fgpx-total-size" style="font-weight: bold; color: #007cba;">~' + Math.round((VIDEO_QUALITY_PRESETS.medium.bitrate / 8 * 60 * 1.3 * trackDurationMinutes) / (1024 * 1024)) + 'MB</span>' +
+                '<span class="fgpx-stat-value" id="fgpx-total-size" style="font-weight: bold; color: #007cba;">~' + Math.round(estimateExpectedSizeMbForPreset('medium', trackDurationMinutes)) + 'MB</span>' +
               '</div>' +
             '</div>' +
+            '<div id="fgpx-recording-note" style="margin-top: 12px; font-size: 12px; color: #555; line-height: 1.45;">Export size matches the current player size. Presets adjust bitrate and frame rate. Long recordings may be split into multiple files; supported browsers will offer a folder picker for chunked output.</div>' +
           '</div>' +
           
           '<div class="fgpx-modal-actions" style="display: flex; gap: 12px; justify-content: flex-end;">' +
@@ -12369,7 +12810,7 @@
             
             // Update preview
             document.getElementById('fgpx-selected-quality').textContent = preset.name;
-            var estimatedSize = (preset.bitrate / 8 * 60 * 1.3 * trackDurationMinutes) / (1024 * 1024);
+            var estimatedSize = estimateExpectedSizeMbForPreset(selectedPreset, trackDurationMinutes);
             document.getElementById('fgpx-total-size').textContent = '~' + Math.round(estimatedSize) + 'MB';
           });
           
@@ -12391,7 +12832,19 @@
         
         // Start recording button
         modalContent.querySelector('#fgpx-start-recording').addEventListener('click', function() {
-          closeModal(selectedPreset);
+          var startButton = modalContent.querySelector('#fgpx-start-recording');
+          var expectedChunkCount = estimateExpectedChunkCount(selectedPreset, trackDurationMinutes);
+          startButton.disabled = true;
+          chooseRecordingOutput(expectedChunkCount).then(function(outputConfig) {
+            closeModal({
+              preset: selectedPreset,
+              expectedChunkCount: expectedChunkCount,
+              outputConfig: outputConfig
+            });
+          }).catch(function(error) {
+            startButton.disabled = false;
+            DBG.warn('Failed to choose recording output', error);
+          });
         });
         
         // Close on backdrop click
