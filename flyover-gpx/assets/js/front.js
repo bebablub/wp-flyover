@@ -5820,14 +5820,15 @@
           var metersPerPx = 156543.03 * Math.cos(centerLatRad) / Math.pow(2, z);
           var viewW = Math.max(320, (ui && ui.mapEl && ui.mapEl.clientWidth) ? ui.mapEl.clientWidth : 1280);
           var viewH = Math.max(240, (ui && ui.mapEl && ui.mapEl.clientHeight) ? ui.mapEl.clientHeight : 720);
-          var halfMetersX = metersPerPx * (viewW / 2);
-          var halfMetersY = metersPerPx * (viewH / 2);
+          var safetyPx = Math.max(96, Math.round(Math.max(viewW, viewH) * 0.18));
+          var halfMetersX = metersPerPx * ((viewW / 2) + safetyPx);
+          var halfMetersY = metersPerPx * ((viewH / 2) + safetyPx);
           var degPerMeterLat = 1 / 110540;
           var cosLat = Math.max(0.2, Math.cos(centerLatRad));
           var degPerMeterLon = 1 / (111320 * cosLat);
           var halfSpanLon = halfMetersX * degPerMeterLon;
           var halfSpanLat = halfMetersY * degPerMeterLat;
-          var pad = (typeof margin === 'number') ? Math.max(0, margin) : 0.05;
+          var pad = (typeof margin === 'number') ? Math.max(0, margin) : 0.18;
           var lonPad = halfSpanLon * (1 + pad);
           var latPad = halfSpanLat * (1 + pad);
           var ex = {
@@ -5871,16 +5872,9 @@
 
           // Only target zoom level — no extra levels.
           // Keep request volume bounded to avoid runaway network usage.
-          var reqs = queuePrefetchForZoom(z, 120);
-          DBG.log('prefetch tiles at target zoom', { z: z, tiles: reqs.length, maxTilesTotal: 120, viewW: viewW, viewH: viewH, margin: pad, bearing: bearingDeg });
+          var reqs = queuePrefetchForZoom(z, 180);
+          DBG.log('prefetch tiles at target zoom', { z: z, tiles: reqs.length, maxTilesTotal: 180, viewW: viewW, viewH: viewH, margin: pad, safetyPx: safetyPx, bearing: bearingDeg });
           return Promise.allSettled(reqs).then(function(){
-            // Optional fallback: warm parent zoom after main target-zoom prefetch is done.
-            // Run in background (non-blocking) so playback can start immediately.
-            var parentReqs = queuePrefetchForZoom(z - 1, 24);
-            if (parentReqs.length > 0) {
-              DBG.log('prefetch parent zoom fallback', { z: z - 1, tiles: parentReqs.length, maxTilesTotal: 24 });
-              Promise.allSettled(parentReqs).catch(function(){});
-            }
             if (vpInflightKeys.size > 2000) { vpInflightKeys.clear(); }
           });
         } catch(_) { return Promise.resolve(); }
@@ -6471,7 +6465,7 @@
             });
           }
         });
-        var demGate = demWarmup ? Promise.race([demWarmup, new Promise(function(r){ setTimeout(r, 2000); })]) : Promise.resolve();
+        var demGate = demWarmup ? demWarmup : Promise.resolve();
         var demTracked = demGate.then(function() {
           if (playStartTrace && playStartTrace.startedAt) {
             DBG.log('play-start stage', {
@@ -6487,11 +6481,35 @@
           // the zoom-in, so tiles at the playback zoom level are crisp from the start.
           setPreloadOverlayText('Preparing playback…');
           var mapIdleWait = new Promise(function(resolve) {
-            if (typeof map.isMoving === 'function' && !map.isMoving()) {
-              map.once('idle', resolve);
-              setTimeout(resolve, 800); // cap: don't block longer than 0.8s
-            } else {
+            var settled = false;
+            function done() {
+              if (settled) return;
+              settled = true;
               resolve();
+            }
+            try {
+              var idleNow = (typeof map.isMoving === 'function') ? !map.isMoving() : true;
+              var tilesReady = (typeof map.areTilesLoaded === 'function') ? map.areTilesLoaded() : true;
+              var styleReady = (typeof map.isStyleLoaded === 'function') ? map.isStyleLoaded() : true;
+              if (idleNow && tilesReady && styleReady) {
+                done();
+                return;
+              }
+              map.once('idle', done);
+              // In case map already became idle before listener wiring is observed,
+              // re-check in next frame and resolve if ready.
+              try {
+                requestAnimationFrame(function() {
+                  try {
+                    var _idle = (typeof map.isMoving === 'function') ? !map.isMoving() : true;
+                    var _tiles = (typeof map.areTilesLoaded === 'function') ? map.areTilesLoaded() : true;
+                    var _style = (typeof map.isStyleLoaded === 'function') ? map.isStyleLoaded() : true;
+                    if (_idle && _tiles && _style) done();
+                  } catch(_) {}
+                });
+              } catch(_) {}
+            } catch(_) {
+              done();
             }
           });
           mapIdleWait.then(function() {
@@ -10445,12 +10463,22 @@
               terrainTemporarilyDisabled = false;
             } catch (_) {}
           }
-          var targetCenter = (currentPosLngLat && Array.isArray(currentPosLngLat)) ? currentPosLngLat.slice(0,2) : cameraCenter.slice(0,2);
           var dNow = Math.max(0, Math.min(1, progress)) * totalDistance;
+          var posNow = positionAtDistance(dNow);
+          var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
+          var remainingAhead = Math.max(0, dMaxAhead - dNow);
+          // Match playback camera framing at handoff: end zoom on the same lead center
+          // that runtime camera logic uses, avoiding a moveend->first-frame jump.
+          var cameraLookaheadD = Math.min(remainingAhead * 0.4, hasTerrain ? 35 : 50);
+          var targetCenter = (cameraLookaheadD > 2)
+            ? positionAtDistance(Math.min(dMaxAhead, dNow + cameraLookaheadD)).slice(0, 2)
+            : posNow.slice(0, 2);
           var startBearing = targetBearingAtDistance(dNow);
           // Pre-set bearing state so the first animation frame does not jump
           bearing = startBearing;
           appliedBearing = startBearing;
+          cameraCenter[0] = targetCenter[0];
+          cameraCenter[1] = targetCenter[1];
           forceCameraUpdate = false;
 
           // Suppress tile fade-in during zoom so new tiles snap in instantly (no crossfade blur)
@@ -10468,7 +10496,7 @@
           var prefetchPromise;
           try {
             if (prefetchEnabled) {
-              prefetchPromise = prefetchTilesAtTargetAsync(targetCenter, defaultZoom, startBearing, 0.05);
+              prefetchPromise = prefetchTilesAtTargetAsync(targetCenter, defaultZoom, startBearing, 0.18);
             }
           } catch (_) {}
           if (!prefetchPromise) prefetchPromise = Promise.resolve();
@@ -10481,7 +10509,7 @@
             }, 2800);
 
             // Animate to target — tiles are already in browser HTTP cache
-            map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 2200, easing: easeInOutCubic });
+            map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 3500, easing: easeInOutCubic });
             map.once('moveend', function() {
               firstPlayZoomPending = false;
               try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
