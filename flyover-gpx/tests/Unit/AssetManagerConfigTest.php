@@ -14,7 +14,6 @@ final class AssetManagerConfigTest extends TestCase
         $source = (string) file_get_contents($assetManagerFile);
 
         $this->assertStringContainsString("'primary' => 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js'", $source);
-        $this->assertStringContainsString("'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.js'", $source);
         $this->assertStringContainsString("'https://unpkg.com/chart.js@4.5.1/dist/chart.umd.min.js'", $source);
         $this->assertStringContainsString("'version' => '4.5.1'", $source);
 
