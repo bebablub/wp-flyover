@@ -11856,7 +11856,6 @@
         cameraCooldown = 0;
         cameraJumpedLastFrame = false;
         cameraJumpStreak = 0;
-        suppressCameraUpdateFrames = 0;
       }
 
       function syncCameraStateFromMap() {
@@ -11880,7 +11879,33 @@
           cameraCooldown = 0;
           cameraJumpedLastFrame = false;
           cameraJumpStreak = 0;
-          suppressCameraUpdateFrames = 0;
+        } catch(_) {}
+      }
+
+      // Apply rendering optimizations for playback: zero tile fades, allow label overlap.
+      // Called once before the intro easeTo so that MapLibre settles layout during the
+      // 3.5s zoom animation, preventing any visible label-shift at countdown start.
+      function applyPlaybackLayerOptimizations() {
+        try {
+          if (map.style && typeof map.style.fadeDuration !== 'undefined') {
+            if (mapFadeDurationDefault == null) mapFadeDurationDefault = map.style.fadeDuration;
+            map.style.fadeDuration = 0;
+          }
+          var _pst = map.getStyle();
+          var _players = (_pst && _pst.layers) ? _pst.layers : [];
+          for (var _pli = 0; _pli < _players.length; _pli++) {
+            var _plyr = _players[_pli];
+            if (!_plyr || !_plyr.id || !map.getLayer(_plyr.id)) continue;
+            if (_plyr.type === 'raster') {
+              try { map.setPaintProperty(_plyr.id, 'raster-fade-duration', 0); } catch(_) {}
+            }
+            if (_plyr.type === 'symbol') {
+              try {
+                map.setLayoutProperty(_plyr.id, 'text-allow-overlap', true);
+                map.setLayoutProperty(_plyr.id, 'text-ignore-placement', true);
+              } catch(_) {}
+            }
+          }
         } catch(_) {}
       }
 
@@ -12001,15 +12026,6 @@
           // Sync camera state so the first playback frame starts from exactly this position
           syncCameraState(targetCenter, startBearing);
 
-          // Suppress tile fade-in during zoom so new tiles snap in instantly (no crossfade blur)
-          var origFadeDuration = null;
-          try {
-            if (map.style && typeof map.style.fadeDuration !== 'undefined') {
-              origFadeDuration = map.style.fadeDuration;
-              map.style.fadeDuration = 0;
-            }
-          } catch (_) {}
-
           // STRATEGY: Prefetch tiles at target zoom for the viewport only (HTTP cache),
           // wait for fetches to complete, then start zoom animation.
           // No jumpTo — no visible flash. Only fetches the single target zoom level.
@@ -12032,6 +12048,15 @@
               zoomOverlayTimer = null;
             }, 1200);
 
+            // Suppress tile fade during the zoom animation so new tiles snap in instantly
+            var origFadeDuration = null;
+            try {
+              if (map.style && typeof map.style.fadeDuration !== 'undefined') {
+                origFadeDuration = map.style.fadeDuration;
+                map.style.fadeDuration = 0;
+              }
+            } catch (_) {}
+
             // Animate to target — tiles are already in browser HTTP cache
             map.easeTo({ center: targetCenter, zoom: defaultZoom, bearing: startBearing, duration: 3500, easing: easeInOutCubic });
             map.once('moveend', function() {
@@ -12049,33 +12074,12 @@
                 markerDataCooldown = 999;
                 progressNeedLineInit = true;
                 progressLineCooldown = 999;
-                try { updateVisuals(progress, getPlaybackCadence(speed, hasTerrain, currentChartTab)); } catch(_) {}
               } catch(_) {}
-              // Apply playback rendering optimizations NOW (before countdown) so MapLibre
-              // settles label placement and tile state during the 3-second countdown.
-              // This prevents the visible label-shift "jump" that occurs when properties
-              // are changed at the exact moment playback starts.
-              try {
-                if (map.style && typeof map.style.fadeDuration !== 'undefined') {
-                  if (mapFadeDurationDefault == null) mapFadeDurationDefault = map.style.fadeDuration;
-                  map.style.fadeDuration = 0;
-                }
-                var _pst = map.getStyle();
-                var _players = (_pst && _pst.layers) ? _pst.layers : [];
-                for (var _pli = 0; _pli < _players.length; _pli++) {
-                  var _plyr = _players[_pli];
-                  if (!_plyr || !_plyr.id || !map.getLayer(_plyr.id)) continue;
-                  if (_plyr.type === 'raster') {
-                    try { map.setPaintProperty(_plyr.id, 'raster-fade-duration', 0); } catch(_) {}
-                  }
-                  if (_plyr.type === 'symbol') {
-                    try {
-                      map.setLayoutProperty(_plyr.id, 'text-allow-overlap', true);
-                      map.setLayoutProperty(_plyr.id, 'text-ignore-placement', true);
-                    } catch(_) {}
-                  }
-                }
-              } catch(_) {}
+
+              // Apply playback rendering optimizations (label overlap, fade suppression)
+              // BEFORE waiting for idle, so MapLibre processes them and settles.
+              applyPlaybackLayerOptimizations();
+
               function beginPlayback() {
                 try {
                   var _dStart = Math.max(0, Math.min(1, progress)) * totalDistance;
@@ -12084,34 +12088,52 @@
                   }
                   syncCameraStateFromMap();
                 } catch(_) {}
+                // Suppress camera jumpTo for the first few frames so playback
+                // starts from exactly where countdown/sway left the camera, with no snap.
+                suppressCameraUpdateFrames = 3;
                 setPlaying(true);
                 scheduleRaf();
                 recordPlaybackStart();
               }
-              if (shouldRunStartupCountdown()) {
-                var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
-                // Countdown strategy: sway animation during countdown, no playback.
-                // Playback begins only when countdown finishes.
-                startIdleSway();
-                runStartupCountdown(countdownSeconds).then(function() {
-                  stopIdleSway();
-                  syncCameraStateFromMap();
-                  // Brief speed ramp for smooth acceleration into playback
-                  startupSpeedRampDuration = 1.5;
-                  startupSpeedRampRemaining = 1.5;
+
+              // Wait for the map to fully settle (tiles loaded, labels repositioned)
+              // BEFORE showing the countdown overlay. This prevents the visible "jump"
+              // that occurs when the map's render state changes at countdown start.
+              function onMapSettled() {
+                if (shouldRunStartupCountdown()) {
+                  var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
+                  startIdleSway();
+                  runStartupCountdown(countdownSeconds).then(function() {
+                    stopIdleSway();
+                    syncCameraStateFromMap();
+                    startupSpeedRampDuration = 1.5;
+                    startupSpeedRampRemaining = 1.5;
+                    beginPlayback();
+                  }).catch(function() {
+                    stopIdleSway();
+                    beginPlayback();
+                  });
+                } else {
                   beginPlayback();
-                }).catch(function() {
-                  stopIdleSway();
-                  beginPlayback();
-                });
-              } else {
-                beginPlayback();
+                }
               }
+
+              var settleTimedOut = false;
+              var settleTimer = setTimeout(function() {
+                settleTimedOut = true;
+                DBG.log('map settle timeout, proceeding');
+                onMapSettled();
+              }, 400);
+              map.once('idle', function() {
+                if (settleTimedOut) return;
+                clearTimeout(settleTimer);
+                DBG.log('map settled via idle event');
+                onMapSettled();
+              });
             });
           }).catch(function() {
             // Fallback: just animate and start
             firstPlayZoomPending = false;
-            try { if (origFadeDuration !== null && map.style) map.style.fadeDuration = origFadeDuration; } catch(_) {}
             setPlaying(true);
             scheduleRaf();
           });
@@ -12149,8 +12171,9 @@
         // apply text-allow-overlap + text-ignore-placement on all symbol layers to prevent
         // label collision recalculation while camera is moving fast.
         // On stop/pause: restore saved values.
-        // NOTE: On play-start these are already applied during the countdown (see moveend handler)
-        // to avoid a label-shift flash. This block still runs to handle resume-after-pause and stop.
+        // NOTE: On play-start these are already applied in the moveend handler
+        // (applyPlaybackLayerOptimizations) before the countdown starts.
+        // This block still runs to handle resume-after-pause and stop.
         try {
           if (!playing) {
             var _st = map.getStyle();
@@ -12798,7 +12821,12 @@
           // When position is nearly stationary, lower rotate gate so small heading
           // changes still produce smooth rotation rather than accumulate-then-snap.
           var effectiveRotateGate = (movePx < 0.5) ? rotateGate * 0.3 : rotateGate;
-          if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > effectiveRotateGate || forceCameraUpdate)) {
+          // Phase 3: Suppress camera writes for a few frames after countdown→playback handoff
+          if (suppressCameraUpdateFrames > 0) {
+            suppressCameraUpdateFrames--;
+            forceCameraUpdate = false;
+            cameraCooldown = 0;
+          } else if (!userInteracting && needCameraUpdate && (movePx > moveGate || bearingDeltaAbs > effectiveRotateGate || forceCameraUpdate)) {
             cameraCenter[0] = nextCenterLng;
             cameraCenter[1] = nextCenterLat;
             var camOpts = { center: cameraCenter, bearing: bearing };
