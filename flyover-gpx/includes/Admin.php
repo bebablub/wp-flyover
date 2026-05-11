@@ -3457,6 +3457,12 @@ final class Admin
 	$screen = \get_current_screen();
 	if (!$screen) { return; }
 	
+	// Enqueue Chart.js on dashboard for playback widgets
+	if ($screen->id === 'dashboard') {
+		AssetManager::registerAssets();
+		\wp_enqueue_script('chartjs');
+	}
+	
 	// Enqueue admin.js and CSS on relevant pages
 	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track', 'fgpx_track_page_fgpx-statistics'];
 	if (in_array($screen->id, $relevant_pages, true)) {
@@ -5114,21 +5120,146 @@ final class Admin
 	}
 
 	/**
-	 * Render dashboard widget for playbacks by month.
+	 * Render dashboard widget for playbacks by month with chart.
 	 */
 	public function render_dashboard_widget_playbacks_by_month(): void
 	{
-		$stats = Statistics::get_statistics_data();
-		$this->render_dashboard_period_widget($stats['charts']['playbacks_by_month'] ?? [], 'playbackCount', 'No monthly playback data available yet.');
+		$this->render_playbacks_widget_async('playbacks_by_month', \esc_html__('Playback count', 'flyover-gpx'));
 	}
 
 	/**
-	 * Render dashboard widget for playbacks by year.
+	 * Render dashboard widget for playbacks by year with chart.
 	 */
 	public function render_dashboard_widget_playbacks_by_year(): void
 	{
-		$stats = Statistics::get_statistics_data();
-		$this->render_dashboard_period_widget($stats['charts']['playbacks_by_year'] ?? [], 'playbackCount', 'No yearly playback data available yet.');
+		$this->render_playbacks_widget_async('playbacks_by_year', \esc_html__('Playback count', 'flyover-gpx'));
+	}
+
+	/**
+	 * Render a playback stats widget that shows a skeleton, then loads asynchronously.
+	 */
+	private function render_playbacks_widget_async(string $chartKey, string $countLabel): void
+	{
+		$widgetId = 'fgpx-pw-' . \uniqid();
+		$restUrl  = \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate'));
+		$nonce    = \wp_create_nonce('wp_rest');
+		?>
+		<div id="<?php echo \esc_attr($widgetId); ?>">
+			<div class="fgpx-pw-skeleton" aria-label="<?php \esc_attr_e('Loading…', 'flyover-gpx'); ?>" aria-busy="true">
+				<div style="position:relative;width:100%;height:220px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:4px;animation:fgpxSkeletonShimmer 1.4s infinite;"></div>
+				<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:60%;animation:fgpxSkeletonShimmer 1.4s infinite;"></div>
+					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:80%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.1s;"></div>
+					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:50%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.2s;"></div>
+				</div>
+			</div>
+			<div class="fgpx-pw-content" style="display:none;"></div>
+		</div>
+		<style>
+		@keyframes fgpxSkeletonShimmer {
+			0%   { background-position: 200% 0; }
+			100% { background-position: -200% 0; }
+		}
+		</style>
+		<script>
+		(function() {
+			var widgetId  = <?php echo \wp_json_encode($widgetId); ?>;
+			var chartKey  = <?php echo \wp_json_encode($chartKey); ?>;
+			var countLabel = <?php echo \wp_json_encode($countLabel); ?>;
+			var restUrl   = <?php echo \wp_json_encode($restUrl); ?>;
+			var nonce     = <?php echo \wp_json_encode($nonce); ?>;
+			var statsUrl  = restUrl;
+
+			var root      = document.getElementById(widgetId);
+			var skeleton  = root.querySelector('.fgpx-pw-skeleton');
+			var content   = root.querySelector('.fgpx-pw-content');
+
+			function showError(msg) {
+				skeleton.style.display = 'none';
+				content.innerHTML = '<p style="color:#c00;">' + msg + '</p>';
+				content.style.display = '';
+			}
+
+			function formatTable(rows, key) {
+				var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+				html += '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px 6px;">Period</th><th style="text-align:right;padding:4px 6px;">' + countLabel + '</th></tr>';
+				var reversed = rows.slice().reverse();
+				for (var i = 0; i < reversed.length; i++) {
+					html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">' + (reversed[i]['period'] || '') + '</td><td style="text-align:right;padding:4px 6px;">' + (parseInt(reversed[i][key], 10) || 0) + '</td></tr>';
+				}
+				html += '</table>';
+				return html;
+			}
+
+			function renderChart(canvasId, labels, data) {
+				function tryRender() {
+					var canvas = document.getElementById(canvasId);
+					if (!canvas || !window.Chart) { setTimeout(tryRender, 100); return; }
+					new window.Chart(canvas.getContext('2d'), {
+						type: 'line',
+						data: {
+							labels: labels,
+							datasets: [{
+								label: countLabel,
+								data: data,
+								borderColor: '#0f766e',
+								backgroundColor: 'rgba(15,118,110,0.15)',
+								fill: true,
+								tension: 0.25
+							}]
+						},
+						options: {
+							responsive: true,
+							maintainAspectRatio: false,
+							plugins: { legend: { display: true } }
+						}
+					});
+				}
+				tryRender();
+			}
+
+			function onDataLoaded(rows) {
+				var canvasId = widgetId + '-canvas';
+				var labels = rows.map(function(r) { return r['period'] || ''; });
+				var data   = rows.map(function(r) { return parseInt(r['playbackCount'] || r['trackCount'] || 0, 10); });
+
+				var tableHtml = formatTable(rows, 'playbackCount');
+
+				content.innerHTML =
+					'<div style="margin-bottom:15px;">'
+					+ '<div style="position:relative;width:100%;height:220px;">'
+					+ '<canvas id="' + canvasId + '" style="display:block;width:100%;height:100%;"></canvas>'
+					+ '</div>'
+					+ '</div>'
+					+ '<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:10px;">'
+					+ tableHtml
+					+ '</div>'
+					+ '<p style="margin:0;"><a href="<?php echo \esc_js(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')); ?>"><?php echo \esc_js(__('View Full Statistics →', 'flyover-gpx')); ?></a></p>';
+
+				skeleton.style.display = 'none';
+				content.style.display  = '';
+				renderChart(canvasId, labels, data);
+			}
+
+			fetch(statsUrl, {
+				headers: {
+					'X-WP-Nonce': nonce,
+					'Accept': 'application/json'
+				}
+			})
+			.then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+			.then(function(payload) {
+				var charts = (payload && payload.charts) ? payload.charts : {};
+				var rows   = charts[chartKey] || [];
+				if (!rows.length) { showError('<?php echo \esc_js(__('No data available yet.', 'flyover-gpx')); ?>'); return; }
+				onDataLoaded(rows);
+			})
+			.catch(function() {
+				showError('<?php echo \esc_js(__('Could not load statistics.', 'flyover-gpx')); ?>');
+			});
+		})();
+		</script>
+		<?php
 	}
 
 	/**
