@@ -7723,7 +7723,16 @@
         // overlay draw for the position dot to guarantee it is above all datasets
         afterDatasetsDraw: function (chart, args, pluginOptions) {
           try {
-            var ds1 = chart.data && chart.data.datasets && chart.data.datasets[1];
+            // Find the Position dataset dynamically because dataset order varies by tab.
+            var ds1 = null;
+            if (chart.data && chart.data.datasets) {
+              for (var _pi = 0; _pi < chart.data.datasets.length; _pi++) {
+                if (chart.data.datasets[_pi].label === 'Position') {
+                  ds1 = chart.data.datasets[_pi];
+                  break;
+                }
+              }
+            }
             var pt = ds1 && ds1.data && ds1.data[0];
             var xScale = chart.scales.x;
             var yScale = chart.scales.y;
@@ -7738,6 +7747,32 @@
             
             if (!dotVisible) return; // Don't draw dot if outside zoom range
             
+            // Retry once after a short delay to handle style/image race conditions.
+            setTimeout(function() {
+              try {
+                if (map.hasImage('arrow-calm')) return; // Already loaded.
+                var retryColors = [
+                  { name: 'calm', color: '#666666' },
+                  { name: 'light', color: '#228b22' },
+                  { name: 'moderate', color: '#ff8c00' },
+                  { name: 'strong', color: '#ff4500' },
+                  { name: 'very-strong', color: '#dc143c' }
+                ];
+                var retrySizes = [72, 54, 36, 24, 18];
+                retryColors.forEach(function(wc) {
+                  retrySizes.forEach(function(sz, si) {
+                    var c = createArrowIcon(wc.color, sz);
+                    var cx = c.getContext('2d');
+                    var id = cx.getImageData(0, 0, c.width, c.height);
+                    var sn = si === 0 ? '' : '-size' + si;
+                    map.addImage('arrow-' + wc.name + sn, { width: c.width, height: c.height, data: id.data });
+                  });
+                });
+                DBG.log('Arrow icons loaded on retry');
+              } catch (retryErr) {
+                DBG.warn('Arrow icon retry also failed:', retryErr);
+              }
+            }, 500);
             var xDot = Math.min(Math.max(pt.x, xScale.min), xScale.max);
             var x = xScale.getPixelForValue(xDot);
             var y = yScale.getPixelForValue(pt.y);
@@ -10041,6 +10076,36 @@
         
         // Store current tab type for position marker updates
         window.currentChartTabType = tabType;
+
+        function getCurrentChartMarkerIndex() {
+          try {
+            if (!Array.isArray(cumDist) || cumDist.length === 0) return 0;
+            var currentDistance = Math.max(0, Math.min(totalDistance || 0, (progress || 0) * (totalDistance || 0)));
+            var loIdx = 0;
+            var hiIdx = cumDist.length - 1;
+            while (loIdx < hiIdx) {
+              var midIdx = (loIdx + hiIdx) >>> 1;
+              if (cumDist[midIdx] < currentDistance) loIdx = midIdx + 1;
+              else hiIdx = midIdx;
+            }
+            return Math.max(0, loIdx);
+          } catch (_) {
+            return 0;
+          }
+        }
+
+        function getCurrentChartMarkerX(index) {
+          try {
+            if (useTime && Array.isArray(timeOffsets) && timeOffsets.length > 0) {
+              var seriesX = Array.isArray(movingTimeOffsets) ? movingTimeOffsets : timeOffsets;
+              var safeIndex = Math.max(0, Math.min(index, seriesX.length - 1));
+              return seriesX[safeIndex] || 0;
+            }
+            return Math.max(0, Math.min(totalDistance || 0, (progress || 0) * (totalDistance || 0))) / 1000;
+          } catch (_) {
+            return 0;
+          }
+        }
         
         // Function to get position marker Y value based on current tab and index
         window.getPositionMarkerY = function(index) {
@@ -10100,6 +10165,18 @@
             return 0;
           }
         };
+
+        // Seed the marker and cursor from the current playback state so tab switches
+        // don't briefly show the previous tab's marker position until the next RAF tick.
+        try {
+          var initialMarkerIndex = getCurrentChartMarkerIndex();
+          var initialMarkerX = getCurrentChartMarkerX(initialMarkerIndex);
+          var initialMarkerY = window.getPositionMarkerY(initialMarkerIndex);
+          if (positionDataset && positionDataset.data && positionDataset.data.length > 0) {
+            positionDataset.data[0] = { x: initialMarkerX, y: initialMarkerY };
+          }
+          cursorX = initialMarkerX;
+        } catch (_) {}
         
         if (tabType === 'elevation') {
           // Elevation + Speed tab with area chart and gradient coloring
@@ -13816,8 +13893,20 @@
           
           try {
             applyWeatherOverlayProfile(true);
-            if (!map.getLayer('fgpx-temperature-text')) {
+            if (temperatureVisible && !map.getLayer('fgpx-temperature-text') && !weatherTextLayersSupported) {
               DBG.log('Temperature text layer not available (no glyphs in map style)');
+              try {
+                var existingNote = root.querySelector('.fgpx-glyph-note');
+                if (!existingNote) {
+                  var note = document.createElement('div');
+                  note.className = 'fgpx-glyph-note';
+                  note.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:5;background:rgba(0,0,0,0.75);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;pointer-events:none;white-space:nowrap;transition:opacity 0.4s;';
+                  note.textContent = 'Text labels unavailable (map style has no glyph support)';
+                  root.appendChild(note);
+                  setTimeout(function() { note.style.opacity = '0'; }, 4000);
+                  setTimeout(function() { if (note.parentNode) note.parentNode.removeChild(note); }, 4500);
+                }
+              } catch(_) {}
             }
             
             // Update button appearance
@@ -13843,8 +13932,20 @@
           
           try {
             applyWeatherOverlayProfile(true);
-            if (!map.getLayer('fgpx-wind-text')) {
+            if (windVisible && !map.getLayer('fgpx-wind-text') && !weatherTextLayersSupported) {
               DBG.log('Wind text layer not available (no glyphs in map style)');
+              try {
+                var existingNote = root.querySelector('.fgpx-glyph-note');
+                if (!existingNote) {
+                  var note = document.createElement('div');
+                  note.className = 'fgpx-glyph-note';
+                  note.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:5;background:rgba(0,0,0,0.75);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;pointer-events:none;white-space:nowrap;transition:opacity 0.4s;';
+                  note.textContent = 'Text labels unavailable (map style has no glyph support)';
+                  root.appendChild(note);
+                  setTimeout(function() { note.style.opacity = '0'; }, 4000);
+                  setTimeout(function() { if (note.parentNode) note.parentNode.removeChild(note); }, 4500);
+                }
+              } catch(_) {}
             }
             
             // Update button appearance
