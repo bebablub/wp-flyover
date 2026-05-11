@@ -21,6 +21,7 @@ const clouds3dSrc = fs.readFileSync(
 // Minimal THREE stub — implements only what clouds3d.js calls.
 function buildThreeStub() {
   const Matrix4 = function () { this.set = jest.fn(); };
+  Matrix4.prototype.fromArray = jest.fn(function(arr) { return this; });
   const Vector3 = function () { this.set = jest.fn().mockReturnThis(); };
   Vector3.prototype.normalize = jest.fn().mockReturnThis();
 
@@ -43,13 +44,13 @@ function buildThreeStub() {
 
   const PerspectiveCamera = function () {};
 
-  const WebGLRenderer = function () {
+  const WebGLRenderer = jest.fn().mockImplementation(function () {
     this.autoClear = true;
     this.setPixelRatio = jest.fn();
     this.resetState    = jest.fn();
     this.render        = jest.fn();
     this.dispose       = jest.fn();
-  };
+  });
 
   return {
     Matrix4, Vector3,

@@ -36,8 +36,8 @@ final class AssetManagerConfigTest extends TestCase
         $source = (string) file_get_contents($assetManagerFile);
 
         $this->assertStringContainsString("'three-js'", $source, 'three-js asset entry must exist');
-        $this->assertStringContainsString("'primary' => 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.min.js'", $source);
-        $this->assertStringContainsString("'https://unpkg.com/three@0.169.0/build/three.min.js'", $source);
-        $this->assertStringContainsString("'version' => '0.169.0'", $source);
+        $this->assertStringContainsString("'primary' => 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js'", $source);
+        $this->assertStringContainsString("'https://unpkg.com/three@0.160.0/build/three.min.js'", $source);
+        $this->assertStringContainsString("'version' => '0.160.0'", $source);
     }
 }
