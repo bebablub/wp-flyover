@@ -282,12 +282,13 @@
       var rows = getChartRows(payload, 'playbacks_by_year');
       if (!rows.length) return false;
       var canvas = makeChartCanvas(wrap, strings.chartPlaybacksByYear || 'Playbacks by Year');
-      renderBarChart(
+      renderLineChart(
         canvas,
         rows.map(function (r) { return r.period; }),
         strings.chartPlaybacksCount || 'Playback count',
         rows.map(function (r) { return Number(r.playbackCount || 0); }),
-        theme.speed
+        theme.speed,
+        theme.lineFill
       );
       return true;
     },

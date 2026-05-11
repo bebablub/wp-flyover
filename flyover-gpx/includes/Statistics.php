@@ -509,16 +509,26 @@ final class Statistics
             $weekdayDistribution[$weekdayKey]['trackCount']++;
             $weekdayDistribution[$weekdayKey]['distanceM'] += $distanceM;
 
-            $hourKey = (int) \wp_date('G', $dateTs);
-            if (!isset($hourDistribution[$hourKey])) {
-                $hourDistribution[$hourKey] = [
-                    'hour' => $hourKey,
-                    'trackCount' => 0,
-                    'distanceM' => 0.0,
-                ];
+            // Hourly distribution: count every hour the track spans, not just start hour.
+            $startHour = (int) \wp_date('G', $dateTs);
+            $endTs = $dateTs + max(0, (int) $durationS);
+            $endHour = (int) \wp_date('G', $endTs);
+            // Calculate number of distinct hours spanned (handles midnight crossing)
+            $hoursSpanned = max(1, (int) ceil($durationS / 3600));
+            // Cap at 24 to avoid runaway loops on bad data
+            $hoursSpanned = min($hoursSpanned, 24);
+            for ($h = 0; $h < $hoursSpanned; $h++) {
+                $hourKey = ($startHour + $h) % 24;
+                if (!isset($hourDistribution[$hourKey])) {
+                    $hourDistribution[$hourKey] = [
+                        'hour' => $hourKey,
+                        'trackCount' => 0,
+                        'distanceM' => 0.0,
+                    ];
+                }
+                $hourDistribution[$hourKey]['trackCount']++;
+                $hourDistribution[$hourKey]['distanceM'] += $distanceM;
             }
-            $hourDistribution[$hourKey]['trackCount']++;
-            $hourDistribution[$hourKey]['distanceM'] += $distanceM;
 
             $this->add_distance_to_histogram($trackLengthHistogram, max(0.0, $distanceM / 1000.0));
 

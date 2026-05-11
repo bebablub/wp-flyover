@@ -1164,6 +1164,7 @@
       controls: { btnPlay: btnPlay, btnPause: btnPause, btnRestart: btnRestart, btnRecord: btnRecord, btnWeather: btnWeather, btnTemperature: btnTemperature, btnWind: btnWind, btnDayNight: btnDayNight, speedSel: speedSel, progressBar: progressBar }, 
       stats: { dist: statDist, time: statTime, avg: statAvg, gain: statGain }, 
       canvas: canvas,
+      chartWrap: chartWrap,
       tabs: { tabElevation: tabElevation, tabBiometrics: tabBiometrics, tabTemperature: tabTemperature, tabPower: tabPower, tabPowerZones: tabPowerZones, tabWindImpact: tabWindImpact, tabWindRose: tabWindRose, tabAll: tabAll, tabWeatherGrade: tabWeatherGrade, tabMedia: tabMedia, tabWeatherOverview: tabWeatherOverview },
       chartLegend: chartLegend,
       mediaPanel: mediaPanel,
@@ -7621,6 +7622,7 @@
             }
             if (firstPlayZoomPending) { zoomInThenStartPlayback(); }
             else {
+              syncCameraStateFromMap();
               setPlaying(true); scheduleRaf();
               recordPlaybackStart();
             }
@@ -7633,6 +7635,7 @@
           hidePreloadOverlay();
           if (firstPlayZoomPending) { zoomInThenStartPlayback(); } 
           else {
+            syncCameraStateFromMap();
             setPlaying(true); scheduleRaf();
             recordPlaybackStart();
           } 
@@ -12360,17 +12363,20 @@
             coordsUpTo.push(interp);
 
             // Create elevation-colored segments or single route
-            var segments = createProgressiveSegments(coordsUpTo, startIdx);
+            // When privacy prepends a synthetic point, offset the gradient index by 1
+            var segStartIdx = privacyEnabled ? Math.max(0, startIdx - 1) : startIdx;
+            var segments = createProgressiveSegments(coordsUpTo, segStartIdx);
             if (segments && segments.length > 0 && segmentPoolReady) {
-              // Skip progressData.setData when in segment mode unless driven arrows need it.
-              // When arrows are enabled, throttle the source update at half the frequency
-              // since arrow placement is expensive (symbol layout).
+              // Always update the base progress line as a "floor" underneath colored segments.
+              // This ensures previously-traversed track remains visible even when later segments
+              // with different gradient buckets render on top (e.g. figure-8 patterns).
+              progressData.geometry.coordinates = coordsUpTo;
+              routeProgSrc.setData(progressData);
+              dbgProgressSetDataCount++;
+              // When arrows are enabled, throttle arrow symbol layout updates separately.
               if (arrowsEnabled) {
                 progressArrowsCooldown += (lastFrameDt || 0.016);
-                if (!cameraJumpedLastFrame && (progressArrowsCooldown >= cadence.arrowsInterval || progressNeedLineInit)) {
-                  progressData.geometry.coordinates = coordsUpTo;
-                  routeProgSrc.setData(progressData);
-                  dbgProgressSetDataCount++;
+                if (progressArrowsCooldown >= cadence.arrowsInterval || progressNeedLineInit) {
                   progressArrowsCooldown = 0;
                 }
               }
