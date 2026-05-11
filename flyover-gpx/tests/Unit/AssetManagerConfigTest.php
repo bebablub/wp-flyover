@@ -29,4 +29,15 @@ final class AssetManagerConfigTest extends TestCase
         $this->assertStringContainsString("\\wp_register_script('chartjs', \$chartSrc, [], '4.5.1', true);", $source);
         $this->assertStringNotContainsString("\\wp_register_script('chartjs', \$chartSrc, [], '4.4.1', true);", $source);
     }
+
+    public function test_three_js_asset_config_registered(): void
+    {
+        $assetManagerFile = dirname(__DIR__, 2) . '/includes/AssetManager.php';
+        $source = (string) file_get_contents($assetManagerFile);
+
+        $this->assertStringContainsString("'three-js'", $source, 'three-js asset entry must exist');
+        $this->assertStringContainsString("'primary' => 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.min.js'", $source);
+        $this->assertStringContainsString("'https://unpkg.com/three@0.169.0/build/three.min.js'", $source);
+        $this->assertStringContainsString("'version' => '0.169.0'", $source);
+    }
 }

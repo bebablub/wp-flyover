@@ -257,6 +257,7 @@ final class OptionsTest extends TestCase
             'debugWeatherData',
             'weatherFogThreshold', 'weatherRainThreshold',
             'weatherSnowThreshold', 'weatherWindThreshold', 'weatherCloudThreshold',
+            'clouds3dEnabled', 'clouds3dQuality',
             'themeMode', 'themeAutoDarkStart', 'themeAutoDarkEnd',
         ];
 
@@ -301,6 +302,9 @@ final class OptionsTest extends TestCase
         $this->assertIsString($f['themeMode'],          'themeMode must be string');
         $this->assertIsString($f['themeAutoDarkStart'], 'themeAutoDarkStart must be string');
         $this->assertIsString($f['themeAutoDarkEnd'],   'themeAutoDarkEnd must be string');
+        $this->assertIsBool($f['clouds3dEnabled'],      'clouds3dEnabled must be bool');
+        $this->assertIsString($f['clouds3dQuality'],    'clouds3dQuality must be string');
+        $this->assertContains($f['clouds3dQuality'], ['low', 'medium', 'high'], 'clouds3dQuality must be a valid preset');
         $this->assertContains($f['photoOrderMode'], ['geo_first', 'time_first'], 'photoOrderMode must be a valid value');
         $this->assertContains($f['themeMode'], ['system', 'dark', 'bright', 'auto'], 'themeMode must be a valid value');
     }

@@ -230,7 +230,17 @@ final class Plugin
             \wp_enqueue_script('maplibre-gl-js');
             \wp_enqueue_script('chartjs');
             \wp_enqueue_script('fgpx-front');
-            
+            if ($options['fgpx_clouds_3d_enabled'] === '1') {
+                \wp_enqueue_script('three-js');
+                \wp_register_script(
+                    'fgpx-clouds3d',
+                    \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/clouds3d.js'),
+                    ['three-js'],
+                    FGPX_VERSION,
+                    true
+                );
+                \wp_enqueue_script('fgpx-clouds3d');
+            }
             // Add client-side fallback detection for immediate loading (if enabled)
             if ($options['fgpx_asset_fallbacks_enabled'] === '1') {
                 AssetManager::addFallbackScript('fgpx-front');
@@ -522,6 +532,9 @@ final class Plugin
             'playbackTrackingNonce' => \wp_create_nonce('fgpx_record_playback'),
             'resolvedApiKey' => $resolvedApiKey,
             'photoCacheVersion' => (string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0'),
+            'clouds3dEnabled' => $options['fgpx_clouds_3d_enabled'] === '1',
+            'clouds3dQuality' => \sanitize_key((string) ($options['fgpx_clouds_3d_quality'] ?? 'medium')),
+            'clouds3dIntensity' => (float) ($options['fgpx_clouds_3d_intensity'] ?? '0.7'),
         ];
 
         $localizeHandle = $lazyViewportEnabled ? 'fgpx-lazy' : 'fgpx-front';
@@ -537,6 +550,12 @@ final class Plugin
                 $frontJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js');
                 $maplibreCss = AssetManager::getAssetUrl('maplibre-gl-css', 'style');
                 $frontCss = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/css/front.css');
+                $lazyExtras = '';
+                if ($options['fgpx_clouds_3d_enabled'] === '1') {
+                    $threeJs = AssetManager::getAssetUrl('three-js', 'script');
+                    $clouds3dJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/clouds3d.js');
+                    $lazyExtras = ',"' . \esc_js($threeJs) . '","' . \esc_js($clouds3dJs) . '"';
+                }
                 \wp_add_inline_script(
                     'fgpx-lazy',
                     'window.FGPX=window.FGPX||{};window.FGPX.lazyStyles=[' .
@@ -547,6 +566,7 @@ final class Plugin
                       '"' . esc_js($chartJs) . '",' .
                       '"' . esc_js($suncalcJs) . '",' .
                       '"' . esc_js($frontJs) . '"' .
+                      $lazyExtras .
                     '];',
                     'after'
                 );
@@ -623,7 +643,10 @@ final class Plugin
                   'weatherColorFog:"' . \esc_js($weatherColorFog) . '",' .
                   'weatherColorClouds:"' . \esc_js($weatherColorClouds) . '",' .
                                     'arrowsEnabled:' . ($arrowsEnabledFinal ? 'true' : 'false') . ',' .
-                                    'arrowsKm:' . \floatval($arrowsKmFinal) .
+                                    'arrowsKm:' . \floatval($arrowsKmFinal) . ',' .
+                                    'clouds3dEnabled:' . ($options['fgpx_clouds_3d_enabled'] === '1' ? 'true' : 'false') . ',' .
+                                    'clouds3dQuality:"' . \esc_js(\sanitize_key((string) ($options['fgpx_clouds_3d_quality'] ?? 'medium'))) . '",' .
+                                    'clouds3dIntensity:' . \floatval($options['fgpx_clouds_3d_intensity'] ?? '0.7') .
                 '} );',
                 'after'
             );
@@ -702,7 +725,10 @@ final class Plugin
                                     'gpxDownloadNonce:"' . \esc_js($gpxDownloadNonce) . '",' .
                                     'arrowsEnabled:' . ($arrowsEnabledFinal ? 'true' : 'false') . ',' .
                                     'arrowsKm:' . \floatval($arrowsKmFinal) . ',' .
-                                    'photoCacheVersion:"' . \esc_js((string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0')) . '"' .
+                                    'photoCacheVersion:"' . \esc_js((string) (\get_post_meta((int) $trackId, 'fgpx_photo_cache_version', true) ?: '0')) . '",' .
+                                    'clouds3dEnabled:' . ($options['fgpx_clouds_3d_enabled'] === '1' ? 'true' : 'false') . ',' .
+                                    'clouds3dQuality:"' . \esc_js(\sanitize_key((string) ($options['fgpx_clouds_3d_quality'] ?? 'medium'))) . '",' .
+                                    'clouds3dIntensity:' . \floatval($options['fgpx_clouds_3d_intensity'] ?? '0.7') .
                 '};',
                 'after'
             );

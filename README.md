@@ -15,7 +15,7 @@ This plugin adds a Track post type, a simple admin uploader, a REST endpoint ser
 - HUD overlays (speed, distance, elevation, heading) – toggleable
 - Multi-weather heatmap overlays with 4 separate colored layers (snow, rain, fog, clouds) using admin-configurable colors
 - Day/Night overlay with configurable colors
-- Weather visualizations: colored heatmaps, temperature circles, and wind arrows with configurable radius
+- Weather visualizations (experimental): colored heatmaps, temperature circles, and wind arrows with configurable radius, 3d clouds
 - Wind analysis: per-point wind speed/direction, wind impact factor chart, wind rose distribution (16 sectors)
 - Multi-tab Chart.js visualizations: Elevation, Biometrics (HR/Cadence), Temperature, Power, Power Zones, Wind Impact, Wind Rose, Weather and All Data
 - Simulation tab: compact weather + grade strip with wind arrows, elevation and photo cues.

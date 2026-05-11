@@ -3342,28 +3342,82 @@
             ]
           };
           
+          // Cloud intensity: shared between 3D and classic cloud rendering (0.1–1.0).
+          var cloudIntensity = (window.FGPX && isFinite(Number(FGPX.clouds3dIntensity))) ? Math.max(0.1, Math.min(1.0, Number(FGPX.clouds3dIntensity))) : 0.7;
+
+          // Cloud-specific heatmap config: smaller radius and zoom-fading opacity so
+          // clouds don't flood the screen at track-playback zoom levels (12–14).
+          // Opacity peaks around zoom 9 (overview) and fades toward zero by zoom 16.
+          var cloudHeatmapConfig = {
+            'heatmap-intensity': baseHeatmapConfig['heatmap-intensity'],
+            'heatmap-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              0, 15,
+              9, 60,
+              11, 100,
+              13, 140,
+              15, 160
+            ],
+            'heatmap-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              0,  0,
+              6,  cloudIntensity * 0.30,
+              9,  cloudIntensity * 0.65,
+              11, cloudIntensity * 0.50,
+              12, cloudIntensity * 0.35,
+              14, cloudIntensity * 0.15,
+              16, 0
+            ]
+          };
+
+          // Resolve cloud mode: admin intent (never show classic if 3D chosen) vs
+          // runtime eligibility (THREE + FGPXClouds3D actually loaded).
+          var clouds3dAdminEnabled = !!(window.FGPX && FGPX.clouds3dEnabled);
+          var clouds3dEnabled = clouds3dAdminEnabled &&
+            !isMobileOverlayDisabled &&
+            weatherOverlayPerfMode !== 'performance' &&
+            typeof window.THREE !== 'undefined' &&
+            typeof window.FGPXClouds3D !== 'undefined';
+
           if (weatherHeatmapConsolidated) {
             DBG.log('Using consolidated weather heatmap layer (phase3)');
-            map.addLayer({
-              id: 'fgpx-weather-heatmap',
-              type: 'heatmap',
-              source: 'fgpx-weather',
-              filter: ['any',
-                ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
-                ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
-                ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
-                ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
-              ],
-              layout: {
-                'visibility': initialWeatherVisible ? 'visible' : 'none'
-              },
-              paint: Object.assign({
-                'heatmap-weight': ['max',
+            // When admin enabled 3D clouds, strip cloud data from the consolidated
+            // filter/weight. This applies unconditionally — if THREE fails to load,
+            // no clouds are shown at all rather than falling back to classic.
+            var consolidatedFilter = clouds3dAdminEnabled
+              ? ['any',
+                  ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+                  ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
+                  ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold]
+                ]
+              : ['any',
+                  ['>', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+                  ['>', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
+                  ['>', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
+                  ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
+                ];
+            var consolidatedWeight = clouds3dAdminEnabled
+              ? ['max',
+                  ['/', ['coalesce', ['get', 'snowfall_cm'], 0], 5],
+                  ['/', ['coalesce', ['get', 'rain_mm'], 0], 8],
+                  ['coalesce', ['get', 'fog_intensity'], 0]
+                ]
+              : ['max',
                   ['/', ['coalesce', ['get', 'snowfall_cm'], 0], 5],
                   ['/', ['coalesce', ['get', 'rain_mm'], 0], 8],
                   ['coalesce', ['get', 'fog_intensity'], 0],
                   ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100]
-                ],
+                ];
+            map.addLayer({
+              id: 'fgpx-weather-heatmap',
+              type: 'heatmap',
+              source: 'fgpx-weather',
+              filter: consolidatedFilter,
+              layout: {
+                'visibility': initialWeatherVisible ? 'visible' : 'none'
+              },
+              paint: Object.assign({
+                'heatmap-weight': consolidatedWeight,
                 'heatmap-color': [
                   'interpolate', ['linear'], ['heatmap-density'],
                   0, 'rgba(255,255,255,0)',
@@ -3375,6 +3429,49 @@
                 ]
               }, baseHeatmapConfig)
             });
+            // Add 3D cloud layer alongside the consolidated heatmap when enabled.
+            if (clouds3dEnabled) {
+              clouds3dEnabled = (function () {
+                var cloudWeatherPoints = [];
+                if (weatherData && weatherData.features) {
+                  for (var cwi = 0; cwi < weatherData.features.length; cwi++) {
+                    var cwf = weatherData.features[cwi];
+                    if (cwf && cwf.geometry && cwf.properties) {
+                      var cwCover = Number(cwf.properties.cloud_cover_pct) || 0;
+                      if (cwCover > 0) {
+                        cloudWeatherPoints.push({ lng: cwf.geometry.coordinates[0], lat: cwf.geometry.coordinates[1], cloudCoverPct: cwCover });
+                      }
+                    }
+                  }
+                }
+                try {
+                  var c3dLookupC = buildWeatherLookup({ weather: weatherData });
+                  var clouds3dLayerC = window.FGPXClouds3D.create(map, {
+                    quality: String((window.FGPX && FGPX.clouds3dQuality) || 'medium'),
+                    intensity: (window.FGPX && isFinite(FGPX.clouds3dIntensity)) ? Math.max(0.1, Math.min(1.0, FGPX.clouds3dIntensity)) : 0.7,
+                    weatherPoints: cloudWeatherPoints,
+                    getCloudCover: function () {
+                      if (!weatherVisible) { return 0; }
+                      var cond = weatherInterpolateAt(c3dLookupC, getCurrentPlaybackSec());
+                      return (cond && Number(cond.cloud_cover_pct)) || 0;
+                    },
+                    getSunAzimuth: function () {
+                      return (dayNightOverlayState && isFinite(dayNightOverlayState.azimuth)) ? dayNightOverlayState.azimuth : 180;
+                    },
+                  });
+                  map.addLayer(clouds3dLayerC);
+                  try { if (!weatherVisible) { map.setLayoutProperty(clouds3dLayerC.id, 'visibility', 'none'); } } catch (_) {}
+                  registerTeardown(function () {
+                    try { if (map.getLayer(clouds3dLayerC.id)) { map.removeLayer(clouds3dLayerC.id); } } catch (_) {}
+                  });
+                  DBG.log('3D cloud layer added (consolidated path)', { quality: FGPX.clouds3dQuality, points: cloudWeatherPoints.length });
+                  return true;
+                } catch (e) {
+                  DBG.warn('3D cloud layer failed (consolidated path), no cloud fallback', e);
+                  return false;
+                }
+              })();
+            }
           } else {
             // Add snow heatmap layer (highest priority - rendered last/on top)
             map.addLayer({
@@ -3428,25 +3525,90 @@
               }, baseHeatmapConfig)
             });
             
-            // Add clouds heatmap layer (lowest priority)
-            map.addLayer({
-              id: 'fgpx-weather-heatmap-clouds',
-              type: 'heatmap',
-              source: 'fgpx-weather',
-              filter: ['all',
-                ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
-                ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
-                ['<=', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
-                ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
-              ],
-              layout: {
-                'visibility': initialWeatherVisible ? 'visible' : 'none'
-              },
-              paint: Object.assign({
-                'heatmap-weight': ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100],
-                'heatmap-color': createHeatmapColorRamp(colorClouds)
-              }, baseHeatmapConfig)
-            });
+            // Add clouds heatmap layer (lowest priority) OR 3D cloud layer (opt-in)
+            // clouds3dEnabled was resolved above before the consolidated/split branch.
+
+            if (clouds3dEnabled) {
+              // Collect cloud positions from weather features
+              var cloudWeatherPoints = [];
+              if (weatherData && weatherData.features) {
+                for (var cwi = 0; cwi < weatherData.features.length; cwi++) {
+                  var cwf = weatherData.features[cwi];
+                  if (cwf && cwf.geometry && cwf.properties) {
+                    var cwCover = Number(cwf.properties.cloud_cover_pct) || 0;
+                    if (cwCover > 0) {
+                      cloudWeatherPoints.push({
+                        lng: cwf.geometry.coordinates[0],
+                        lat: cwf.geometry.coordinates[1],
+                        cloudCoverPct: cwCover,
+                      });
+                    }
+                  }
+                }
+              }
+              try {
+                var clouds3dLayer = window.FGPXClouds3D.create(map, {
+                  quality: String((window.FGPX && FGPX.clouds3dQuality) || 'medium'),
+                  intensity: (window.FGPX && isFinite(FGPX.clouds3dIntensity)) ? Math.max(0.1, Math.min(1.0, FGPX.clouds3dIntensity)) : 0.7,
+                  weatherPoints: cloudWeatherPoints,
+                  getCloudCover: (function () {
+                    // Build the weather lookup now, at map-load time, so it is
+                    // immediately available without requiring the Simulation tab to
+                    // be opened first. buildWeatherLookup / weatherInterpolateAt are
+                    // both in scope here (defined later in the same startPlayer closure).
+                    var c3dLookup = buildWeatherLookup({ weather: weatherData });
+                    return function () {
+                      if (!weatherVisible) { return 0; }
+                      var cond3d = weatherInterpolateAt(c3dLookup, getCurrentPlaybackSec());
+                      return (cond3d && Number(cond3d.cloud_cover_pct)) || 0;
+                    };
+                  })(),
+                  getSunAzimuth: function () {
+                    // reuse existing dayNightOverlayState if available
+                    if (dayNightOverlayState && isFinite(dayNightOverlayState.azimuth)) {
+                      return dayNightOverlayState.azimuth;
+                    }
+                    return 180; // noon fallback
+                  },
+                });
+                map.addLayer(clouds3dLayer);
+                try { if (!weatherVisible) { map.setLayoutProperty(clouds3dLayer.id, 'visibility', 'none'); } } catch (_) {}
+                registerTeardown(function () {
+                  try {
+                    if (map.getLayer(clouds3dLayer.id)) {
+                      map.removeLayer(clouds3dLayer.id);
+                    }
+                  } catch (_) {}
+                });
+                DBG.log('3D cloud layer added', { quality: FGPX.clouds3dQuality, points: cloudWeatherPoints.length });
+              } catch (clouds3dErr) {
+                DBG.warn('3D cloud layer creation failed', clouds3dErr);
+                clouds3dEnabled = false;
+              }
+            }
+
+            // Classic cloud layer: only created when admin has NOT enabled 3D clouds.
+            // If admin enabled 3D but THREE failed load, we show no clouds at all.
+            if (!clouds3dAdminEnabled && !clouds3dEnabled) {
+              map.addLayer({
+                id: 'fgpx-weather-heatmap-clouds',
+                type: 'heatmap',
+                source: 'fgpx-weather',
+                filter: ['all',
+                  ['<=', ['coalesce', ['get', 'snowfall_cm'], 0], 0.1],
+                  ['<=', ['coalesce', ['get', 'rain_mm'], 0], 0.1],
+                  ['<=', ['coalesce', ['get', 'fog_intensity'], 0], fogThreshold],
+                  ['>', ['coalesce', ['get', 'cloud_cover_pct'], 0], 50]
+                ],
+                layout: {
+                  'visibility': initialWeatherVisible ? 'visible' : 'none'
+                },
+                paint: Object.assign({
+                  'heatmap-weight': ['/', ['coalesce', ['get', 'cloud_cover_pct'], 0], 100],
+                  'heatmap-color': createHeatmapColorRamp(colorClouds)
+                }, cloudHeatmapConfig)
+              });
+            }
           }
 
           // Add rain circle layer for higher zoom levels (rain only, like old implementation)
@@ -13824,10 +13986,19 @@
           setLayerVisibilityIfPresent('fgpx-weather-heatmap-rain', baseWeatherVisibility);
         }
         setLayerVisibilityIfPresent('fgpx-weather-circle', baseWeatherVisibility);
+
+        // Cloud / 3D cloud visibility — always handled regardless of consolidated/split.
+        // When admin chose 3D, classic cloud layer stays hidden unconditionally.
+        if (clouds3dAdminEnabled) {
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-clouds', 'none');
+        } else {
+          setLayerVisibilityIfPresent('fgpx-weather-heatmap-clouds', fullWeatherVisibility);
+        }
+        setLayerVisibilityIfPresent('fgpx-clouds-3d', fullWeatherVisibility);
+
         if (!weatherHeatmapConsolidated) {
           setLayerVisibilityIfPresent('fgpx-weather-heatmap-snow', fullWeatherVisibility);
           setLayerVisibilityIfPresent('fgpx-weather-heatmap-fog', fullWeatherVisibility);
-          setLayerVisibilityIfPresent('fgpx-weather-heatmap-clouds', fullWeatherVisibility);
         }
 
         setLayerVisibilityIfPresent('fgpx-temperature-circle', tempBase);

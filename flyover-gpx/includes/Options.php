@@ -145,6 +145,11 @@ final class Options
 		'fgpx_wind_analysis_enabled' => '0',
 		'fgpx_wind_interpolation_density' => '3',
 
+		// 3D Cloud Layer
+		'fgpx_clouds_3d_enabled' => '0',
+		'fgpx_clouds_3d_quality' => 'medium', // low|medium|high
+		'fgpx_clouds_3d_intensity' => '0.7', // 0.1–1.0
+
 		// Day/Night Visualization
 		'fgpx_daynight_enabled' => '1',
 		'fgpx_daynight_map_enabled' => '0',
@@ -365,6 +370,11 @@ final class Options
 			'weatherSnowThreshold' => (float) $options['fgpx_weather_snow_threshold'],
 			'weatherWindThreshold' => (float) $options['fgpx_weather_wind_threshold'],
 			'weatherCloudThreshold' => (float) $options['fgpx_weather_cloud_threshold'],
+
+			// 3D Cloud Layer
+			'clouds3dEnabled' => $options['fgpx_clouds_3d_enabled'] === '1',
+			'clouds3dQuality' => $options['fgpx_clouds_3d_quality'],
+			'clouds3dIntensity' => (float) $options['fgpx_clouds_3d_intensity'],
 		];
 	}
 }

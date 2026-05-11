@@ -50,6 +50,17 @@ final class AssetManager
 			'in_footer' => true,
 			'integrity' => '', // SRI hash if available
 		],
+		'three-js' => [
+			'type' => 'script',
+			'primary' => 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+			'fallbacks' => [
+				'https://unpkg.com/three@0.160.0/build/three.min.js',
+			],
+			'version' => '0.160.0',
+			'deps' => [],
+			'in_footer' => true,
+			'integrity' => '',
+		],
 	];
 
 	/**

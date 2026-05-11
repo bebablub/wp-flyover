@@ -452,6 +452,47 @@
             });
         });
 
+        $('#fgpx-clear-logs').on('click', function(e) {
+            e.preventDefault();
+
+            const $btn = $(this);
+            const nonce = String($btn.data('nonce') || '');
+            if (!nonce) {
+                showAdminNotice('Missing nonce for log clearing.', 'error');
+                return;
+            }
+
+            if (!confirm('Clear all log files? This cannot be undone.')) {
+                return;
+            }
+
+            const originalText = $btn.text();
+            $btn.prop('disabled', true).text('Clearing...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'fgpx_clear_logs',
+                    nonce: nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $btn.text('\u2713 Cleared');
+                        showAdminNotice('Log files cleared successfully.', 'success');
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        $btn.prop('disabled', false).text(originalText);
+                        showAdminNotice(response.data && response.data.message ? response.data.message : 'Failed to clear logs.', 'error');
+                    }
+                },
+                error: function() {
+                    $btn.prop('disabled', false).text(originalText);
+                    showAdminNotice('Network error during log clearing.', 'error');
+                }
+            });
+        });
+
         $('#fgpx-clear-playback-stats').on('click', function(e) {
             e.preventDefault();
 

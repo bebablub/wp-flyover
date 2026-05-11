@@ -908,6 +908,27 @@ final class Admin
 		echo '<input type="number" id="fgpx_weather_cloud_threshold" name="fgpx_weather_cloud_threshold" class="small-text" min="0" max="100" step="1" value="' . \esc_attr($weatherCloudThreshold) . '" />';
 		echo '<p class="description">' . \esc_html__('Minimum cloud cover percentage to show cloud visuals.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
+		// 3D Clouds
+		$clouds3dEnabled = $options['fgpx_clouds_3d_enabled'] === '1';
+		echo '<tr><th scope="row"><label for="fgpx_clouds_3d_enabled">' . \esc_html__('Enable 3D cloud layer (three.js)', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_clouds_3d_enabled" name="fgpx_clouds_3d_enabled" value="1"' . ($clouds3dEnabled ? ' checked' : '') . ' onchange="(function(cb){var dep=document.querySelectorAll(\'.fgpx-clouds3d-dep\');for(var i=0;i<dep.length;i++){dep[i].disabled=!cb.checked;dep[i].closest(\'tr\').style.opacity=cb.checked?\'1\':\'0.4\';}})(this)" /> ' . \esc_html__('Render billboard clouds with a noise-based shader instead of the flat heatmap. Requires WebGL. Loads three.js (~160 KB) only when enabled.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		$depStyle = $clouds3dEnabled ? '' : ' style="opacity:0.4"';
+		echo '<tr' . $depStyle . '><th scope="row"><label for="fgpx_clouds_3d_quality">' . \esc_html__('3D cloud quality', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_clouds_3d_quality" name="fgpx_clouds_3d_quality" class="fgpx-clouds3d-dep"' . ($clouds3dEnabled ? '' : ' disabled') . '>';
+		foreach (['low' => \__('Low (32 instances, 2 octaves)', 'flyover-gpx'), 'medium' => \__('Medium (96 instances, 2 octaves)', 'flyover-gpx'), 'high' => \__('High (192 instances, 3 octaves)', 'flyover-gpx')] as $val => $label) {
+			echo '<option value="' . \esc_attr($val) . '"' . ($options['fgpx_clouds_3d_quality'] === $val ? ' selected' : '') . '>' . \esc_html($label) . '</option>';
+		}
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Higher quality uses more GPU. Medium is recommended for most sites. Only applies when 3D clouds are enabled.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		// Intensity applies to BOTH 3D and classic clouds — always enabled regardless of checkbox.
+		$clouds3dIntensity = \floatval($options['fgpx_clouds_3d_intensity']);
+		echo '<tr><th scope="row"><label for="fgpx_clouds_3d_intensity">' . \esc_html__('Cloud intensity (0.1 – 1.0)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="range" id="fgpx_clouds_3d_intensity" name="fgpx_clouds_3d_intensity" min="0.1" max="1.0" step="0.05" value="' . \esc_attr((string) $clouds3dIntensity) . '" style="width:200px;vertical-align:middle" oninput="document.getElementById(\'fgpx_clouds_3d_intensity_val\').textContent=this.value" />';
+		echo ' <span id="fgpx_clouds_3d_intensity_val">' . \esc_html((string) $clouds3dIntensity) . '</span>';
+		echo '<p class="description">' . \esc_html__('Opacity cap applied to both 3D and classic cloud layers. Lower values keep clouds subtle at high cloud cover.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
 		echo '</table>';
 
 		// Simulation Section
@@ -2607,6 +2628,14 @@ final class Admin
 		if (isset($_POST['fgpx_weather_snow_threshold'])) { \update_option('fgpx_weather_snow_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_snow_threshold'])), true); }
 		if (isset($_POST['fgpx_weather_wind_threshold'])) { \update_option('fgpx_weather_wind_threshold', (string) max(0.0, min(150.0, (float) $_POST['fgpx_weather_wind_threshold'])), true); }
 		if (isset($_POST['fgpx_weather_cloud_threshold'])) { \update_option('fgpx_weather_cloud_threshold', (string) max(0.0, min(100.0, (float) $_POST['fgpx_weather_cloud_threshold'])), true); }
+		\update_option('fgpx_clouds_3d_enabled', isset($_POST['fgpx_clouds_3d_enabled']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_clouds_3d_quality'])) {
+			$q = \sanitize_key((string) $_POST['fgpx_clouds_3d_quality']);
+			\update_option('fgpx_clouds_3d_quality', \in_array($q, ['low', 'medium', 'high'], true) ? $q : 'medium', true);
+		}
+		if (isset($_POST['fgpx_clouds_3d_intensity'])) {
+			\update_option('fgpx_clouds_3d_intensity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_clouds_3d_intensity'])), true);
+		}
 		\update_option('fgpx_simulation_enabled', isset($_POST['fgpx_simulation_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_simulation_waypoints_enabled', isset($_POST['fgpx_simulation_waypoints_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_simulation_cities_enabled', isset($_POST['fgpx_simulation_cities_enabled']) ? '1' : '0', true);
@@ -3467,7 +3496,7 @@ final class Admin
 	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track', 'fgpx_track_page_fgpx-statistics'];
 	if (in_array($screen->id, $relevant_pages, true)) {
 		\wp_enqueue_script('jquery');
-		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], '1.0.4', true);
+		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], FGPX_VERSION, true);
 		\wp_enqueue_style('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/css/admin.css', [], '1.0.2');
 		if ($screen->id === 'fgpx_track') {
 			\wp_enqueue_media();
