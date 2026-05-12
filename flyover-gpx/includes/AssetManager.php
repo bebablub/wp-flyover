@@ -10,7 +10,8 @@ if (!\defined('ABSPATH')) {
 
 /**
  * Asset Manager with fallback support for external dependencies.
- * Provides reliable asset loading with local fallbacks when CDN assets fail.
+ * Provides reliable asset loading with CDN fallback chains when primary
+ * providers fail.
  */
 final class AssetManager
 {
@@ -77,8 +78,16 @@ final class AssetManager
 		// Check if asset fallbacks are enabled in admin settings
 		$options = Options::getAll();
 		$fallbacksEnabled = $options['fgpx_asset_fallbacks_enabled'] === '1';
+		$clouds3dEnabled = $options['fgpx_clouds_3d_enabled'] === '1';
 
 		foreach (self::$assetDefinitions as $handle => $asset) {
+			// Only register Three.js when 3D clouds are enabled.
+			// This avoids unnecessary HEAD probes and registration work on pages
+			// that cannot use 3D cloud rendering.
+			if ($handle === 'three-js' && !$clouds3dEnabled) {
+				continue;
+			}
+
 			if ($fallbacksEnabled) {
 				self::registerAssetWithFallback($handle, $asset);
 			} else {
@@ -288,9 +297,13 @@ final class AssetManager
 	 */
 	private static function generateFallbackScript(): string
 	{
+		$options = Options::getAll();
+		$clouds3dEnabled = $options['fgpx_clouds_3d_enabled'] === '1';
 		$maplibreFallbacks = \wp_json_encode(self::$assetDefinitions['maplibre-gl-js']['fallbacks']);
 		$chartjsFallbacks = \wp_json_encode(self::$assetDefinitions['chartjs']['fallbacks']);
 		$maplibreCssFallbacks = \wp_json_encode(self::$assetDefinitions['maplibre-gl-css']['fallbacks']);
+		$threeJsFallbacks = \wp_json_encode(self::$assetDefinitions['three-js']['fallbacks']);
+		$clouds3dEnabledJs = $clouds3dEnabled ? 'true' : 'false';
 
 		return "
 (function() {
@@ -305,6 +318,10 @@ final class AssetManager
 		'chartjs': {
 			check: function() { return typeof Chart !== 'undefined'; },
 			urls: {$chartjsFallbacks}
+		},
+		'three-js': {
+			check: function() { return typeof THREE !== 'undefined'; },
+			urls: {$threeJsFallbacks}
 		},
 		'maplibre-gl-css': {
 			check: function() { 
@@ -388,6 +405,9 @@ final class AssetManager
 	function checkAssets() {
 		checkAssetWithRetry('maplibre-gl-js', 'Flyover GPX: MapLibre GL JS not loaded, trying fallbacks', false, 1, 5, 250);
 		checkAssetWithRetry('chartjs', 'Flyover GPX: Chart.js not loaded, trying fallbacks', false, 1, 5, 250);
+		if ({$clouds3dEnabledJs}) {
+			checkAssetWithRetry('three-js', 'Flyover GPX: Three.js not loaded, trying fallbacks', false, 1, 5, 250);
+		}
 		// CSS can apply slightly later than script globals; start after a small initial delay.
 		setTimeout(function() {
 			checkAssetWithRetry('maplibre-gl-css', 'Flyover GPX: MapLibre GL CSS not loaded, trying fallbacks', true, 1, 7, 300);
