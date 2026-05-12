@@ -89,67 +89,6 @@
     dbgState[key] = now;
     return true;
   }
-
-      var VIDEO_QUALITY_PRESETS = {
-        high: {
-          fps: 60,
-          bitrate: 8000000,
-          quality: 0.95
-        },
-        medium: {
-          fps: 30,
-          bitrate: 4000000,
-          quality: 0.8
-        },
-        low: {
-          fps: 24,
-          bitrate: 1000000,
-          quality: 0.6
-        },
-        minimal: {
-          fps: 15,
-          bitrate: 500000,
-          quality: 0.5
-        }
-      };
-
-      /**
-       * Generate a random session ID suffix of given length using crypto if available.
-       * Used for unique video recording session IDs.
-       * @param {number} length - Desired length of the suffix
-       * @returns {string} Random alphanumeric string
-       */
-      function createSessionIdSuffix(length) {
-        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        var targetLength = Math.max(1, length || 9);
-        var result = '';
-        var cryptoObj = null;
-
-        if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
-          cryptoObj = globalThis.crypto;
-        } else if (typeof window !== 'undefined') {
-          var windowCrypto = window.crypto || window.msCrypto;
-          if (windowCrypto && typeof windowCrypto.getRandomValues === 'function') {
-            cryptoObj = windowCrypto;
-          }
-        }
-
-        if (cryptoObj) {
-          var bytes = new Uint8Array(targetLength);
-          cryptoObj.getRandomValues(bytes);
-          for (var i = 0; i < targetLength; i++) {
-            result += chars.charAt(bytes[i] % chars.length);
-          }
-          return result;
-        }
-
-        for (var j = 0; j < targetLength; j++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-
-        return result;
-      }
-
       /**
        * Polyfill for MediaRecorder constructor for environments without native support.
        * Used as a fallback for video recording.
@@ -205,440 +144,39 @@
         return recorder.calculateEstimatedSize();
       }
 
-      function VideoRecorder(map, options) {
-        this.map = map;
-        this.options = options || {};
-        this.preset = this.options.preset || 'medium';
-        this.customSettings = this.options.customSettings || null;
-        this.root = this.options.root || null;
-        this.overlayElement = this.options.overlayElement || null;
-        this.mapContainer = this.options.mapContainer || (this.map && typeof this.map.getContainer === 'function' ? this.map.getContainer() : null);
-        this.progressHost = this.options.progressHost || this.mapContainer || document.body;
-        this.outputMode = this.options.outputMode || 'download';
-        this.outputDirectoryHandle = this.options.outputDirectoryHandle || null;
-        this.expectedChunkCount = Math.max(1, Number(this.options.expectedChunkCount) || 1);
+      /**
+       * Resolve adaptive chunk sizing based on device memory and expected output shape.
+       * Keeps chunk downloads within safer limits on constrained devices while preserving
+       * larger chunk sizes for typical desktop recording sessions.
+       * @param {number} expectedChunkCount - Estimated number of chunks for the session
+       * @returns {{profile:string,targetBytes:number,thresholdBytes:number}} Chunk sizing config
+       */
+      function resolveChunkSizingConfig(expectedChunkCount) {
+        var safeExpectedChunks = Math.max(1, Number(expectedChunkCount) || 1);
+        var deviceMemory = Number((typeof navigator !== 'undefined' && navigator && navigator.deviceMemory) || 0);
 
-        var settings = this.customSettings || VIDEO_QUALITY_PRESETS[this.preset] || VIDEO_QUALITY_PRESETS.medium;
-
-        this.canvas = null;
-        this.stream = null;
-        this.mediaRecorder = null;
-        this.mimeType = '';
-        this.chunks = [];
-        this.isRecording = false;
-        this.startTime = 0;
-        this.frameCount = 0;
-        this.targetFPS = settings.fps;
-        this.frameInterval = 1000 / this.targetFPS;
-        this.lastFrameTime = 0;
-        this.quality = settings.quality;
-        this.bitrate = settings.bitrate;
-        this.initialized = false;
-        this.initPromise = null;
-        this.CHUNK_SIZE_THRESHOLD = 250 * 1024 * 1024;
-        this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024;
-        this.currentChunkSize = 0;
-        this.chunkNumber = 0;
-        this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
-        this.downloadedChunks = [];
-        this.totalRecordedBytes = 0;
-        this.progressElement = null;
-        this.recordingImageIds = [];
-        this.pendingObjectUrls = [];
-        this.sessionToken = 0;
-        this.stopRequested = false;
-        this.isRotatingChunk = false;
-        this.recorderOptions = null;
-        this.estimatedSizePerMinute = computeEstimatedSize(this);
-        this.initPromise = this.init();
-      }
-
-      VideoRecorder.prototype.calculateEstimatedSize = function() {
-        var bitsPerSecond = this.bitrate;
-        var bytesPerSecond = bitsPerSecond / 8;
-        var bytesPerMinute = bytesPerSecond * 60;
-        var containerOverhead = 1.1;
-        var encodingOverhead = 1.2;
-        return bytesPerMinute * containerOverhead * encodingOverhead;
-      };
-
-      VideoRecorder.prototype.formatFileSize = function(bytes) {
-        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-        if (bytes < 1024 * 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + ' MB';
-        return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-      };
-
-      VideoRecorder.prototype.createSessionId = function() {
-        return 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
-      };
-
-      VideoRecorder.prototype.resetSessionState = function() {
-        this.chunks = [];
-        this.currentChunkSize = 0;
-        this.chunkNumber = 0;
-        this.downloadedChunks = [];
-        this.totalRecordedBytes = 0;
-        this.startTime = 0;
-        this.frameCount = 0;
-        this.lastFrameTime = 0;
-        this.stopRequested = false;
-        this.isRotatingChunk = false;
-        this.sessionId = this.createSessionId();
-        this.sessionToken += 1;
-      };
-
-      VideoRecorder.prototype.hasActiveStream = function() {
-        if (!this.stream || typeof this.stream.getTracks !== 'function') return false;
-        var tracks = this.stream.getTracks();
-        if (!tracks || tracks.length === 0) return false;
-        for (var i = 0; i < tracks.length; i++) {
-          if (!tracks[i] || typeof tracks[i].readyState === 'undefined' || tracks[i].readyState === 'live') {
-            return true;
-          }
-        }
-        return false;
-      };
-
-      VideoRecorder.prototype.releaseStream = function() {
-        if (!this.stream || typeof this.stream.getTracks !== 'function') {
-          this.stream = null;
-          return;
-        }
-        try {
-          this.stream.getTracks().forEach(function(track) {
-            try { track.stop(); } catch (_) {}
-          });
-        } catch (_) {}
-        this.stream = null;
-      };
-
-      VideoRecorder.prototype.getSupportedMimeType = function() {
-        var RecorderCtor = getVideoRecorderConstructor();
-        var candidates = [
-          'video/webm;codecs=vp9,opus',
-          'video/webm;codecs=vp8,opus',
-          'video/webm',
-          'video/mp4'
-        ];
-        if (typeof RecorderCtor.isTypeSupported !== 'function') {
-          return 'video/webm';
-        }
-        for (var i = 0; i < candidates.length; i++) {
-          if (RecorderCtor.isTypeSupported(candidates[i])) {
-            return candidates[i];
-          }
-        }
-        return 'video/webm';
-      };
-
-      VideoRecorder.prototype.recreateMediaRecorder = function() {
-        var RecorderCtor = getVideoRecorderConstructor();
-        var options = this.recorderOptions || { mimeType: this.getSupportedMimeType(), videoBitsPerSecond: this.bitrate };
-        this.recorderOptions = options;
-        this.mediaRecorder = new RecorderCtor(this.stream, options);
-
-        var self = this;
-        this.mediaRecorder.ondataavailable = function(event) {
-          if (!event || !event.data || !event.data.size) return;
-          self.chunks.push(event.data);
-          self.currentChunkSize += event.data.size;
-          self.totalRecordedBytes += event.data.size;
-        };
-        this.mediaRecorder.onstop = function() {
-          if (self.stopRequested) {
-            self.finalizeCurrentChunk(true).then(function() {
-              self.onRecordingComplete();
-            }).catch(function(error) {
-              DBG.warn('Failed to finalize recording chunk', error);
-            });
-          }
-        };
-        this.mediaRecorder.onerror = function(event) {
-          DBG.warn('MediaRecorder error', event && event.error ? event.error : event);
-        };
-      };
-
-      VideoRecorder.prototype.init = function() {
-        var self = this;
-        return Promise.resolve().then(function() {
-          if (!self.map || typeof self.map.getCanvas !== 'function') {
-            throw new Error('Video recording requires a valid map canvas');
-          }
-
-          self.canvas = self.map.getCanvas();
-          if (!self.canvas || typeof self.canvas.captureStream !== 'function') {
-            var unsupportedMessage = 'Your browser does not support canvas video recording';
-            self.showInitError(unsupportedMessage);
-            throw new Error('Your browser does not support canvas video recording');
-          }
-
-          self.stream = self.canvas.captureStream(self.targetFPS);
-          self.mimeType = self.getSupportedMimeType();
-          var options = {
-            mimeType: self.mimeType,
-            videoBitsPerSecond: self.bitrate
+        if (deviceMemory > 0 && deviceMemory <= 2) {
+          return {
+            profile: 'low-memory',
+            targetBytes: 128 * 1024 * 1024,
+            thresholdBytes: 160 * 1024 * 1024
           };
-          self.recorderOptions = options;
-          self.recreateMediaRecorder();
-          self.initialized = true;
-
-          DBG.log('VideoRecorder initialized with preset', {
-            preset: self.preset,
-            fps: self.targetFPS,
-            bitrate: self.bitrate,
-            quality: self.quality,
-            estimatedSizePerMinute: Math.round(self.estimatedSizePerMinute / 1024 / 1024) + 'MB',
-            chunkThreshold: self.formatFileSize(self.CHUNK_SIZE_THRESHOLD),
-            sessionId: self.sessionId,
-            canvasSize: self.canvas ? { width: self.canvas.width, height: self.canvas.height } : null
-          });
-
-          return self;
-        }).catch(function(error) {
-          self.initialized = false;
-          return Promise.reject(error);
-        });
-      };
-
-      VideoRecorder.prototype.scheduleObjectUrlCleanup = function(url) {
-        var self = this;
-        this.pendingObjectUrls.push(url);
-        setTimeout(function() {
-          try { URL.revokeObjectURL(url); } catch (_) {}
-          self.pendingObjectUrls = self.pendingObjectUrls.filter(function(entry) {
-            return entry !== url;
-          });
-        }, 10000);
-      };
-
-      VideoRecorder.prototype.cleanupPendingUrls = function() {
-        try {
-          while (this.pendingObjectUrls.length > 0) {
-            var url = this.pendingObjectUrls.shift();
-            try { URL.revokeObjectURL(url); } catch (_) {}
-          }
-        } catch (error) {
-          DBG.warn('Error cleaning up pending object URLs', error);
         }
-      };
 
-      VideoRecorder.prototype.triggerChunkDownload = function(blob, filename) {
-        if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
-          return Promise.resolve();
+        if (safeExpectedChunks >= 5) {
+          return {
+            profile: 'high-chunk-count',
+            targetBytes: 160 * 1024 * 1024,
+            thresholdBytes: 208 * 1024 * 1024
+          };
         }
-        var url = URL.createObjectURL(blob);
-        var anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = filename;
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-        this.scheduleObjectUrlCleanup(url);
-        return Promise.resolve();
-      };
 
-      VideoRecorder.prototype.persistChunk = function(blob, filename) {
-        return this.triggerChunkDownload(blob, filename);
-      };
-
-      VideoRecorder.prototype.finalizeCurrentChunk = function(isFinalChunk) {
-        if (this.chunks.length === 0) return Promise.resolve();
-
-        var mimeType = this.mimeType || this.getSupportedMimeType();
-        var blob = new Blob(this.chunks, { type: mimeType });
-        var extension = mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-        var preset = String(this.preset || 'medium').toLowerCase();
-        var filename = 'flyover-' + preset + '-' + this.sessionId + '-chunk-' + String(this.chunkNumber).padStart(3, '0') + extension;
-        var self = this;
-
-        return this.persistChunk(blob, filename).then(function() {
-          self.downloadedChunks.push({ filename: filename, size: blob.size, final: !!isFinalChunk });
-          self.chunks = [];
-          self.currentChunkSize = 0;
-          self.chunkNumber += 1;
-        });
-      };
-
-      VideoRecorder.prototype.showCompletionMessage = function() {
-        if (this.downloadedChunks.length <= 1) return;
-
-        var extension = (this.mimeType || '').indexOf('mp4') !== -1 ? 'mp4' : 'webm';
-        var ffmpegTemplate = 'ffmpeg -f concat -safe 0 -i filelist.txt -c copy output.' + extension;
-        var fileListLines = [];
-        this.downloadedChunks.forEach(function(chunk) {
-          fileListLines.push("file '" + chunk.filename + "'");
-        });
-        var fileListContent = fileListLines.join('\n');
-        var ffmpegCmd = ffmpegTemplate;
-
-        var modal = document.createElement('div');
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.background = 'rgba(0,0,0,0.6)';
-        modal.style.zIndex = '10000';
-        modal.style.display = 'flex';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
-
-        var content = document.createElement('div');
-        content.style.background = 'white';
-        content.style.padding = '24px';
-        content.style.borderRadius = '8px';
-        content.style.maxWidth = '600px';
-        content.style.maxHeight = '80vh';
-        content.style.overflowY = 'auto';
-
-        var title = document.createElement('h2');
-        title.textContent = 'Recording Complete';
-
-        var instructions = document.createElement('p');
-        instructions.textContent = 'Create filelist.txt and run the FFmpeg command below.';
-
-        var fileListCode = document.createElement('pre');
-        fileListCode.textContent = fileListContent;
-
-        var cmdCode = document.createElement('pre');
-        cmdCode.textContent = ffmpegCmd;
-        cmdCode.onclick = function() {
-          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-            navigator.clipboard.writeText(ffmpegCmd);
-            cmdCode.textContent = ffmpegCmd + '\n\nCopied!';
-          }
+        return {
+          profile: 'default',
+          targetBytes: 200 * 1024 * 1024,
+          thresholdBytes: 250 * 1024 * 1024
         };
-
-        var closeButton = document.createElement('button');
-        closeButton.textContent = 'Close';
-
-        function closeModal() {
-          window.removeEventListener('keydown', onKeyDown);
-          if (modal.parentNode) {
-            modal.parentNode.removeChild(modal);
-          }
-        }
-
-        function onKeyDown(e) {
-          if (e.key === 'Escape' || e.code === 'Escape') {
-            closeModal();
-          }
-        }
-
-        modal.onclick = function(e) {
-          if (e.target === modal) {
-            closeModal();
-          }
-        };
-        closeButton.onclick = closeModal;
-        window.addEventListener('keydown', onKeyDown);
-
-        content.appendChild(title);
-        content.appendChild(instructions);
-        content.appendChild(fileListCode);
-        content.appendChild(cmdCode);
-        content.appendChild(closeButton);
-        modal.appendChild(content);
-        document.body.appendChild(modal);
-      };
-
-      VideoRecorder.prototype.showInitError = function(message) {
-        var modal = document.createElement('div');
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.background = 'rgba(0,0,0,0.55)';
-        modal.style.zIndex = '10000';
-
-        var content = document.createElement('div');
-        content.textContent = 'Video Recording Not Available: ' + message;
-        content.style.background = '#fff';
-        content.style.margin = '10vh auto';
-        content.style.maxWidth = '480px';
-        content.style.padding = '24px';
-        content.style.borderRadius = '8px';
-
-        modal.appendChild(content);
-        document.body.appendChild(modal);
-        return modal;
-      };
-
-      VideoRecorder.prototype.restoreTextMarkers = function() {};
-
-      VideoRecorder.prototype.removePhotoFromMap = function() {};
-
-      VideoRecorder.prototype.hideRecordingProgress = function() {};
-
-      VideoRecorder.prototype.showRecordingProgress = function() {};
-
-      VideoRecorder.prototype.cleanupOverlayCanvas = function() {};
-
-      VideoRecorder.prototype.ensureMarkersVisible = function() {};
-
-      VideoRecorder.prototype.start = function() {
-        var self = this;
-        if (this.isRecording) return Promise.resolve();
-
-        if (!this.mediaRecorder || !this.hasActiveStream()) {
-          this.initPromise = this.init();
-        }
-
-        return this.initPromise.then(function() {
-          try {
-            self.resetSessionState();
-            self.isRecording = true;
-            self.startTime = performance.now();
-            self.ensureMarkersVisible();
-            if (self.mediaRecorder && self.mediaRecorder.state !== 'recording') {
-              self.mediaRecorder.start(100);
-            }
-            self.showRecordingProgress();
-          } catch (error) {
-            self.isRecording = false;
-            self.showInitError('Recording failed to start: ' + (error.message || 'unknown error'));
-            throw error;
-          }
-        }).catch(function(error) {
-          self.isRecording = false;
-          self.showInitError('Recording failed to start: ' + (error.message || 'unknown error'));
-          return Promise.reject(error);
-        });
-      };
-
-      VideoRecorder.prototype.stop = function() {
-        if (!this.isRecording) return;
-
-        try {
-          this.stopRequested = true;
-          this.isRecording = false;
-          var mediaRecorder = this.mediaRecorder;
-          if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-          }
-          this.restoreTextMarkers();
-          this.removePhotoFromMap();
-          this.cleanupOverlayCanvas();
-          this.hideRecordingProgress();
-          this.cleanupPendingUrls();
-        } catch (error) {
-          try {
-            this.restoreTextMarkers();
-            this.removePhotoFromMap();
-            this.hideRecordingProgress();
-          } catch (_) {}
-        }
-      };
-
-      VideoRecorder.prototype.onRecordingComplete = function() {
-        this.releaseStream();
-        this.showCompletionMessage();
-      };
-
-      VideoRecorder.prototype.startPhotoCanvasRendering = function() {};
-
-      VideoRecorder.prototype.stopPhotoCanvasRendering = function() {};
+      }
 
   /**
    * Photo Filename Matching Utility
@@ -5081,6 +4619,12 @@
         }
       };
 
+      /**
+       * Generate a random session ID suffix of given length using crypto when available.
+       * Falls back to Math.random only when secure randomness is unavailable.
+       * @param {number} length - Desired suffix length
+       * @returns {string} Random lowercase alphanumeric suffix
+       */
       function createSessionIdSuffix(length) {
         var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         var targetLength = Math.max(1, length || 9);
@@ -5150,8 +4694,10 @@
         this.initPromise = null;
         
         // Chunked download configuration
-        this.CHUNK_SIZE_THRESHOLD = 250 * 1024 * 1024; // 250MB in bytes
-        this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024; // 200MB target chunk size
+        var chunkSizing = resolveChunkSizingConfig(this.expectedChunkCount);
+        this.chunkSizingProfile = chunkSizing.profile;
+        this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes;
+        this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes;
         this.currentChunkSize = 0;
         this.chunkNumber = 0;
         this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
