@@ -74,13 +74,6 @@
 
   // Throttled debug helper to keep verbose diagnostics readable.
   var dbgState = {};
-  /**
-   * Throttled debug helper to limit verbose diagnostics.
-   * Allows a debug action only if the specified interval has elapsed since last allowed.
-   * @param {string} key - Unique key for the debug action
-   * @param {number} intervalMs - Minimum interval in milliseconds
-   * @returns {boolean} True if allowed, false if throttled
-   */
   function dbgAllow(key, intervalMs) {
     if (!DBG.isEnabled()) return false;
     var now = Date.now();
@@ -113,12 +106,6 @@
         }
       };
 
-      /**
-       * Generate a random session ID suffix of given length using crypto if available.
-       * Used for unique video recording session IDs.
-       * @param {number} length - Desired length of the suffix
-       * @returns {string} Random alphanumeric string
-       */
       function createSessionIdSuffix(length) {
         var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         var targetLength = Math.max(1, length || 9);
@@ -150,13 +137,6 @@
         return result;
       }
 
-      /**
-       * Polyfill for MediaRecorder constructor for environments without native support.
-       * Used as a fallback for video recording.
-       * @constructor
-       * @param {MediaStream} stream - Media stream to record
-       * @param {Object} options - Recording options
-       */
       function createVideoRecorderMediaRecorder(stream, options) {
         this.stream = stream;
         this.options = options || {};
@@ -185,10 +165,6 @@
         }
       };
 
-      /**
-       * Returns the appropriate MediaRecorder constructor (native or polyfill).
-       * @returns {Function} MediaRecorder constructor
-       */
       function getVideoRecorderConstructor() {
         if (typeof MediaRecorder === 'function') {
           return MediaRecorder;
@@ -196,11 +172,6 @@
         return createVideoRecorderMediaRecorder;
       }
 
-      /**
-       * Compute the estimated file size per minute for a given recorder instance.
-       * @param {Object} recorder - VideoRecorder instance
-       * @returns {number} Estimated size in bytes
-       */
       function computeEstimatedSize(recorder) {
         return recorder.calculateEstimatedSize();
       }
@@ -730,24 +701,12 @@
     return roundedLat + ',' + roundedLon;
   }
 
-  /**
-   * Escape HTML special characters in a string to prevent XSS.
-   * @param {string} str - Input string
-   * @returns {string} Escaped HTML string
-   */
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
   }
 
-  /**
-   * Create a DOM element with optional class and text content.
-   * @param {string} tag - Tag name
-   * @param {string} [className] - Optional class name
-   * @param {string|number} [text] - Optional text content
-   * @returns {Element} Created DOM element
-   */
   function createEl(tag, className, text) {
     var el = document.createElement(tag);
     if (className) el.className = className;
@@ -755,21 +714,10 @@
     return el;
   }
 
-  /**
-   * Format a number to a fixed number of decimal places.
-   * @param {number} num - Number to format
-   * @param {number} decimals - Number of decimal places
-   * @returns {string} Formatted number string
-   */
   function formatNumber(num, decimals) {
     return Number(num).toFixed(decimals);
   }
 
-  /**
-   * Format a number of seconds as HH:MM:SS.
-   * @param {number} seconds - Number of seconds
-   * @returns {string} Time string in HH:MM:SS format
-   */
   function formatTime(seconds) {
     seconds = Math.max(0, Math.round(seconds));
     var h = Math.floor(seconds / 3600);
@@ -781,11 +729,6 @@
     return hh + ':' + mm + ':' + ss;
   }
 
-  /**
-   * Extract the filename from a URL, removing query/hash fragments.
-   * @param {string} url - URL string
-   * @returns {string} Filename
-   */
   function extractFilenameFromUrl(url) {
     if (typeof url !== 'string' || !url) return '';
     try {
@@ -797,22 +740,12 @@
     }
   }
 
-  /**
-   * Convert a value to trimmed string, or empty string if null/undefined.
-   * @param {*} value - Input value
-   * @returns {string} Non-empty trimmed string or ''
-   */
   function nonEmptyText(value) {
     if (value == null) return '';
     var text = String(value).trim();
     return text;
   }
 
-  /**
-   * Set the textContent of an element only if it differs from the current value.
-   * @param {Element} el - DOM element
-   * @param {string|number} nextText - New text content
-   */
   function setTextIfChanged(el, nextText) {
     if (!el) return;
     var text = String(nextText);
@@ -821,32 +754,14 @@
     }
   }
 
-  /**
-   * Linear interpolation between two values.
-   * @param {number} a - Start value
-   * @param {number} b - End value
-   * @param {number} t - Interpolation factor (0..1)
-   * @returns {number} Interpolated value
-   */
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
 
-  /**
-   * Cubic ease-in-out interpolation for smooth transitions.
-   * @param {number} t - Interpolation factor (0..1)
-   * @returns {number} Eased value
-   */
   function easeInOutCubic(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
-  /**
-   * Calculate the bearing (degrees) from point p1 to p2.
-   * @param {Array<number>} p1 - [lon, lat] start point
-   * @param {Array<number>} p2 - [lon, lat] end point
-   * @returns {number} Bearing in degrees (0..360)
-   */
   function bearingBetween(p1, p2) {
     var lon1 = p1[0] * Math.PI / 180;
     var lat1 = p1[1] * Math.PI / 180;
@@ -858,32 +773,15 @@
     return (brng + 360) % 360;
   }
 
-  /**
-   * Compute the shortest angle difference between two bearings.
-   * @param {number} fromDeg - Start angle in degrees
-   * @param {number} toDeg - End angle in degrees
-   * @returns {number} Signed angle delta (-180..180)
-   */
   function shortestAngleDelta(fromDeg, toDeg) {
     var delta = ((toDeg - fromDeg + 540) % 360) - 180;
     return delta;
   }
 
-  /**
-   * Normalize an angle to the range 0..360 degrees.
-   * @param {number} deg - Angle in degrees
-   * @returns {number} Normalized angle (0..360)
-   */
   function normalizeAngle(deg) {
     return (deg % 360 + 360) % 360;
   }
 
-  /**
-   * Calculate the Haversine distance in meters between two lon/lat points.
-   * @param {Array<number>} a - [lon, lat] point A
-   * @param {Array<number>} b - [lon, lat] point B
-   * @returns {number} Distance in meters
-   */
   function haversineMeters(a, b) {
     var R = 6371000;
     var dLat = (b[1] - a[1]) * Math.PI / 180;
@@ -898,12 +796,6 @@
   }
 
   // New: find nearest route vertex index to a lon/lat point (fast and robust enough for our use)
-  /**
-   * Find the index of the nearest coordinate in coords to the given lon/lat point.
-   * @param {Array<number>} pointLonLat - [lon, lat] point
-   * @param {Array<Array<number>>} coords - Array of [lon, lat] coordinates
-   * @returns {number} Index of nearest coordinate
-   */
   function nearestCoordIndex(pointLonLat, coords) {
     var bestI = 0, bestD = Infinity;
     for (var i = 0; i < coords.length; i++) {
@@ -916,13 +808,6 @@
 
   // Faster nearest-index approximation for large tracks.
   // Uses coarse sampling first, then local refinement around the best coarse hit.
-  /**
-   * Fast approximation to find nearest coordinate index for large tracks.
-   * Uses coarse sampling and local refinement.
-   * @param {Array<number>} pointLonLat - [lon, lat] point
-   * @param {Array<Array<number>>} coords - Array of [lon, lat] coordinates
-   * @returns {number} Index of nearest coordinate
-   */
   function nearestCoordIndexFast(pointLonLat, coords) {
     if (!Array.isArray(coords) || coords.length === 0) return 0;
     if (coords.length <= 1200) return nearestCoordIndex(pointLonLat, coords);
@@ -949,13 +834,6 @@
   }
 
   // Douglas–Peucker simplification (iterative) that returns kept indices
-  /**
-   * Iterative Douglas–Peucker simplification algorithm.
-   * Returns indices of points to keep for simplified polyline.
-   * @param {Array<Array<number>>} points - Array of [x, y] points
-   * @param {number} sqTol - Squared tolerance for simplification
-   * @returns {Object} { indices: Array<number> }
-   */
   function simplifyDouglasPeucker(points, sqTol) {
     var len = points.length;
     if (len <= 2) {
@@ -1005,12 +883,6 @@
     return { indices: out };
   }
 
-  /**
-   * Heuristically choose a squared tolerance for Douglas–Peucker to reach a target point count.
-   * @param {Array<Array<number>>} points - Array of [x, y] points
-   * @param {number} targetCount - Desired number of points after simplification
-   * @returns {number} Squared tolerance value
-   */
   function chooseTolerance(points, targetCount) {
     // heuristic range based on bbox diagonal
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1034,10 +906,6 @@
     return bestTol * bestTol; // return squared tolerance
   }
 
-  /**
-   * Returns the default OSM raster style URL for MapLibre.
-   * @returns {string} Style URL
-   */
   function buildOSMRasterStyle() {
     return 'https://api.maptiler.com/maps/base-v4/style.json?key=yuGDmIlURzez57sC1sod';
   }
