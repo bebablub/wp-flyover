@@ -223,9 +223,53 @@ describe('VideoRecorder.js', () => {
     
     const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
     
-    // Verify thresholds are reasonable
-    expect(recorder.CHUNK_SIZE_TARGET).toBe(200 * 1024 * 1024); // 200MB
-    expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(250 * 1024 * 1024); // 250MB
+    // Default/fallback profile when deviceMemory is unavailable in runtime
+    expect(recorder.CHUNK_SIZE_TARGET).toBe(200 * 1024 * 1024);
+    expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(250 * 1024 * 1024);
+  });
+
+  test('chunk sizing uses low-memory profile when deviceMemory is 2GB', () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window.navigator, 'deviceMemory');
+    Object.defineProperty(window.navigator, 'deviceMemory', {
+      configurable: true,
+      value: 2
+    });
+
+    try {
+      loadFront();
+      const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
+      expect(recorder.chunkSizingProfile).toBe('low-memory');
+      expect(recorder.CHUNK_SIZE_TARGET).toBe(128 * 1024 * 1024);
+      expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(160 * 1024 * 1024);
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window.navigator, 'deviceMemory', originalDescriptor);
+      } else {
+        delete window.navigator.deviceMemory;
+      }
+    }
+  });
+
+  test('chunk sizing uses high-memory profile when deviceMemory is 8GB', () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window.navigator, 'deviceMemory');
+    Object.defineProperty(window.navigator, 'deviceMemory', {
+      configurable: true,
+      value: 8
+    });
+
+    try {
+      loadFront();
+      const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
+      expect(recorder.chunkSizingProfile).toBe('high-memory');
+      expect(recorder.CHUNK_SIZE_TARGET).toBe(256 * 1024 * 1024);
+      expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(320 * 1024 * 1024);
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window.navigator, 'deviceMemory', originalDescriptor);
+      } else {
+        delete window.navigator.deviceMemory;
+      }
+    }
   });
 
   test('error shown to user via modal when init fails', () => {
@@ -591,6 +635,19 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
     expect(code).toContain('this.recorderOptions');
     expect(code).toContain('this.recorderOptions = options');
     expect(code).toContain('var opts = this.recorderOptions');
+  });
+
+  test('REGRESSION: Chunk sizing profiles must be memory-aware', () => {
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    expect(code).toContain('resolveChunkSizingConfig');
+    expect(code).toContain('navigator.deviceMemory');
+    expect(code).toContain('this.chunkSizingProfile');
+    expect(code).toContain('this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes');
+    expect(code).toContain('this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes');
   });
 
   test('REGRESSION: Estimated size calculation must account for overhead', () => {

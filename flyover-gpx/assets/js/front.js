@@ -204,6 +204,49 @@
         return recorder.calculateEstimatedSize();
       }
 
+      function resolveChunkSizingConfig(expectedChunkCount) {
+        var safeExpectedChunks = Math.max(1, Number(expectedChunkCount) || 1);
+        var deviceMemoryGb = Number((typeof navigator !== 'undefined' && navigator && navigator.deviceMemory) || 0);
+
+        if (deviceMemoryGb > 0 && deviceMemoryGb <= 2) {
+          return {
+            profile: 'low-memory',
+            targetBytes: 128 * 1024 * 1024,
+            thresholdBytes: 160 * 1024 * 1024
+          };
+        }
+
+        if (deviceMemoryGb > 0 && deviceMemoryGb <= 4) {
+          return {
+            profile: 'mid-memory',
+            targetBytes: 160 * 1024 * 1024,
+            thresholdBytes: 208 * 1024 * 1024
+          };
+        }
+
+        if (safeExpectedChunks >= 8) {
+          return {
+            profile: 'high-chunk-count',
+            targetBytes: 160 * 1024 * 1024,
+            thresholdBytes: 208 * 1024 * 1024
+          };
+        }
+
+        if (deviceMemoryGb >= 8) {
+          return {
+            profile: 'high-memory',
+            targetBytes: 256 * 1024 * 1024,
+            thresholdBytes: 320 * 1024 * 1024
+          };
+        }
+
+        return {
+          profile: 'default',
+          targetBytes: 200 * 1024 * 1024,
+          thresholdBytes: 250 * 1024 * 1024
+        };
+      }
+
       function VideoRecorder(map, options) {
         this.map = map;
         this.options = options || {};
@@ -234,8 +277,10 @@
         this.bitrate = settings.bitrate;
         this.initialized = false;
         this.initPromise = null;
-        this.CHUNK_SIZE_THRESHOLD = 250 * 1024 * 1024;
-        this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024;
+        var chunkSizing = resolveChunkSizingConfig(this.expectedChunkCount);
+        this.chunkSizingProfile = chunkSizing.profile;
+        this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes;
+        this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes;
         this.currentChunkSize = 0;
         this.chunkNumber = 0;
         this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
@@ -4960,8 +5005,10 @@
         this.initPromise = null;
         
         // Chunked download configuration
-        this.CHUNK_SIZE_THRESHOLD = 250 * 1024 * 1024; // 250MB in bytes
-        this.CHUNK_SIZE_TARGET = 200 * 1024 * 1024; // 200MB target chunk size
+        var chunkSizing = resolveChunkSizingConfig(this.expectedChunkCount);
+        this.chunkSizingProfile = chunkSizing.profile;
+        this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes;
+        this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes;
         this.currentChunkSize = 0;
         this.chunkNumber = 0;
         this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
@@ -4986,6 +5033,7 @@
           quality: this.quality,
           estimatedSizePerMinute: Math.round(this.estimatedSizePerMinute / 1024 / 1024) + 'MB',
           chunkThreshold: this.formatFileSize(this.CHUNK_SIZE_THRESHOLD),
+          chunkProfile: this.chunkSizingProfile,
           sessionId: this.sessionId
         });
         
