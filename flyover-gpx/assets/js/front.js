@@ -84,25 +84,53 @@
   }
 
       var VIDEO_QUALITY_PRESETS = {
-        high: {
+        ultra: {
+          name: 'Ultra HD',
+          description: '4K quality for professional use',
           fps: 60,
-          bitrate: 8000000,
-          quality: 0.95
+          bitrate: 15000000, // 15 Mbps
+          quality: 0.95,
+          resolution: { width: 3840, height: 2160 },
+          fileSize: 'Very Large (~180MB/min)',
+          useCase: 'Professional presentations, high-end displays'
+        },
+        high: {
+          name: 'High Definition',
+          description: '1080p quality for general use',
+          fps: 30,
+          bitrate: 5000000, // 5 Mbps
+          quality: 0.9,
+          resolution: { width: 1920, height: 1080 },
+          fileSize: 'Large (~60MB/min)',
+          useCase: 'YouTube uploads, presentations'
         },
         medium: {
+          name: 'Standard Definition',
+          description: 'Balanced quality and file size',
           fps: 30,
-          bitrate: 4000000,
-          quality: 0.8
+          bitrate: 4000000, // 4 Mbps
+          resolution: { width: 1280, height: 720 },
+          useCase: 'Web sharing, social media'
         },
         low: {
+          name: 'Compressed',
+          description: 'Small file size for quick sharing',
           fps: 24,
-          bitrate: 1000000,
-          quality: 0.6
+          bitrate: 1000000, // 1 Mbps
+          quality: 0.6,
+          resolution: { width: 854, height: 480 },
+          fileSize: 'Small (~12MB/min)',
+          useCase: 'Mobile viewing, slow connections'
         },
         minimal: {
+          name: 'Ultra Compressed',
+          description: 'Minimal file size for previews',
           fps: 15,
-          bitrate: 500000,
-          quality: 0.5
+          bitrate: 500000, // 0.5 Mbps
+          quality: 0.5,
+          resolution: { width: 640, height: 360 },
+          fileSize: 'Very Small (~6MB/min)',
+          useCase: 'Quick previews, thumbnails'
         }
       };
 
@@ -4892,93 +4920,7 @@
       // --- Video Recording Implementation ---
       var videoRecorder = null;
       var isRecording = false;
-      var recordingProgress = 0;
-      var recordingDuration = 0;
-      var recordingSettingsModal = null;
       var selectedQualityPreset = 'medium';
-      
-      // Video Quality Presets
-      var VIDEO_QUALITY_PRESETS = {
-        'ultra': {
-          name: 'Ultra HD',
-          description: '4K quality for professional use',
-          fps: 60,
-          bitrate: 15000000, // 15 Mbps
-          quality: 0.95,
-          resolution: { width: 3840, height: 2160 },
-          fileSize: 'Very Large (~180MB/min)',
-          useCase: 'Professional presentations, high-end displays'
-        },
-        'high': {
-          name: 'High Definition',
-          description: '1080p quality for general use',
-          fps: 30,
-          bitrate: 5000000, // 5 Mbps
-          quality: 0.9,
-          resolution: { width: 1920, height: 1080 },
-          fileSize: 'Large (~60MB/min)',
-          useCase: 'YouTube uploads, presentations'
-        },
-        'medium': {
-          name: 'Standard Definition',
-          description: 'Balanced quality and file size',
-          fps: 30,
-          bitrate: 4000000, // 4 Mbps - increased from 2.5 to reduce compression blocks
-          resolution: { width: 1280, height: 720 },
-          useCase: 'Web sharing, social media'
-        },
-        'low': {
-          name: 'Compressed',
-          description: 'Small file size for quick sharing',
-          fps: 24,
-          bitrate: 1000000, // 1 Mbps
-          quality: 0.6,
-          resolution: { width: 854, height: 480 },
-          fileSize: 'Small (~12MB/min)',
-          useCase: 'Mobile viewing, slow connections'
-        },
-        'minimal': {
-          name: 'Ultra Compressed',
-          description: 'Minimal file size for previews',
-          fps: 15,
-          bitrate: 500000, // 0.5 Mbps
-          quality: 0.5,
-          resolution: { width: 640, height: 360 },
-          fileSize: 'Very Small (~6MB/min)',
-          useCase: 'Quick previews, thumbnails'
-        }
-      };
-
-      function createSessionIdSuffix(length) {
-        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        var targetLength = Math.max(1, length || 9);
-        var result = '';
-        var cryptoObj = null;
-
-        if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
-          cryptoObj = globalThis.crypto;
-        } else if (typeof window !== 'undefined') {
-          var windowCrypto = window.crypto || window.msCrypto;
-          if (windowCrypto && typeof windowCrypto.getRandomValues === 'function') {
-            cryptoObj = windowCrypto;
-          }
-        }
-
-        if (cryptoObj) {
-          var bytes = new Uint8Array(targetLength);
-          cryptoObj.getRandomValues(bytes);
-          for (var i = 0; i < targetLength; i++) {
-            result += chars.charAt(bytes[i] % chars.length);
-          }
-          return result;
-        }
-
-        for (var j = 0; j < targetLength; j++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-
-        return result;
-      }
       
       function VideoRecorder(map, options) {
         this.map = map;
@@ -7256,8 +7198,6 @@
       overlay.appendChild(overlayClose);
       ui.mapEl.appendChild(overlay);
       var overlayLastFocusedElement = null;
-      function updateOverlayViewerControls() {
-      }
       function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
@@ -7313,7 +7253,6 @@
         try { overlay.offsetHeight; } catch(_) {} 
         overlay.style.opacity = '1'; 
         try { overlayClose.focus({ preventScroll: true }); } catch(_) { try { overlayClose.focus(); } catch(__) {} }
-        updateOverlayViewerControls();
       }
       function hideOverlay() {
         DBG.log('overlay hide start');
@@ -7343,7 +7282,6 @@
               overlayTime.style.display = 'none';
               // Reset background to default
               overlay.style.background = 'rgba(0,0,0,0.6)';
-              updateOverlayViewerControls();
               overlay.removeEventListener('transitionend', done); 
               // Clear overlay from map canvas if recording
               DBG.log('hideOverlay: videoRecorder exists?', !!videoRecorder);
@@ -7379,7 +7317,6 @@
             overlayTime.style.display = 'none';
             // Reset background to default
             overlay.style.background = 'rgba(0,0,0,0.6)';
-            updateOverlayViewerControls();
             // Clear overlay from map canvas if recording
             DBG.log('hideOverlay (catch): videoRecorder exists?', !!videoRecorder);
             DBG.log('hideOverlay (catch): isRecording?', videoRecorder ? videoRecorder.isRecording : 'N/A');
@@ -14513,16 +14450,6 @@
       // Initial visuals
       reset();
     });
-  }
-
-  function boundsFromCoords(cs) {
-    var minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
-    for (var i = 0; i < cs.length; i++) {
-      var c = cs[i];
-      if (c[0] < minLon) minLon = c[0]; if (c[0] > maxLon) maxLon = c[0];
-      if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1];
-    }
-    return [[minLon, minLat], [maxLon, maxLat]];
   }
 
   function __fgpxRunInit(){

@@ -537,6 +537,34 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
     expect(code).toContain('this.targetFPS');
   });
 
+  test('REGRESSION: recorder presets/helper declarations are not duplicated', () => {
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const presetDecls = (code.match(/var VIDEO_QUALITY_PRESETS\s*=\s*\{/g) || []).length;
+    const sessionHelperDecls = (code.match(/function createSessionIdSuffix\s*\(/g) || []).length;
+
+    expect(presetDecls).toBe(1);
+    expect(sessionHelperDecls).toBe(1);
+  });
+
+  test('REGRESSION: duplicate bounds helper and dead recorder vars stay removed', () => {
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const boundsHelpers = (code.match(/function boundsFromCoords\s*\(/g) || []).length;
+    expect(boundsHelpers).toBe(1);
+
+    expect(code).not.toContain('recordingProgress');
+    expect(code).not.toContain('recordingDuration');
+    expect(code).not.toContain('recordingSettingsModal');
+    expect(code).not.toContain('function updateOverlayViewerControls');
+  });
+
   test('REGRESSION: Session ID generation must use crypto, not Math.random', () => {
     // BUG FIX: Weak session IDs using Math.random
     // FIXED: Use crypto.getRandomValues for better randomness
