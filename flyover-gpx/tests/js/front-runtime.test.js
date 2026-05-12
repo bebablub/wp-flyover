@@ -583,7 +583,7 @@ describe('front.js runtime minimal regressions', () => {
 
   test('overlay has close button and no prev/next nav', () => {
     expect(FRONT_SRC.includes("overlayClose.className = 'fgpx-photo-overlay-close';")).toBe(true);
-    expect(FRONT_SRC.includes('function updateOverlayViewerControls() {')).toBe(true);
+    expect(FRONT_SRC.includes('function updateOverlayViewerControls() {')).toBe(false);
     expect(FRONT_SRC.includes("overlayPrev.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-prev';")).toBe(false);
     expect(FRONT_SRC.includes("overlayNext.className = 'fgpx-photo-overlay-nav fgpx-photo-overlay-next';")).toBe(false);
     expect(FRONT_SRC.includes('openMediaViewerAt(mediaViewerIndex + 1);')).toBe(false);
