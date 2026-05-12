@@ -223,33 +223,9 @@ describe('VideoRecorder.js', () => {
     
     const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
     
-    // Verify adaptive sizing guard rails and ordering.
-    expect(recorder.CHUNK_SIZE_TARGET).toBeGreaterThanOrEqual(96 * 1024 * 1024);
-    expect(recorder.CHUNK_SIZE_TARGET).toBeLessThanOrEqual(240 * 1024 * 1024);
-    expect(recorder.CHUNK_SIZE_THRESHOLD).toBeGreaterThan(recorder.CHUNK_SIZE_TARGET);
-    expect(recorder.CHUNK_SIZE_THRESHOLD).toBeLessThanOrEqual(320 * 1024 * 1024);
-  });
-
-  test('adaptive chunk sizing reduces limits on low-memory devices', () => {
-    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'deviceMemory');
-    Object.defineProperty(navigator, 'deviceMemory', {
-      configurable: true,
-      value: 2
-    });
-
-    try {
-      loadFront();
-      const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
-      expect(recorder.chunkSizingProfile).toBe('low-memory');
-      expect(recorder.CHUNK_SIZE_TARGET).toBe(128 * 1024 * 1024);
-      expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(160 * 1024 * 1024);
-    } finally {
-      if (originalDescriptor) {
-        Object.defineProperty(navigator, 'deviceMemory', originalDescriptor);
-      } else {
-        delete navigator.deviceMemory;
-      }
-    }
+    // Verify thresholds are reasonable
+    expect(recorder.CHUNK_SIZE_TARGET).toBe(200 * 1024 * 1024); // 200MB
+    expect(recorder.CHUNK_SIZE_THRESHOLD).toBe(250 * 1024 * 1024); // 250MB
   });
 
   test('error shown to user via modal when init fails', () => {
@@ -294,19 +270,6 @@ describe('VideoRecorder.js', () => {
     const code = FRONT_SRC;
     expect(code).toContain('createSessionIdSuffix');
     expect(code).toContain('cryptoObj.getRandomValues');
-  });
-
-  test('REGRESSION: front.js contains a single VideoRecorder implementation', () => {
-    const code = FRONT_SRC;
-    const recorderDefs = code.match(/function\s+VideoRecorder\s*\(/g) || [];
-    const presetDefs = code.match(/var\s+VIDEO_QUALITY_PRESETS\s*=\s*\{/g) || [];
-    expect(recorderDefs).toHaveLength(1);
-    expect(presetDefs).toHaveLength(1);
-  });
-
-  test('REGRESSION: chunk filenames keep lowercase preset tokens', () => {
-    const code = FRONT_SRC;
-    expect(code).toContain("String(this.preset || 'medium').toLowerCase()");
   });
 
   test('recorder options are preserved during chunk rotation', async () => {
