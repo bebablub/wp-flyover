@@ -134,6 +134,11 @@
         }
       };
 
+      /**
+       * Generate a random session ID suffix for unique identification.
+       * @param {number} length
+       * @returns {string}
+       */
       function createSessionIdSuffix(length) {
         var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         var targetLength = Math.max(1, length || 9);
@@ -165,6 +170,12 @@
         return result;
       }
 
+      /**
+       * Polyfill for MediaRecorder used in VideoRecorder fallback.
+       * @constructor
+       * @param {MediaStream} stream
+       * @param {Object} [options]
+       */
       function createVideoRecorderMediaRecorder(stream, options) {
         this.stream = stream;
         this.options = options || {};
@@ -193,6 +204,10 @@
         }
       };
 
+      /**
+       * Returns the appropriate MediaRecorder constructor for the environment.
+       * @returns {Function}
+       */
       function getVideoRecorderConstructor() {
         if (typeof MediaRecorder === 'function') {
           return MediaRecorder;
@@ -200,10 +215,20 @@
         return createVideoRecorderMediaRecorder;
       }
 
+      /**
+       * Compute estimated video file size per minute for a given recorder.
+       * @param {Object} recorder
+       * @returns {number}
+       */
       function computeEstimatedSize(recorder) {
         return recorder.calculateEstimatedSize();
       }
 
+      /**
+       * Resolve chunk sizing configuration based on device memory and expected chunk count.
+       * @param {number} expectedChunkCount
+       * @returns {Object}
+       */
       function resolveChunkSizingConfig(expectedChunkCount) {
         var safeExpectedChunks = Math.max(1, Number(expectedChunkCount) || 1);
         var deviceMemoryGb = Number((typeof navigator !== 'undefined' && navigator && navigator.deviceMemory) || 0);
@@ -247,6 +272,12 @@
         };
       }
 
+      /**
+       * VideoRecorder class for recording map playback as video.
+       * @constructor
+       * @param {Object} map
+       * @param {Object} [options]
+       */
       function VideoRecorder(map, options) {
         this.map = map;
         this.options = options || {};
@@ -765,6 +796,12 @@
 
   // Helper function to create a location key for grouping photos by location
   // Uses rounded coordinates to group nearby photos (within ~10 meters)
+  /**
+   * Create a location key for grouping photos by location (rounded coordinates).
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {string|null}
+   */
   function getLocationKey(lat, lon) {
     if (typeof lat !== 'number' || typeof lon !== 'number') {
       return null;
@@ -774,12 +811,24 @@
     return roundedLat + ',' + roundedLon;
   }
 
+  /**
+   * Escape HTML special characters in a string.
+   * @param {string} str
+   * @returns {string}
+   */
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
   }
 
+  /**
+   * Create a DOM element with optional class and text content.
+   * @param {string} tag
+   * @param {string} [className]
+   * @param {string} [text]
+   * @returns {Element}
+   */
   function createEl(tag, className, text) {
     var el = document.createElement(tag);
     if (className) el.className = className;
@@ -787,10 +836,21 @@
     return el;
   }
 
+  /**
+   * Format a number to a fixed number of decimals.
+   * @param {number} num
+   * @param {number} decimals
+   * @returns {string}
+   */
   function formatNumber(num, decimals) {
     return Number(num).toFixed(decimals);
   }
 
+  /**
+   * Format seconds as HH:MM:SS string.
+   * @param {number} seconds
+   * @returns {string}
+   */
   function formatTime(seconds) {
     seconds = Math.max(0, Math.round(seconds));
     var h = Math.floor(seconds / 3600);
@@ -802,6 +862,11 @@
     return hh + ':' + mm + ':' + ss;
   }
 
+  /**
+   * Extract filename from a URL string.
+   * @param {string} url
+   * @returns {string}
+   */
   function extractFilenameFromUrl(url) {
     if (typeof url !== 'string' || !url) return '';
     try {
@@ -813,12 +878,22 @@
     }
   }
 
+  /**
+   * Return trimmed string if value is not null/undefined, else empty string.
+   * @param {*} value
+   * @returns {string}
+   */
   function nonEmptyText(value) {
     if (value == null) return '';
     var text = String(value).trim();
     return text;
   }
 
+  /**
+   * Set textContent of element if changed.
+   * @param {Element} el
+   * @param {string} nextText
+   */
   function setTextIfChanged(el, nextText) {
     if (!el) return;
     var text = String(nextText);
@@ -827,14 +902,32 @@
     }
   }
 
+  /**
+   * Linear interpolation between a and b by t.
+   * @param {number} a
+   * @param {number} b
+   * @param {number} t
+   * @returns {number}
+   */
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
 
+  /**
+   * Cubic ease-in-out interpolation for t in [0,1].
+   * @param {number} t
+   * @returns {number}
+   */
   function easeInOutCubic(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
+  /**
+   * Calculate bearing in degrees from p1 to p2.
+   * @param {Array<number>} p1 [lon, lat]
+   * @param {Array<number>} p2 [lon, lat]
+   * @returns {number}
+   */
   function bearingBetween(p1, p2) {
     var lon1 = p1[0] * Math.PI / 180;
     var lat1 = p1[1] * Math.PI / 180;
@@ -846,15 +939,32 @@
     return (brng + 360) % 360;
   }
 
+  /**
+   * Compute the shortest angle delta between two degrees.
+   * @param {number} fromDeg
+   * @param {number} toDeg
+   * @returns {number}
+   */
   function shortestAngleDelta(fromDeg, toDeg) {
     var delta = ((toDeg - fromDeg + 540) % 360) - 180;
     return delta;
   }
 
+  /**
+   * Normalize angle to [0, 360) degrees.
+   * @param {number} deg
+   * @returns {number}
+   */
   function normalizeAngle(deg) {
     return (deg % 360 + 360) % 360;
   }
 
+  /**
+   * Calculate haversine distance in meters between two [lon, lat] points.
+   * @param {Array<number>} a
+   * @param {Array<number>} b
+   * @returns {number}
+   */
   function haversineMeters(a, b) {
     var R = 6371000;
     var dLat = (b[1] - a[1]) * Math.PI / 180;
@@ -869,6 +979,12 @@
   }
 
   // New: find nearest route vertex index to a lon/lat point (fast and robust enough for our use)
+  /**
+   * Find nearest route vertex index to a lon/lat point.
+   * @param {Array<number>} pointLonLat
+   * @param {Array<Array<number>>} coords
+   * @returns {number}
+   */
   function nearestCoordIndex(pointLonLat, coords) {
     var bestI = 0, bestD = Infinity;
     for (var i = 0; i < coords.length; i++) {
@@ -881,6 +997,12 @@
 
   // Faster nearest-index approximation for large tracks.
   // Uses coarse sampling first, then local refinement around the best coarse hit.
+  /**
+   * Fast nearest-index approximation for large tracks.
+   * @param {Array<number>} pointLonLat
+   * @param {Array<Array<number>>} coords
+   * @returns {number}
+   */
   function nearestCoordIndexFast(pointLonLat, coords) {
     if (!Array.isArray(coords) || coords.length === 0) return 0;
     if (coords.length <= 1200) return nearestCoordIndex(pointLonLat, coords);
@@ -907,6 +1029,12 @@
   }
 
   // Douglas–Peucker simplification (iterative) that returns kept indices
+  /**
+   * Douglas–Peucker simplification (iterative) that returns kept indices.
+   * @param {Array<Array<number>>} points
+   * @param {number} sqTol
+   * @returns {Object}
+   */
   function simplifyDouglasPeucker(points, sqTol) {
     var len = points.length;
     if (len <= 2) {
@@ -956,6 +1084,12 @@
     return { indices: out };
   }
 
+  /**
+   * Heuristically choose squared tolerance for Douglas–Peucker to hit target count.
+   * @param {Array<Array<number>>} points
+   * @param {number} targetCount
+   * @returns {number}
+   */
   function chooseTolerance(points, targetCount) {
     // heuristic range based on bbox diagonal
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -979,10 +1113,20 @@
     return bestTol * bestTol; // return squared tolerance
   }
 
+  /**
+   * Returns default OSM raster style URL.
+   * @returns {string}
+   */
   function buildOSMRasterStyle() {
     return 'https://api.maptiler.com/maps/base-v4/style.json?key=yuGDmIlURzez57sC1sod';
   }
 
+  /**
+   * Build and return the main player layout for a container.
+   * @param {Element} container
+   * @param {Object} FGPX
+   * @returns {Object}
+   */
   function buildLayout(container, FGPX) {
     FGPX = FGPX || window.FGPX;
     container.innerHTML = '';
@@ -2436,7 +2580,17 @@
       }
 
       // Elevation-based coloring helpers
+      /**
+       * Clamps a number to the range [0, 1].
+       * @param {number} x - Value to clamp.
+       * @returns {number} Clamped value.
+       */
       function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+      /**
+       * Converts a hex color string to an RGB object.
+       * @param {string} hex - Hex color string.
+       * @returns {{r: number, g: number, b: number}} RGB object.
+       */
       function hexToRgb(hex) {
         hex = (hex || '').replace('#', '');
         if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
@@ -2446,9 +2600,23 @@
           b: parseInt(hex.substr(4, 2), 16)
         };
       }
+      /**
+       * Converts RGB values to a hex color string.
+       * @param {number} r - Red value (0-255).
+       * @param {number} g - Green value (0-255).
+       * @param {number} b - Blue value (0-255).
+       * @returns {string} Hex color string.
+       */
       function rgbToHex(r, g, b) {
         return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
       }
+      /**
+       * Blends two hex colors by a given alpha.
+       * @param {string} hex1 - First hex color.
+       * @param {string} hex2 - Second hex color.
+       * @param {number} alpha - Blend ratio (0-1).
+       * @returns {string} Blended hex color.
+       */
       function blendHex(hex1, hex2, alpha) {
         var rgb1 = hexToRgb(hex1);
         var rgb2 = hexToRgb(hex2);
@@ -2459,6 +2627,12 @@
       }
 
       // Calculate elevation gradients
+      /**
+       * Calculates elevation gradients for a set of coordinates.
+       * @param {Array} coords - Array of coordinates.
+       * @param {Array} cumDist - Cumulative distances.
+       * @returns {Array} Array of gradients.
+       */
       function calculateGradients(coords, cumDist) {
         var gradients = [];
         for (var i = 0; i < coords.length; i++) {
@@ -2475,6 +2649,12 @@
       }
 
       // Smooth gradients to reduce noise
+      /**
+       * Smooths an array of gradients using a moving average window.
+       * @param {Array} gradients - Array of gradients.
+       * @param {number} windowSize - Window size for smoothing.
+       * @returns {Array} Smoothed gradients.
+       */
       function smoothGradients(gradients, windowSize) {
         var smoothed = [];
         var halfWindow = Math.floor(windowSize / 2);
@@ -2621,6 +2801,9 @@
       // Pre-allocate a fixed pool of segment sources/layers at init.
       // During playback we only call setData() — never add/remove layers.
       var emptyFeatureCollection = { type: 'FeatureCollection', features: [] };
+      /**
+       * Initializes the pool of segment sources/layers for progressive route coloring.
+       */
       function initSegmentPool() {
         for (var i = 0; i < SEGMENT_POOL_SIZE; i++) {
           var srcId = 'fgpx-progress-segment-' + i;
@@ -2645,6 +2828,9 @@
       }
 
       // Helper function to clean up progressive segments (resets pool to empty data)
+      /**
+       * Cleans up progressive segments and resets related caches.
+       */
       function cleanupProgressiveSegments() {
         for (var segIdx = 0; segIdx < SEGMENT_POOL_SIZE; segIdx++) {
           try {
@@ -2659,6 +2845,12 @@
       }
 
       // Helper function to create elevation-colored progressive segments
+      /**
+       * Creates elevation-colored progressive segments for the route.
+       * @param {Array} coordsUpTo - Coordinates up to current progress.
+       * @param {number} startIdx - Start index for segmenting.
+       * @returns {Array} Array of segment objects.
+       */
       function createProgressiveSegments(coordsUpTo, startIdx) {
         if (!elevationColoringEnabled || !progressiveSmoothedGradients) {
           return null; // Use single-color progressive route
@@ -2743,6 +2935,12 @@
       }
 
       // Create colored arrow icons for different wind speeds and sizes
+      /**
+       * Creates a canvas arrow icon of a given color and size.
+       * @param {string} color - Arrow color.
+       * @param {number} [size=72] - Icon size in pixels.
+       * @returns {HTMLCanvasElement} Canvas element with arrow.
+       */
       function createArrowIcon(color, size) {
         size = size || 72; // Default size
         var canvas = document.createElement('canvas');
@@ -2815,6 +3013,12 @@
       }
 
       // Weather heatmap layer (if weather data is available and enabled)
+      /**
+       * Converts a value to a boolean, with fallback.
+       * @param {*} value - Value to convert.
+       * @param {boolean} fallback - Fallback value if conversion fails.
+       * @returns {boolean} Boolean result.
+       */
       function toBoolOption(value, fallback) {
         if (value === undefined || value === null || value === '') return !!fallback;
         if (typeof value === 'boolean') return value;
@@ -4026,6 +4230,12 @@
       var mapCities = []; // [{name, lat, lon, distanceMeters, type}] sorted by distanceMeters
 
 
+      /**
+       * Returns a unique key for a media item, used for ordering and deduplication.
+       * @param {Object} item - Media item object.
+       * @param {number} fallbackIndex - Fallback index if no key found.
+       * @returns {string} Unique key string.
+       */
       function getMediaItemKey(item, fallbackIndex) {
         if (!item) return String(fallbackIndex || '');
         var ph = item.photo || item;
@@ -4039,10 +4249,18 @@
         );
       }
 
+      /**
+       * Gets the currently displayed media items (rotated or default order).
+       * @returns {Array} Array of media items.
+       */
       function getDisplayedMediaItems() {
         return (Array.isArray(mediaDisplayItems) && mediaDisplayItems.length > 0) ? mediaDisplayItems : mediaItems;
       }
 
+      /**
+       * Gets the current playback time in seconds.
+       * @returns {number|null} Playback time in seconds, or null if unavailable.
+       */
       function getCurrentPlaybackSec() {
         if (isFinite(Number(tOffset))) return Number(tOffset);
         if (isFinite(lastPlaybackSec)) return Number(lastPlaybackSec);
@@ -4060,10 +4278,18 @@
         return null;
       }
 
+      /**
+       * Determines if the media queue can be rotated (more than one item and enabled).
+       * @returns {boolean} True if rotation is possible.
+       */
       function canRotateMediaQueue() {
         return !!(FGPX.photosEnabled && photoQueueRotationEnabled && Array.isArray(mediaItems) && mediaItems.length > 1);
       }
 
+      /**
+       * Builds a rotated array of media items so the upcoming item is first.
+       * @returns {Array} Rotated media items.
+       */
       function buildRotatedMediaItems() {
         var items = Array.isArray(mediaItems) ? mediaItems.slice() : [];
         var ii;
@@ -4114,6 +4340,11 @@
         return rotated;
       }
 
+      /**
+       * Checks if the current and next media item orders match.
+       * @param {Array} nextItems - Next media items.
+       * @returns {boolean} True if orders match.
+       */
       function mediaOrdersMatch(nextItems) {
         var currentItems = getDisplayedMediaItems();
         if (!Array.isArray(currentItems) || currentItems.length !== nextItems.length) return false;
@@ -4125,6 +4356,9 @@
         return true;
       }
 
+      /**
+       * Clears the media rotation timer if set.
+       */
       function clearMediaRotationTimer() {
         if (mediaRotationTimer !== null) {
           clearTimeout(mediaRotationTimer);
@@ -4132,6 +4366,11 @@
         }
       }
 
+      /**
+       * Applies a new display order to media items and triggers UI update.
+       * @param {Array} nextItems - New media items order.
+       * @param {Object|null} animationHint - Animation hint for UI.
+       */
       function applyMediaDisplayOrder(nextItems, animationHint) {
         mediaDisplayItems = nextItems;
         mediaRotationLeadKey = nextItems.length > 0 ? getMediaItemKey(nextItems[0], 0) : '';
@@ -4142,6 +4381,10 @@
         }
       }
 
+      /**
+       * Synchronizes the displayed media order with the rotated queue.
+       * @param {boolean} force - If true, force update even if order matches.
+       */
       function syncMediaDisplayOrder(force) {
         var nextItems = buildRotatedMediaItems();
         if (mediaOrdersMatch(nextItems)) {
@@ -4173,6 +4416,9 @@
         clearMediaRotationTimer();
       });
 
+      /**
+       * Builds the media items array from available photos and updates display order.
+       */
       function buildMediaItems() {
         if (DBG.isEnabled()) {
           console.log('[FGPX] buildMediaItems starting', {
@@ -4302,6 +4548,10 @@
         syncMediaDisplayOrder(true);
       }
 
+      /**
+       * Opens the media viewer at the specified index.
+       * @param {number} index - Index of the media item to open.
+       */
       function openMediaViewerAt(index) {
         var activeMediaItems = getDisplayedMediaItems();
         if (!Array.isArray(activeMediaItems) || activeMediaItems.length === 0) return;
@@ -4321,6 +4571,10 @@
       }
 
       // Invalidate media grid cache when track data changes
+      /**
+       * Invalidates the cached media grid DOM, optionally preserving the current page.
+       * @param {boolean} preservePage - If true, keep current page index.
+       */
       function invalidateMediaGridCache(preservePage) {
         mediaGridRendered = false;
         cachedMediaGridDOM = null;
@@ -4330,6 +4584,9 @@
         }
       }
 
+      /**
+       * Renders the media grid UI for the current page and items.
+       */
       function renderMediaGrid() {
         if (!ui.mediaPanel) return;
         var activeMediaItems = getDisplayedMediaItems();
@@ -4498,6 +4755,9 @@
         mediaAnimationHint = null;
       }
 
+      /**
+       * Adds photo markers to the map for each photo in the track.
+       */
       function addPhotoMarkers() {
         if (!FGPX.photosEnabled || !Array.isArray(photos) || photos.length === 0) { return; }
         var tmpByDist = [];
@@ -4614,6 +4874,9 @@
         ui.mapEl.appendChild(countdownOverlay);
       } catch(_) {}
 
+      /**
+       * Clears the countdown timer for the startup overlay.
+       */
       function clearCountdownTimer() {
         if (countdownTimer) {
           try {
@@ -4623,6 +4886,9 @@
           countdownTimer = null;
         }
       }
+      /**
+       * Hides the countdown overlay and resets its state.
+       */
       function hideCountdownOverlay() {
         clearCountdownTimer();
         try {
@@ -4634,6 +4900,10 @@
           countdownOverlay.style.opacity = '';
         } catch(_) {}
       }
+      /**
+       * Shows the countdown overlay with the given value and triggers animation.
+       * @param {number|string} value - Value to display in the overlay.
+       */
       function showCountdownOverlay(value) {
         try {
           if (!countdownOverlay) return;
@@ -4650,10 +4920,19 @@
           countdownOverlay.style.opacity = '0.55';
         } catch(_) {}
       }
+      /**
+       * Determines if the startup countdown should run (only once per instance).
+       * @returns {boolean} True if countdown should run.
+       */
       function shouldRunStartupCountdown() {
         // Run only once per instance after initial splash-based startup.
         return !startupCountdownDone && !isRecording;
       }
+      /**
+       * Runs the startup countdown overlay for the given number of seconds.
+       * @param {number} seconds - Number of seconds for the countdown.
+       * @returns {Promise<void>} Resolves when countdown completes.
+       */
       function runStartupCountdown(seconds) {
         return new Promise(function(resolve) {
           var total = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -4693,6 +4972,11 @@
           }};
         });
       }
+      /**
+       * Waits for the startup decode to be ready, up to a maximum wait time.
+       * @param {number} maxWaitMs - Maximum wait time in milliseconds.
+       * @returns {Promise<void>} Resolves when ready or timeout.
+       */
       function waitForStartupDecodeReady(maxWaitMs) {
         return new Promise(function(resolve) {
           var started = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -4722,12 +5006,20 @@
         });
       }
 
+      /**
+       * Sets the text content of the preload overlay.
+       * @param {string} text - Text to display.
+       */
       function setPreloadOverlayText(text) {
         try {
           if (!preloadOverlay) return;
           preloadOverlay.textContent = String(text || 'Preparing playback…');
         } catch(_) {}
       }
+      /**
+       * Shows the preload overlay with optional text.
+       * @param {string} text - Text to display in the overlay.
+       */
       function showPreloadOverlay(text) {
         try {
           if (!preloadOverlay) return;
@@ -4736,6 +5028,9 @@
           preloadOverlayVisible = true;
         } catch(_) {}
       }
+      /**
+       * Hides the preload overlay and marks it as not visible.
+       */
       function hidePreloadOverlay() {
         try {
           if (!preloadOverlay) return;
@@ -4747,9 +5042,36 @@
         hideCountdownOverlay();
       });
 
+      /**
+       * Converts longitude to tile X coordinate at a given zoom level.
+       * @param {number} lon - Longitude in degrees.
+       * @param {number} z - Zoom level.
+       * @returns {number} Tile X coordinate.
+       */
       function lon2tileX(lon, z){ return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
+
+      /**
+       * Converts latitude to tile Y coordinate at a given zoom level.
+       * @param {number} lat - Latitude in degrees.
+       * @param {number} z - Zoom level.
+       * @returns {number} Tile Y coordinate.
+       */
       function lat2tileY(lat, z){ var rad = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(rad) + 1/Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z)); }
+
+      /**
+       * Builds a tile URL from a template string and tile coordinates.
+       * @param {string} tpl - URL template with {z}, {x}, {y} placeholders.
+       * @param {number} z - Zoom level.
+       * @param {number} x - Tile X coordinate.
+       * @param {number} y - Tile Y coordinate.
+       * @returns {string} Tile URL.
+       */
       function tileUrlFromTemplate(tpl, z, x, y){ return tpl.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)); }
+
+      /**
+       * Returns an array of tile template metadata for all sources in the current map style.
+       * @returns {Array} Array of template metadata objects.
+       */
       function getPrefetchTileTemplates() {
         var out = [];
         try {
@@ -4794,6 +5116,12 @@
         return out;
       }
 
+      /**
+       * Clamps the prefetch zoom level to the allowed min/max for the tile source.
+       * @param {number} rawZoom - Requested zoom level.
+       * @param {Object} templateMeta - Tile template metadata.
+       * @returns {number} Clamped zoom level.
+       */
       function clampPrefetchZoom(rawZoom, templateMeta) {
         var minZ = 0;
         var maxZ = (templateMeta && templateMeta.sourceType === 'raster-dem') ? 14 : 19;
@@ -4804,6 +5132,12 @@
         return Math.max(Math.max(1, minZ), Math.min(maxZ, z));
       }
 
+      /**
+       * Builds a list of tile keys to prefetch for the route at a given zoom level.
+       * @param {number} z - Zoom level.
+       * @param {number} maxTiles - Maximum number of tiles to prefetch.
+       * @returns {Array} Array of tile key strings.
+       */
       function buildPrefetchList(z, maxTiles) {
         var set = new Set();
         try {
@@ -4833,9 +5167,18 @@
         } catch(_) {}
         return Array.from(set);
       }
+      /**
+       * Prefetches map tiles for the current route to ensure smooth playback by requesting all needed tiles along the route before animation starts.
+       * Handles privacy window, zoom levels, and tile template selection. Updates UI state during preloading.
+       * @returns {Promise<void>} Resolves when prefetching is complete or times out.
+       */
       function prefetchTilesForRoute() {
         if (preloadCompleted || preloadingInProgress) { return Promise.resolve(); }
         preloadingInProgress = true;
+        /**
+         * Marks the tile prefetch as finished, updates state and UI.
+         * Called internally after prefetch completes or times out.
+         */
         function finishPreload() {
           preloadCompleted = true;
           preloadingInProgress = false;
@@ -4856,6 +5199,10 @@
           var controller = null;
           var totalTileBudget = 400;
           var perTemplateBudget = Math.max(60, Math.floor(totalTileBudget / Math.max(1, templates.length)));
+          /**
+           * For each tile template, builds the prefetch list and issues fetch requests for each tile.
+           * @param {Object} meta - Tile template metadata.
+           */
           templates.forEach(function(meta) {
             try {
               var zUse = clampPrefetchZoom(defaultZoomSetting, meta);
@@ -4870,6 +5217,10 @@
               });
             } catch(_) {}
           });
+          /**
+           * Waits for all tile fetches to settle, then marks prefetch as finished.
+           * Handles both success and error cases.
+           */
           var prefetch = Promise.allSettled(reqs)
             .then(function(){ 
               finishPreload();
@@ -4881,6 +5232,10 @@
               DBG.log('route-prefetch finished');
               DBG.timeEnd('route-prefetch');
             });
+          /**
+           * Timeout fallback: resolves after a fixed time and marks prefetch as finished.
+           * Ensures UI is not blocked if tile fetches hang.
+           */
           var timed = new Promise(function(resolve){ 
             setTimeout(function() { 
               finishPreload();
@@ -4903,6 +5258,11 @@
       // at the view zoom and 1-2 levels below. Without pre-warming these, the mesh has holes
       // (showing the black background) whenever the camera moves to a not-yet-loaded area.
       var demPrefetchPromise = null;
+      /**
+       * Prefetches DEM (terrain) tiles for the current route at multiple zoom levels to avoid mesh gaps.
+       * Only runs if terrain is enabled and DEM sources are present.
+       * @returns {Promise|null} Resolves when DEM prefetch is complete, or null if not applicable.
+       */
       function prefetchDemForRoute() {
         if (demPrefetchPromise) return demPrefetchPromise;
         if (!hasTerrain || !terrainSourceId || !prefetchEnabled) return null;
@@ -5040,10 +5400,17 @@
         this.initPromise = this.init();
       }
 
+      /**
+       * Creates a new unique session ID for the video recording session.
+       * @returns {string} Session ID.
+       */
       VideoRecorder.prototype.createSessionId = function() {
         return 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);
       };
 
+      /**
+       * Resets the internal state for a new recording session.
+       */
       VideoRecorder.prototype.resetSessionState = function() {
         this.chunks = [];
         this.currentChunkSize = 0;
@@ -5059,6 +5426,10 @@
         this.sessionToken += 1;
       };
 
+      /**
+       * Checks if there is an active media stream for recording.
+       * @returns {boolean} True if active stream exists.
+       */
       VideoRecorder.prototype.hasActiveStream = function() {
         if (!this.stream || typeof this.stream.getTracks !== 'function') return false;
         var tracks = this.stream.getTracks();
@@ -5069,6 +5440,9 @@
         return false;
       };
 
+      /**
+       * Releases the current media stream and stops all tracks.
+       */
       VideoRecorder.prototype.releaseStream = function() {
         if (!this.stream || typeof this.stream.getTracks !== 'function') return;
         try {
@@ -5079,6 +5453,10 @@
         this.stream = null;
       };
 
+      /**
+       * Gets the overlay element for video recording, if available.
+       * @returns {HTMLElement|null} Overlay element or null.
+       */
       VideoRecorder.prototype.getOverlayElement = function() {
         if (this.overlayElement && this.overlayElement.isConnected) {
           return this.overlayElement;
@@ -5089,6 +5467,10 @@
         return null;
       };
 
+      /**
+       * Gets all marker elements from the map container.
+       * @returns {NodeList} NodeList of marker elements.
+       */
       VideoRecorder.prototype.getMarkerElements = function() {
         if (!this.mapContainer || typeof this.mapContainer.querySelectorAll !== 'function') {
           return [];
@@ -5096,12 +5478,19 @@
         return this.mapContainer.querySelectorAll('.maplibregl-marker');
       };
 
+      /**
+       * Recreates the MediaRecorder instance with the current settings.
+       */
       VideoRecorder.prototype.recreateMediaRecorder = function() {
         var opts = this.recorderOptions || { mimeType: this.getSupportedMimeType(), videoBitsPerSecond: this.bitrate };
         this.mediaRecorder = new MediaRecorder(this.stream, opts);
         this.setupEventHandlers();
       };
 
+      /**
+       * Schedules cleanup of an object URL after a short delay.
+       * @param {string} url - Object URL to revoke.
+       */
       VideoRecorder.prototype.scheduleObjectUrlCleanup = function(url) {
         var self = this;
         this.pendingObjectUrls.push(url);
@@ -5111,6 +5500,12 @@
         }, 10000); // 10 seconds: enough time for download to complete, quick cleanup
       };
 
+      /**
+       * Writes a video chunk to the output directory using the File System Access API.
+       * @param {Blob} blob - Video chunk blob.
+       * @param {string} filename - Filename to write.
+       * @returns {Promise<void>} Resolves when write is complete.
+       */
       VideoRecorder.prototype.writeChunkToDirectory = function(blob, filename) {
         var self = this;
         if (!this.outputDirectoryHandle) {
@@ -5135,6 +5530,12 @@
           });
       };
 
+      /**
+       * Triggers a download of a video chunk by creating a temporary link.
+       * @param {Blob} blob - Video chunk blob.
+       * @param {string} filename - Filename for download.
+       * @returns {Promise<void>} Resolves when download is triggered.
+       */
       VideoRecorder.prototype.triggerChunkDownload = function(blob, filename) {
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
@@ -5148,6 +5549,12 @@
         return Promise.resolve();
       };
 
+      /**
+       * Persists a video chunk, either by writing to directory or triggering download.
+       * @param {Blob} blob - Video chunk blob.
+       * @param {string} filename - Filename for saving.
+       * @returns {Promise<void>} Resolves when chunk is persisted.
+       */
       VideoRecorder.prototype.persistChunk = function(blob, filename) {
         if (this.outputMode === 'directory' && this.outputDirectoryHandle) {
           return this.writeChunkToDirectory(blob, filename);
@@ -5155,6 +5562,11 @@
         return this.triggerChunkDownload(blob, filename);
       };
 
+      /**
+       * Finalizes the current video chunk and triggers persistence.
+       * @param {boolean} isFinalChunk - If true, this is the last chunk.
+       * @returns {Promise<void>} Resolves when chunk is finalized.
+       */
       VideoRecorder.prototype.finalizeCurrentChunk = function(isFinalChunk) {
         var self = this;
         if (this.chunks.length === 0) return Promise.resolve();
@@ -5191,6 +5603,10 @@
         });
       };
       
+      /**
+       * Initializes the video recorder and prepares for recording.
+       * @returns {Promise<void>} Resolves when initialization is complete.
+       */
       VideoRecorder.prototype.init = function() {
         var self = this;
         return new Promise(function(resolve, reject) {
@@ -5216,6 +5632,9 @@
         });
       };
       
+      /**
+       * Initializes the video recorder with a canvas element.
+       */
       VideoRecorder.prototype.initWithCanvas = function() {
         try {
           // Check browser support for canvas.captureStream()
@@ -5251,6 +5670,9 @@
         }
       };
       
+      /**
+       * Sets up the composite canvas for video rendering.
+       */
       VideoRecorder.prototype.setupCompositeCanvas = function() {
         try {
           // Create composite canvas for recording that includes markers
@@ -5266,6 +5688,10 @@
         }
       };
       
+      /**
+       * Gets the best supported MIME type for video recording based on preset.
+       * @returns {string} Supported MIME type.
+       */
       VideoRecorder.prototype.getSupportedMimeType = function() {
         var codecs = [
           { 
@@ -5343,6 +5769,9 @@
         return supportedCodecs[0].mimeType;
       };
       
+      /**
+       * Sets up event handlers for the MediaRecorder instance.
+       */
       VideoRecorder.prototype.setupEventHandlers = function() {
         var self = this;
         
@@ -5405,6 +5834,10 @@
         };
       };
       
+      /**
+       * Draws a photo overlay on the video during recording.
+       * @param {Object} photoData - Photo data to overlay.
+       */
       VideoRecorder.prototype.drawPhotoOverlay = function(photoData) {
         if (!this.isRecording) return;
         
@@ -5432,12 +5865,18 @@
         DBG.log('Photo overlay will be added to map for recording', photoData);
       };
       
+      /**
+       * Clears the photo overlay from the video.
+       */
       VideoRecorder.prototype.clearPhotoOverlay = function() {
         DBG.log('clearPhotoOverlay called - removing map layer');
         this.removePhotoFromMap();
         DBG.log('Photo overlay removed from map');
       };
       
+      /**
+       * Adds a photo overlay to the map during video recording.
+       */
       VideoRecorder.prototype.addPhotoToMap = function() {
         try {
           var overlay = this.getOverlayElement();
@@ -5464,6 +5903,11 @@
         }
       };
       
+      /**
+       * Adds a photo as a top layer on the map for video recording.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {Object} overlay - Overlay data.
+       */
       VideoRecorder.prototype.addPhotoAsTopLayer = function(img, overlay) {
         try {
           var self = this;
@@ -5564,6 +6008,10 @@
         }
       };
       
+      /**
+       * Adds a photo as a raster fallback layer if top layer fails.
+       * @param {string} originalImageUrl - Image URL.
+       */
       VideoRecorder.prototype.addPhotoAsRasterFallback = function(originalImageUrl) {
         try {
           var bounds = this.map.getBounds();
@@ -5595,6 +6043,11 @@
         }
       };
       
+      /**
+       * Renders a photo and overlay to the video canvas.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {Object} overlay - Overlay data.
+       */
       VideoRecorder.prototype.renderPhotoToCanvas = function(img, overlay) {
         try {
           var self = this;
@@ -5646,6 +6099,11 @@
         }
       };
       
+      /**
+       * Starts rendering a photo overlay to the canvas for video recording.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {Object} overlay - Overlay data.
+       */
       VideoRecorder.prototype.startPhotoCanvasRendering = function(img, overlay) {
         var self = this;
         var canvas = this.canvas;
@@ -5677,6 +6135,13 @@
         requestAnimationFrame(renderFrame);
       };
       
+      /**
+       * Draws a photo and overlay onto a canvas context.
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {Object} overlay - Overlay data.
+       * @param {HTMLCanvasElement} canvas - Canvas element.
+       */
       VideoRecorder.prototype.drawPhotoOnCanvas = function(ctx, img, overlay, canvas) {
         try {
           // Draw overlay background
@@ -5728,6 +6193,12 @@
         }
       };
       
+      /**
+       * Adds a photo overlay to the map using a canvas and bounds.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {Object} overlay - Overlay data.
+       * @param {Array} bounds - Map bounds for overlay.
+       */
       VideoRecorder.prototype.addPhotoToMapWithCanvas = function(img, overlay, bounds) {
         try {
           // Create canvas with overlay background and image
@@ -5756,6 +6227,14 @@
         }
       };
       
+      /**
+       * Draws an image and overlay to a canvas with bounds.
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @param {HTMLImageElement} img - Image element.
+       * @param {HTMLCanvasElement} canvas - Canvas element.
+       * @param {Object} overlay - Overlay data.
+       * @param {Array} bounds - Map bounds for overlay.
+       */
       VideoRecorder.prototype.drawImageToCanvas = function(ctx, img, canvas, overlay, bounds) {
         try {
           // Match browser overlay scaling: max-width:90%; max-height:100%; object-fit:contain
@@ -5836,6 +6315,9 @@
         }
       };
       
+      /**
+       * Removes the photo overlay from the map.
+       */
       VideoRecorder.prototype.removePhotoFromMap = function() {
         try {
           DBG.log('removePhotoFromMap: Starting removal process');
@@ -5873,6 +6355,9 @@
         }
       };
       
+      /**
+       * Stops rendering the photo overlay to the canvas.
+       */
       VideoRecorder.prototype.stopPhotoCanvasRendering = function() {
         try {
           // Restore original canvas content if we have it stored
@@ -5886,6 +6371,9 @@
         }
       };
       
+      /**
+       * Starts the video recording process.
+       */
       VideoRecorder.prototype.start = function() {
         var self = this;
         if (this.isRecording) return Promise.resolve();
@@ -5932,11 +6420,17 @@
         });
       };
       
+      /**
+       * Ensures that map markers are visible during video recording.
+       */
       VideoRecorder.prototype.ensureMarkersVisible = function() {
         // Convert text markers to map layers for recording (photos stay as DOM)
         this.convertTextMarkersToLayers();
       };
       
+      /**
+       * Converts text markers to map layers for video rendering.
+       */
       VideoRecorder.prototype.convertTextMarkersToLayers = function() {
         var self = this;
         var sessionToken = this.sessionToken;
@@ -6250,6 +6744,9 @@
         }
       };
       
+      /**
+       * Restores DOM text markers and removes any temporary map layers created for recording.
+       */
       VideoRecorder.prototype.restoreTextMarkers = function() {
         var self = this;
         
@@ -6303,6 +6800,9 @@
         }
       };
       
+      /**
+       * Starts the compositing loop to draw all visible map markers to the composite canvas during recording.
+       */
       VideoRecorder.prototype.startMarkerCompositing = function() {
         if (!this.compositeCanvas || !this.isRecording) return;
         
@@ -6332,6 +6832,10 @@
         requestAnimationFrame(composite);
       };
       
+      /**
+       * Draws all visible map markers to the composite recording canvas.
+       * Iterates over marker elements, renders each to a temporary canvas, and draws them onto the main composite canvas.
+       */
       VideoRecorder.prototype.drawMarkersToCanvas = function() {
         var markers = this.getMarkerElements();
         var mapRect = this.canvas.getBoundingClientRect();
@@ -6367,6 +6871,13 @@
         }.bind(this));
       };
       
+      /**
+       * Renders a single marker element onto a canvas context for video recording.
+       * @param {HTMLElement} marker - Marker DOM element.
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @param {number} width - Canvas width.
+       * @param {number} height - Canvas height.
+       */
       VideoRecorder.prototype.renderMarkerToCanvas = function(marker, ctx, width, height) {
         // Get marker styles
         var computedStyle = window.getComputedStyle(marker);
@@ -6396,6 +6907,15 @@
         }
       };
       
+      /**
+       * Draws a rounded rectangle path on a canvas context.
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @param {number} x - X coordinate.
+       * @param {number} y - Y coordinate.
+       * @param {number} width - Rectangle width.
+       * @param {number} height - Rectangle height.
+       * @param {number} radius - Corner radius.
+       */
       VideoRecorder.prototype.drawRoundedRect = function(ctx, x, y, width, height, radius) {
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
@@ -6410,6 +6930,9 @@
         ctx.closePath();
       };
       
+      /**
+       * Stops the video recording process and performs cleanup.
+       */
       VideoRecorder.prototype.stop = function() {
         if (!this.isRecording) return;
         
@@ -6452,6 +6975,9 @@
         }
       };
       
+      /**
+       * Cleans up any pending object URLs created during recording.
+       */
       VideoRecorder.prototype.cleanupPendingUrls = function() {
         try {
           while (this.pendingObjectUrls.length > 0) {
@@ -6463,6 +6989,9 @@
         }
       };
       
+      /**
+       * Cleans up and resets the overlay canvas used for recording.
+       */
       VideoRecorder.prototype.cleanupOverlayCanvas = function() {
         if (this.compositeCanvas) {
           this.compositeCanvas.width = 0;
@@ -6473,6 +7002,9 @@
         DBG.log('Recording cleanup completed');
       };
       
+      /**
+       * Handles actions to perform when recording is complete, such as releasing resources and showing completion UI.
+       */
       VideoRecorder.prototype.onRecordingComplete = function() {
         try {
           var totalSize = this.downloadedChunks.reduce(function(total, chunk) { 
@@ -6504,10 +7036,19 @@
         }
       };
       
+      /**
+       * Finalizes and downloads the current video chunk.
+       * @param {boolean} isFinalChunk - If true, marks this as the final chunk.
+       * @returns {Promise<void>} Resolves when download is complete.
+       */
       VideoRecorder.prototype.downloadCurrentChunk = function(isFinalChunk) {
         return this.finalizeCurrentChunk(isFinalChunk);
       };
       
+      /**
+       * Triggers download of the entire video as a single file (legacy, for small recordings).
+       * @param {Blob} blob - Video blob to download.
+       */
       VideoRecorder.prototype.downloadVideo = function(blob) {
         // Legacy method - now handled by chunked downloads
         // Only used for small files that don't exceed chunk threshold
@@ -6538,6 +7079,10 @@
       };
       
       // File size estimation and utility methods
+      /**
+       * Estimates the file size per minute for the current recording settings.
+       * @returns {number} Estimated bytes per minute.
+       */
       VideoRecorder.prototype.calculateEstimatedSize = function() {
         // Base calculation: bitrate * duration
         var bitsPerSecond = this.bitrate;
@@ -6553,6 +7098,11 @@
         return bytesPerMinute * containerOverhead * encodingOverhead;
       };
       
+      /**
+       * Formats a file size in bytes as a human-readable string.
+       * @param {number} bytes - File size in bytes.
+       * @returns {string} Human-readable file size.
+       */
       VideoRecorder.prototype.formatFileSize = function(bytes) {
         if (bytes < 1024 * 1024) {
           return Math.round(bytes / 1024) + ' KB';
@@ -6563,6 +7113,11 @@
         }
       };
       
+      /**
+       * Calculates the expected number of chunks for a given recording duration.
+       * @param {number} durationMinutes - Recording duration in minutes.
+       * @returns {number} Expected chunk count.
+       */
       VideoRecorder.prototype.calculateExpectedChunks = function(durationMinutes) {
         var estimatedTotalSize = this.estimatedSizePerMinute * durationMinutes;
         if (estimatedTotalSize <= this.CHUNK_SIZE_THRESHOLD) {
@@ -6571,6 +7126,9 @@
         return Math.ceil(estimatedTotalSize / this.CHUNK_SIZE_TARGET);
       };
       
+      /**
+       * Displays a modal dialog with instructions for reassembling chunked video files after recording.
+       */
       VideoRecorder.prototype.showCompletionMessage = function() {
         if (this.downloadedChunks.length <= 1) return; // Single file, no message needed
         
@@ -6746,6 +7304,10 @@
         });
       };
       
+      /**
+       * Displays a modal dialog with an error message if video recording initialization fails.
+       * @param {string} message - Error message to display.
+       */
       VideoRecorder.prototype.showInitError = function(message) {
         var modal = document.createElement('div');
         modal.style.position = 'fixed';
@@ -6824,6 +7386,9 @@
       
       // Removed complex canvas scaling - keep it simple and working!
       
+      /**
+       * Updates the UI with the current recording progress and bitrate.
+       */
       VideoRecorder.prototype.updateRecordingProgress = function() {
         if (!this.isRecording) return;
         
@@ -6844,6 +7409,9 @@
         }
       };
       
+      /**
+       * Shows the recording progress UI overlay.
+       */
       VideoRecorder.prototype.showRecordingProgress = function() {
         // Create progress display if it doesn't exist
         var existing = this.progressElement;
@@ -6866,6 +7434,9 @@
         this.progressElement = progressDiv;
       };
       
+      /**
+       * Hides the recording progress UI overlay.
+       */
       VideoRecorder.prototype.hideRecordingProgress = function() {
         var progressElement = this.progressElement;
         if (progressElement) {
@@ -6873,6 +7444,11 @@
         }
       };
       
+      /**
+       * Determines if a new video frame should be captured based on the target FPS.
+       * @param {number} currentTime - Current time in milliseconds.
+       * @returns {boolean} True if a frame should be captured.
+       */
       VideoRecorder.prototype.shouldCaptureFrame = function(currentTime) {
         if (!this.isRecording) return false;
         
@@ -7965,7 +8541,11 @@
       var windSpeedPoints = null;
       var windImpactPoints = null;
       
-      // Helper function to get data points for specific chart type
+      /**
+       * Returns data points for a specific chart type (elevation, biometrics, temperature, etc.).
+       * @param {string} chartType - The chart type to retrieve data for.
+       * @returns {Object} Data points for the chart.
+       */
       function getDataPointsForChart(chartType) {
         switch (chartType) {
           case 'elevation':
@@ -8024,6 +8604,10 @@
       var xMax = xVals.length > 0 ? xVals[xVals.length - 1] : 1;
       
       // Define showNoDataMessage function here where createChart can access it
+      /**
+       * Shows a message in the chart area when no data is available.
+       * @param {string} message - The message to display.
+       */
       var showNoDataMessageLocal = function(message) {
         if (chart) {
           chart.destroy();
@@ -8038,6 +8622,10 @@
       };
       
       // Define switchChartTab function here where event listeners can access it
+      /**
+       * Switches the chart to the specified tab type and updates UI accordingly.
+       * @param {string} tabType - The tab type to switch to.
+       */
       var switchChartTab = function(tabType) {
         DBG.log('Switching to tab', { tabType: tabType });
         if ((tabType === 'weathergrade' || tabType === 'weatheroverview') && !weatherGradeAvailable) {
@@ -8183,6 +8771,9 @@
       };
       
       // Initialize legend controls for All Data tab
+      /**
+       * Initializes the legend controls for the All Data tab, creating checkboxes for each data series.
+       */
       function initializeLegendControls() {
         // Clear existing controls except title
         var title = ui.chartLegend.querySelector('span');
@@ -8296,6 +8887,13 @@
       }
 
       // Helper function to calculate day/night periods
+      /**
+       * Calculates day/night periods for the track using SunCalc and timestamps.
+       * @param {Array} coordinates - Array of [lon, lat, elev] coordinates.
+       * @param {Array} timestampArray - Array of timestamp strings or numbers.
+       * @param {Array} timeOffsetsArray - Array of time offsets in seconds.
+       * @returns {Array} Array of period objects with type and timeOffset.
+       */
       function calculateDayNightPeriods(coordinates, timestampArray, timeOffsetsArray) {
         DBG.log('calculateDayNightPeriods called', {
           coordinatesLength: coordinates.length,
@@ -8424,6 +9022,11 @@
       // Weather & Grade Cinema Animation Tab
       // =====================================================================
 
+      /**
+       * Parses a value into epoch seconds, handling various formats.
+       * @param {string|number|null} value - The value to parse.
+       * @returns {number} Epoch seconds or NaN if invalid.
+       */
       function parseEpochSeconds(value) {
         if (value === null || value === undefined || value === '') return NaN;
         var num = Number(value);
@@ -8442,6 +9045,11 @@
         return NaN;
       }
 
+      /**
+       * Builds a lookup array of weather data points with time offsets for interpolation.
+       * @param {Object} payloadData - The payload containing weather data.
+       * @returns {Array} Array of weather lookup items.
+       */
       function buildWeatherLookup(payloadData) {
         if (!payloadData || !payloadData.weather) return [];
         var weather = payloadData.weather;
@@ -8486,6 +9094,12 @@
         return items;
       }
 
+      /**
+       * Interpolates weather data at a given time offset.
+       * @param {Array} weatherLookup - Array of weather lookup items.
+       * @param {number} ts - Time offset in seconds.
+       * @returns {Object|null} Interpolated weather properties or null.
+       */
       function weatherInterpolateAt(weatherLookup, ts) {
         if (!weatherLookup || !weatherLookup.length) return null;
         var n = weatherLookup.length;
@@ -8514,6 +9128,12 @@
         };
       }
 
+      /**
+       * Builds summary slices for the weather overview panel.
+       * @param {Array} weatherLookup - Array of weather lookup items.
+       * @param {number} totalDurationSec - Total duration in seconds.
+       * @returns {Array} Array of slice objects for the overview.
+       */
       function buildWeatherOverviewSlices(weatherLookup, totalDurationSec) {
         if ((!isFinite(Number(totalDurationSec)) || Number(totalDurationSec) <= 0) && Array.isArray(weatherLookup) && weatherLookup.length > 1) {
           totalDurationSec = Number(weatherLookup[weatherLookup.length - 1].timeOffset) || 0;
@@ -8647,6 +9267,13 @@
         return slices;
       }
 
+      /**
+       * Renders the weather overview panel with summary cards for each slice.
+       * @param {HTMLElement} panelEl - The panel element to render into.
+       * @param {Array} slices - Array of weather overview slices.
+       * @param {Object} i18n - Internationalization labels.
+       * @returns {number} Number of rendered cards.
+       */
       function renderWeatherOverviewPanel(panelEl, slices, i18n) {
         var rainThresh = (window.FGPX && FGPX.weatherRainThreshold != null) ? FGPX.weatherRainThreshold : 0.1;
         var windThresh = (window.FGPX && FGPX.weatherWindThreshold != null) ? FGPX.weatherWindThreshold : 3;
@@ -8720,6 +9347,11 @@
         return rendered;
       }
 
+      /**
+       * Renders the legend for the weather overview panel.
+       * @param {HTMLElement} legendEl - The legend element to render into.
+       * @param {Object} i18n - Internationalization labels.
+       */
       function renderWeatherOverviewLegend(legendEl, i18n) {
         if (!legendEl) return;
         legendEl.innerHTML = '';
@@ -8746,6 +9378,11 @@
         }
       }
 
+      /**
+       * Returns the distance along the track at a given playback time.
+       * @param {number} sec - Playback time in seconds.
+       * @returns {number} Distance in meters.
+       */
       function distanceAtPlaybackTime(sec) {
         if (!Array.isArray(timeOffsets) || timeOffsets.length < 2 || !Array.isArray(cumDist) || cumDist.length < 2) return NaN;
         if (!isFinite(Number(sec))) return NaN;
@@ -8766,6 +9403,12 @@
         return d0 + ((d1 - d0) * frac);
       }
 
+      /**
+       * Finds the photo marker nearest to the current playback time or distance.
+       * @param {number} currentTimeSec - Current playback time in seconds.
+       * @param {number} currentDistanceMeters - Current distance in meters.
+       * @returns {Object|null} Photo marker object or null.
+       */
       function getCinemaPhotoMarker(currentTimeSec, currentDistanceMeters) {
         var markerPhoto = currentDisplayedPhoto;
         var markerTimeSec = NaN;
@@ -8829,6 +9472,11 @@
         };
       }
 
+      /**
+       * Returns waypoints near the current playback distance for display in the cinema.
+       * @param {number} currentDistanceMeters - Current distance in meters.
+       * @returns {Array} Array of waypoint objects.
+       */
       function getCinemaWaypointsNear(currentDistanceMeters) {
         if (!simulationWaypointsEnabled || !Array.isArray(waypoints) || waypoints.length === 0) return [];
         
@@ -8887,6 +9535,10 @@
       // during playback. queryRenderedFeatures only sees tiles currently in the viewport,
       // so this must be called repeatedly as playback progresses.
       var _placeLayers = null; // cached place-label layer ids from the current style
+      /**
+       * Returns an array of place/label layer IDs from the current map style.
+       * @returns {Array|null} Array of layer IDs or null.
+       */
       function _getPlaceLayers() {
         if (_placeLayers) return _placeLayers;
         try {
@@ -8910,6 +9562,9 @@
         return _placeLayers;
       }
 
+      /**
+       * Precomputes city features from the current map viewport and caches them for simulation.
+       */
       function precomputeMapCities() {
         if (!simulationCitiesEnabled || !map || !coords || coords.length === 0) return;
         try {
@@ -8985,6 +9640,11 @@
         }
       }
 
+      /**
+       * Returns city features near the current playback distance for display in the cinema.
+       * @param {number} currentDistanceMeters - Current distance in meters.
+       * @returns {Array} Array of city objects.
+       */
       function getCinemaCitiesNear(currentDistanceMeters) {
         if (!simulationCitiesEnabled || !Array.isArray(mapCities) || mapCities.length === 0) return [];
         
@@ -9002,6 +9662,11 @@
         return citiesInWindow;
       }
 
+      /**
+       * Converts a temperature in Celsius to an HSL color string for background coloring.
+       * @param {number} tempC - Temperature in Celsius.
+       * @returns {string} HSL color string.
+       */
       function tempToHsl(tempC) {
         var t = Math.max(-20, Math.min(40, Number(tempC) || 15));
         var norm = (t + 20) / 60;
@@ -9011,6 +9676,12 @@
         return 'hsl(' + Math.round(hue) + ',' + Math.round(sat) + '%,' + Math.round(light) + '%)';
       }
 
+      /**
+       * Determines if a given timestamp and coordinate is during nighttime using SunCalc.
+       * @param {number} ts - Time offset in seconds.
+       * @param {Array} coordsArr - Array of coordinates.
+       * @returns {boolean} True if nighttime, false otherwise.
+       */
       function isNighttime(ts, coordsArr) {
         if (!window.SunCalc || !coordsArr || !coordsArr.length || !timestamps || !timestamps.length) return false;
         var idx = 0;
@@ -9040,6 +9711,10 @@
         }
       }
 
+      /**
+       * Returns the floating tooltip element for weather overlays, creating it if needed.
+       * @returns {HTMLElement} Tooltip element.
+       */
       function getWeatherFloatingTooltipEl() {
         var tooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
         if (!tooltipEl) {
@@ -9054,6 +9729,9 @@
         return tooltipEl;
       }
 
+      /**
+       * Hides the weather floating tooltip if it exists.
+       */
       function hideWeatherFloatingTooltip() {
         var tooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
         if (!tooltipEl) return;
@@ -9063,6 +9741,13 @@
         tooltipEl._target = null;
       }
 
+      /**
+       * Shows the weather floating tooltip near the target element.
+       * @param {HTMLElement} targetEl - The element to anchor the tooltip to.
+       * @param {string} text - Tooltip text.
+       * @param {number} clientX - X coordinate for positioning.
+       * @param {number} clientY - Y coordinate for positioning.
+       */
       function showWeatherFloatingTooltip(targetEl, text, clientX, clientY) {
         if (!targetEl || !text) return;
         var tooltipEl = getWeatherFloatingTooltipEl();
@@ -9099,6 +9784,10 @@
         tooltipEl._target = targetEl;
       }
 
+      /**
+       * Binds floating tooltip events to a target element for weather overlays.
+       * @param {HTMLElement} targetEl - The element to bind events to.
+       */
       function bindWeatherFloatingTooltip(targetEl) {
         if (!targetEl) return;
         var getTooltipText = function() {
@@ -9118,6 +9807,14 @@
         targetEl.addEventListener('blur', hideWeatherFloatingTooltip);
       }
 
+      /**
+       * Creates the weather cinema overlay element and legend for the simulation tab.
+       * @param {HTMLElement} containerEl - The container element.
+       * @param {Object} payloadData - Weather payload data.
+       * @param {number} currentTimeSec - Current playback time in seconds.
+       * @param {boolean} isCurrentlyPlaying - Whether playback is active.
+       * @returns {HTMLElement} The created cinema element.
+       */
       function createWeatherCinema(containerEl, payloadData, currentTimeSec, isCurrentlyPlaying) {
         var i18n = (window.FGPX && FGPX.i18n) ? FGPX.i18n : {};
         var cinema = document.createElement('div');
@@ -9276,6 +9973,14 @@
         return cinema;
       }
 
+      /**
+       * Updates the weather cinema overlay with current playback state and weather data.
+       * @param {HTMLElement} cinemaEl - The cinema element.
+       * @param {Object} payloadData - Weather payload data.
+       * @param {number} currentTimeSec - Current playback time in seconds.
+       * @param {boolean} isCurrentlyPlaying - Whether playback is active.
+       * @param {boolean} forceUpdate - Force update even if throttled.
+       */
       function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate) {
         if (!cinemaEl || cinemaEl.style.display === 'none') return;
         var floatingTooltipEl = document.getElementById('fgpx-weather-floating-tooltip');
@@ -9925,6 +10630,10 @@
       }
 
       // Assign the chart creation function to the variable declared in UI scope
+      /**
+       * Creates and renders the chart for the specified tab type.
+       * @param {string} tabType - The chart tab type to render.
+       */
       createChart = function(tabType) {
         // ========== LAZY LOADING: LOAD DATA ON DEMAND ==========
         var startTime = performance.now();
@@ -11767,6 +12476,9 @@
       var swayLastBearing = null; // last applied bearing for smooth stop
       var swayActive = false;
 
+      /**
+       * Starts the idle sway animation for the camera bearing when paused.
+       */
       function startIdleSway() {
         if (swayActive) return;
         swayActive = true;
@@ -11818,6 +12530,9 @@
         swayRafId = requestAnimationFrame(swayFrame);
       }
 
+      /**
+       * Stops the idle sway animation for the camera bearing.
+       */
       function stopIdleSway() {
         swayActive = false;
         if (swayRafId) {
@@ -11831,6 +12546,11 @@
       registerTeardown(function() { stopIdleSway(); });
 
       // Consolidated camera state sync helpers — replace duplicate inline code
+      /**
+       * Synchronizes the camera state to the given center and bearing.
+       * @param {Array} center - [lng, lat] camera center.
+       * @param {number} brg - Bearing in degrees.
+       */
       function syncCameraState(center, brg) {
         cameraCenter[0] = center[0];
         cameraCenter[1] = center[1];
@@ -11843,6 +12563,9 @@
         cameraJumpStreak = 0;
       }
 
+      /**
+       * Synchronizes the camera state from the current map view.
+       */
       function syncCameraStateFromMap() {
         try {
           if (typeof map.getCenter === 'function') {
@@ -11870,6 +12593,9 @@
       // Apply rendering optimizations for playback: zero tile fades, allow label overlap.
       // Called once before the intro easeTo so that MapLibre settles layout during the
       // 3.5s zoom animation, preventing any visible label-shift at countdown start.
+      /**
+       * Applies rendering optimizations for playback (tile fade, label overlap, etc.).
+       */
       function applyPlaybackLayerOptimizations() {
         try {
           if (map.style && typeof map.style.fadeDuration !== 'undefined') {
@@ -11894,6 +12620,11 @@
         } catch(_) {}
       }
 
+      /**
+       * Calculates the target bearing at a given distance along the track.
+       * @param {number} d - Distance in meters.
+       * @returns {number} Bearing in degrees.
+       */
       function targetBearingAtDistance(d) {
         try {
           var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
@@ -11918,6 +12649,12 @@
         } catch(_) { return 0; }
       }
 
+      /**
+       * Calculates the camera target position at a given distance and lookahead factor.
+       * @param {number} d - Distance in meters.
+       * @param {number} lookaheadFactor - Lookahead factor (0..1).
+       * @returns {Array} [lng, lat] camera target.
+       */
       function cameraTargetAtDistance(d, lookaheadFactor) {
         try {
           var dMaxAhead = privacyEnabled ? privacyEndD : totalDistance;
@@ -11933,6 +12670,11 @@
         }
       }
 
+      /**
+       * Returns the time offset at a given distance along the track.
+       * @param {number} dMeters - Distance in meters.
+       * @returns {number} Time offset in seconds.
+       */
       function timeOffsetAtDistance(dMeters) {
         try {
           if (!hasTimestamps || !Array.isArray(timeOffsets) || !Array.isArray(cumDist) || timeOffsets.length < 2 || cumDist.length < 2) {
@@ -11957,6 +12699,11 @@
         }
       }
 
+      /**
+       * Returns the distance along the track at a given time offset.
+       * @param {number} tSeconds - Time offset in seconds.
+       * @returns {number} Distance in meters.
+       */
       function distanceAtTimeOffset(tSeconds) {
         try {
           if (!hasTimestamps || !Array.isArray(timeOffsets) || !Array.isArray(cumDist) || timeOffsets.length < 2 || cumDist.length < 2) {
@@ -11983,6 +12730,9 @@
 
 
 
+      /**
+       * Animates zoom-in and starts playback, prefetching tiles and handling countdown.
+       */
       function zoomInThenStartPlayback() {
         DBG.log('zoomInThenStartPlayback trigger');
         if (playStartTrace && playStartTrace.startedAt) {
@@ -12129,6 +12879,10 @@
         }
       }
 
+      /**
+       * Sets the playing state (play/pause) and updates UI and animation accordingly.
+       * @param {boolean} p - True to play, false to pause.
+       */
       function setPlaying(p) {
         if (playing !== p) { DBG.log('playback state change', { playing: p }); }
         playing = p;
@@ -12213,6 +12967,9 @@
         }
       }
       
+      /**
+       * Updates the enabled/disabled state of playback and recording buttons.
+       */
       function updateButtonStates() {
         // Update button states based on current playback, preloading, and recording state
         ui.controls.btnPlay.disabled = playing || preloadingInProgress || isRecording;
@@ -12221,6 +12978,9 @@
         ui.controls.btnRecord.disabled = preloadingInProgress;
       }
 
+      /**
+       * Resets the player state to the initial position and updates all visuals.
+       */
       function reset() {
         DBG.log('reset() invoked');
         stopIdleSway();
@@ -12316,6 +13076,10 @@
         } catch(_) {}
       }
 
+      /**
+       * Sets the progress bar width based on playback progress.
+       * @param {number} p - Progress (0..1).
+       */
       function setProgressBar(p) {
         if (privacyEnabled) {
           var d = Math.max(0, Math.min(1, p)) * totalDistance;
@@ -12327,6 +13091,11 @@
         }
       }
 
+      /**
+       * Calculates the bounding box from an array of coordinates.
+       * @param {Array} cs - Array of [lng, lat] coordinates.
+       * @returns {Array} Bounding box [[minLon, minLat], [maxLon, maxLat]].
+       */
       function boundsFromCoords(cs) {
         var minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
         for (var i = 0; i < cs.length; i++) {
@@ -12340,6 +13109,12 @@
       // removed duplicate positionAtDistance (defined earlier)
 
       // Smooth a polyline using Catmull–Rom splines to reduce abrupt angles
+      /**
+       * Smooths a polyline using Catmull–Rom splines.
+       * @param {Array} points - Array of [lng, lat] points.
+       * @param {number} samplesPerSegment - Number of samples per segment.
+       * @returns {Array} Smoothed array of points.
+       */
       function smoothPolyline(points, samplesPerSegment) {
         try {
           var n = Array.isArray(points) ? points.length : 0;
@@ -12378,6 +13153,11 @@
         }
       }
 
+      /**
+       * Converts a bearing in degrees to a cardinal direction string.
+       * @param {number} deg - Bearing in degrees.
+       * @returns {string} Cardinal direction.
+       */
       function bearingToCardinal(deg) {
         try {
           var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
@@ -12386,6 +13166,13 @@
         } catch(_) { return 'N'; }
       }
 
+      /**
+       * Returns playback cadence parameters based on speed, terrain, and tab.
+       * @param {number} speedMul - Speed multiplier.
+       * @param {boolean} terrainOn - Whether terrain is enabled.
+       * @param {string} tabName - Current tab name.
+       * @returns {Object} Cadence parameters.
+       */
       function getPlaybackCadence(speedMul, terrainOn, tabName) {
         var tier = (speedMul >= 80) ? 2 : ((speedMul >= 40) ? 1 : 0);
         var progressIntervals = terrainOn ? [0.12, 0.14, 0.16] : [0.08, 0.09, 0.11];
@@ -12422,6 +13209,11 @@
         };
       }
 
+      /**
+       * Updates all visuals (marker, camera, overlays, chart, HUD) for the current playback progress.
+       * @param {number} p - Playback progress (0..1).
+       * @param {Object} cadence - Playback cadence parameters.
+       */
       function updateVisuals(p, cadence) {
         // Clamp progress to privacy window if enabled
         if (privacyEnabled) {
@@ -12981,6 +13773,9 @@
         }
       }
 
+      /**
+       * Schedules the next animation frame for playback.
+       */
       function scheduleRaf() {
         if (!document.contains(root)) {
           destroyRuntime();
@@ -12991,6 +13786,10 @@
         }
       }
 
+      /**
+       * Main animation frame callback for playback loop.
+       * @param {number} ts - Timestamp in ms.
+       */
       function raf(ts) {
         rafId = null;
         if (!document.contains(root)) {
@@ -13267,6 +14066,9 @@
       }
 
       // Recording functions
+      /**
+       * Starts video recording, showing the quality selection modal and initializing the recorder.
+       */
       function startRecording() {
         if (isRecording || preloadingInProgress) return;
         
@@ -13355,6 +14157,9 @@
         });
       }
       
+      /**
+       * Stops video recording and updates UI state.
+       */
       function stopRecording() {
         if (!isRecording || !videoRecorder) return;
         
@@ -13380,6 +14185,10 @@
       }
       
       // Calculate track duration for recording estimates (respects playback speed)
+      /**
+       * Calculates the track duration in minutes for recording estimates.
+       * @returns {number} Track duration in minutes.
+       */
       function calculateTrackDuration() {
         // Get current speed from UI (in case user changed it)
         var currentSpeed = speed;
@@ -13458,11 +14267,23 @@
         return 3 / currentSpeed; // fallback adjusted for speed
       }
 
+      /**
+       * Estimates the expected file size in MB for a given preset and track duration.
+       * @param {string} presetKey - Quality preset key.
+       * @param {number} trackDurationMinutes - Track duration in minutes.
+       * @returns {number} Estimated size in MB.
+       */
       function estimateExpectedSizeMbForPreset(presetKey, trackDurationMinutes) {
         var preset = VIDEO_QUALITY_PRESETS[presetKey] || VIDEO_QUALITY_PRESETS.medium;
         return (preset.bitrate / 8 * 60 * 1.3 * trackDurationMinutes) / (1024 * 1024);
       }
 
+      /**
+       * Estimates the expected number of output chunks for a given preset and track duration.
+       * @param {string} presetKey - Quality preset key.
+       * @param {number} trackDurationMinutes - Track duration in minutes.
+       * @returns {number} Estimated chunk count.
+       */
       function estimateExpectedChunkCount(presetKey, trackDurationMinutes) {
         var estimatedSizeMb = estimateExpectedSizeMbForPreset(presetKey, trackDurationMinutes);
         if (estimatedSizeMb <= 250) {
@@ -13471,6 +14292,11 @@
         return Math.ceil(estimatedSizeMb / 200);
       }
 
+      /**
+       * Chooses the recording output mode (download or directory) based on expected chunk count and browser support.
+       * @param {number} expectedChunkCount - Expected number of output chunks.
+       * @returns {Promise<Object>} Promise resolving to output config.
+       */
       function chooseRecordingOutput(expectedChunkCount) {
         if (expectedChunkCount <= 1) {
           return Promise.resolve({ mode: 'download', directoryHandle: null });
@@ -13494,6 +14320,10 @@
       }
       
       // Quality selection modal
+      /**
+       * Shows the recording settings modal and resolves with the selected options.
+       * @returns {Promise<Object>} Promise resolving to modal selection.
+       */
       function showRecordingSettingsModal() {
         return new Promise(function(resolve, reject) {
           try {
@@ -13522,6 +14352,12 @@
         });
       }
       
+      /**
+       * Creates the DOM for the recording settings modal.
+       * @param {Function} resolve - Callback to resolve the modal.
+       * @param {number} trackDurationMinutes - Track duration in minutes.
+       * @returns {HTMLElement} The modal element.
+       */
       function createRecordingSettingsModal(resolve, trackDurationMinutes) {
         var modal = document.createElement('div');
         modal.className = 'fgpx-recording-settings-modal';
@@ -13738,6 +14574,11 @@
         }
       });
 
+      /**
+       * Checks if the map style supports glyphs for weather text layers.
+       * @param {boolean} logResult - Whether to log the result.
+       * @returns {boolean} True if supported, false otherwise.
+       */
       function refreshWeatherTextLayerSupport(logResult) {
         if (weatherTextLayersSupported === true) return true;
         var hasGlyphs = false;
@@ -13757,6 +14598,9 @@
         return hasGlyphs;
       }
 
+      /**
+       * Ensures the temperature text layer is present on the map.
+       */
       function ensureTemperatureTextLayer() {
         if (!refreshWeatherTextLayerSupport(false)) return;
         try {
@@ -13803,6 +14647,9 @@
         }
       }
 
+      /**
+       * Ensures the wind text layer is present on the map.
+       */
       function ensureWindTextLayer() {
         if (!refreshWeatherTextLayerSupport(false)) return;
         try {
@@ -13870,6 +14717,9 @@
         }
       }
 
+      /**
+       * Ensures the wind satellite arrow layers are present on the map.
+       */
       function ensureWindSatelliteLayers() {
         if (!windSatelliteLayersEnabled) return;
         try {
@@ -13972,6 +14822,10 @@
         }
       }
 
+      /**
+       * Applies the weather overlay profile (visibility, performance mode, etc.) to all weather layers.
+       * @param {boolean} force - Force update even if state unchanged.
+       */
       function applyWeatherOverlayProfile(force) {
         if (!effectiveWeatherEnabled || !weatherData || !weatherData.features || !Array.isArray(weatherData.features) || weatherData.features.length === 0) {
           return;
@@ -14279,6 +15133,10 @@
         });
       }
 
+      /**
+       * Handles keydown events for the player (e.g., spacebar play/pause).
+       * @param {KeyboardEvent} e - The keydown event.
+       */
       var onPlayerKeydown = function (e) {
         if (!document.contains(root)) return;
         if (e.code === 'Space') {
@@ -14301,6 +15159,10 @@
       registerTeardown(function() { window.removeEventListener('keydown', onPlayerKeydown); });
 
       // Click-to-seek on progress bar: move to point in playback and reveal route up to there
+      /**
+       * Seeks playback to the specified fraction of the track.
+       * @param {number} frac - Fraction (0..1) of the track.
+       */
       function seekToFraction(frac) {
         var f = Math.max(0, Math.min(1, frac));
         // Map to privacy window
@@ -14480,6 +15342,11 @@
       } catch (_) {}
 
       // Helper function to fit map bounds consistently
+      /**
+       * Fits the map view to the track bounds with optional camera options.
+       * @param {number} duration - Animation duration in ms.
+       * @param {Object} cameraOpts - Camera options (pitch, bearing, etc.).
+       */
       function fitMapToBounds(duration, cameraOpts) {
         duration = duration || 0;
         cameraOpts = cameraOpts || null;
