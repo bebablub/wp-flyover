@@ -2,18 +2,25 @@
   'use strict';
 
   function loadStyles(urls) {
-    return Promise.all((urls || []).map(function (u) {
-      return new Promise(function (resolve) {
-        if (!u) return resolve();
-        if ([].slice.call(document.styleSheets).some(function (ss) { return (ss.href || '') === u; })) return resolve();
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = u;
-        link.onload = resolve;
-        link.onerror = resolve;
-        document.head.appendChild(link);
-      });
-    }));
+    return Promise.all(
+      (urls || []).map(function (u) {
+        return new Promise(function (resolve) {
+          if (!u) return resolve();
+          if (
+            [].slice.call(document.styleSheets).some(function (ss) {
+              return (ss.href || '') === u;
+            })
+          )
+            return resolve();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = u;
+          link.onload = resolve;
+          link.onerror = resolve;
+          document.head.appendChild(link);
+        });
+      })
+    );
   }
 
   function loadScriptsSequential(urls) {
@@ -21,7 +28,12 @@
       return promise.then(function () {
         return new Promise(function (resolve, reject) {
           if (!url) return resolve();
-          if ([].slice.call(document.scripts).some(function (script) { return (script.src || '') === url; })) return resolve();
+          if (
+            [].slice.call(document.scripts).some(function (script) {
+              return (script.src || '') === url;
+            })
+          )
+            return resolve();
           var script = document.createElement('script');
           script.src = url;
           script.async = false;
@@ -42,9 +54,9 @@
   function applyPlayerConfig(cfg) {
     var playerConfig = cfg.playerConfig || {};
     if (window.FGPX && window.FGPX.debugEnabled) {
-      console.log('[FGPX Gallery] applyPlayerConfig - BEFORE', { 
+      console.log('[FGPX Gallery] applyPlayerConfig - BEFORE', {
         globalPhotosEnabled: window.FGPX.photosEnabled,
-        playerConfig: playerConfig 
+        playerConfig: playerConfig,
       });
     }
     var forceOverrideKeys = {
@@ -57,7 +69,7 @@
       simulationWaypointsEnabled: true,
       simulationCitiesEnabled: true,
       simulationWaypointWindowKm: true,
-      simulationCityWindowKm: true
+      simulationCityWindowKm: true,
     };
     window.FGPX = window.FGPX || {};
     for (var key in playerConfig) {
@@ -73,9 +85,9 @@
       window.FGPX.photoOrderMode = playerConfig.photoOrderMode;
     }
     if (window.FGPX && window.FGPX.debugEnabled) {
-      console.log('[FGPX Gallery] applyPlayerConfig - AFTER', { 
+      console.log('[FGPX Gallery] applyPlayerConfig - AFTER', {
         globalPhotosEnabled: window.FGPX.photosEnabled,
-        globalPhotoOrderMode: window.FGPX.photoOrderMode
+        globalPhotoOrderMode: window.FGPX.photoOrderMode,
       });
     }
   }
@@ -87,7 +99,9 @@
     }
     if (!window.__FGPXGalleryPlayerAssetsPromise) {
       window.__FGPXGalleryPlayerAssetsPromise = loadStyles(cfg.playerStyles || [])
-        .then(function () { return loadScriptsSequential(cfg.playerScripts || []); })
+        .then(function () {
+          return loadScriptsSequential(cfg.playerScripts || []);
+        })
         .then(function () {
           applyPlayerConfig(cfg);
           if (!window.FGPX || typeof window.FGPX.initContainer !== 'function') {
@@ -139,15 +153,18 @@
     var failedLabel = strings.copyFailed || 'Copy failed';
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(shortcode).then(function () {
-        setCopyButtonState(copyBtn, successLabel, resetLabel);
-      }).catch(function () {
-        if (fallbackCopyText(shortcode)) {
+      navigator.clipboard
+        .writeText(shortcode)
+        .then(function () {
           setCopyButtonState(copyBtn, successLabel, resetLabel);
-          return;
-        }
-        setCopyButtonState(copyBtn, failedLabel, resetLabel);
-      });
+        })
+        .catch(function () {
+          if (fallbackCopyText(shortcode)) {
+            setCopyButtonState(copyBtn, successLabel, resetLabel);
+            return;
+          }
+          setCopyButtonState(copyBtn, failedLabel, resetLabel);
+        });
       return;
     }
 
@@ -161,7 +178,10 @@
 
   function renderPlayerError(panel, mount, title, strings) {
     if (mount) {
-      mount.innerHTML = '<div class="fgpx-gallery-empty">' + escHtml(strings.playerLoadFailed || 'Could not load the track player.') + '</div>';
+      mount.innerHTML =
+        '<div class="fgpx-gallery-empty">' +
+        escHtml(strings.playerLoadFailed || 'Could not load the track player.') +
+        '</div>';
     }
     if (panel) {
       panel.hidden = false;
@@ -180,7 +200,7 @@
       return;
     }
 
-    var playerConfig = (cfg && cfg.playerConfig) ? cfg.playerConfig : {};
+    var playerConfig = cfg && cfg.playerConfig ? cfg.playerConfig : {};
     var mode = String(playerConfig.themeMode || 'system');
 
     if (root.__fgpxGalleryThemeTimer) {
@@ -235,11 +255,10 @@
       root.setAttribute('data-fgpx-theme', inDark ? 'dark' : 'light');
 
       var nextBoundaryMins = inDark
-        ? ((endMins - nowMins + 1440) % 1440)
-        : ((startMins - nowMins + 1440) % 1440);
-      var msUntilNext = (nextBoundaryMins * 60 * 1000)
-        - (now.getSeconds() * 1000)
-        - now.getMilliseconds();
+        ? (endMins - nowMins + 1440) % 1440
+        : (startMins - nowMins + 1440) % 1440;
+      var msUntilNext =
+        nextBoundaryMins * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
       if (msUntilNext <= 0) {
         msUntilNext += 24 * 60 * 60 * 1000;
       }
@@ -271,7 +290,9 @@
   }
 
   function normalize(str) {
-    return String(str || '').toLowerCase().trim();
+    return String(str || '')
+      .toLowerCase()
+      .trim();
   }
 
   function getSearchText(track) {
@@ -280,12 +301,21 @@
     }
 
     track._searchText = normalize(
-      String(track.title || '')
-      + ' '
-      + String(track.keywords || '')
-      + ' distance ' + String(track.distanceKm || '') + 'km ' + String(track.distanceKm || '') + ' km'
-      + ' duration ' + String(track.durationLabel || '')
-      + ' elevation gain ' + String(track.elevationGainLabel || '') + 'm ' + String(track.elevationGainLabel || '') + ' m'
+      String(track.title || '') +
+        ' ' +
+        String(track.keywords || '') +
+        ' distance ' +
+        String(track.distanceKm || '') +
+        'km ' +
+        String(track.distanceKm || '') +
+        ' km' +
+        ' duration ' +
+        String(track.durationLabel || '') +
+        ' elevation gain ' +
+        String(track.elevationGainLabel || '') +
+        'm ' +
+        String(track.elevationGainLabel || '') +
+        ' m'
     );
 
     return track._searchText;
@@ -323,22 +353,32 @@
   function sortTracks(items, sortKey) {
     var out = items.slice();
     if (sortKey === 'distance') {
-      out.sort(function (a, b) { return Number(b.distanceKm) - Number(a.distanceKm); });
+      out.sort(function (a, b) {
+        return Number(b.distanceKm) - Number(a.distanceKm);
+      });
       return out;
     }
     if (sortKey === 'duration') {
-      out.sort(function (a, b) { return Number(b.durationS) - Number(a.durationS); });
+      out.sort(function (a, b) {
+        return Number(b.durationS) - Number(a.durationS);
+      });
       return out;
     }
     if (sortKey === 'gain') {
-      out.sort(function (a, b) { return Number(b.elevationGainM) - Number(a.elevationGainM); });
+      out.sort(function (a, b) {
+        return Number(b.elevationGainM) - Number(a.elevationGainM);
+      });
       return out;
     }
     if (sortKey === 'title') {
-      out.sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
+      out.sort(function (a, b) {
+        return String(a.title).localeCompare(String(b.title));
+      });
       return out;
     }
-    out.sort(function (a, b) { return Number(b.dateTs) - Number(a.dateTs); });
+    out.sort(function (a, b) {
+      return Number(b.dateTs) - Number(a.dateTs);
+    });
     return out;
   }
 
@@ -347,27 +387,61 @@
     var imageUrl = String(track.previewImageUrl || '');
     var visual;
     if (imageUrl) {
-      visual = '<div class="fgpx-gallery-card-visual">'
-        + '<img class="fgpx-gallery-card-image" src="' + escHtml(imageUrl) + '" alt="' + escHtml(track.title || 'Track preview') + '" loading="lazy" decoding="async" />'
-        + '<div class="fgpx-gallery-card-icon" aria-hidden="true">⛰</div>'
-        + '</div>';
+      visual =
+        '<div class="fgpx-gallery-card-visual">' +
+        '<img class="fgpx-gallery-card-image" src="' +
+        escHtml(imageUrl) +
+        '" alt="' +
+        escHtml(track.title || 'Track preview') +
+        '" loading="lazy" decoding="async" />' +
+        '<div class="fgpx-gallery-card-icon" aria-hidden="true">⛰</div>' +
+        '</div>';
     } else {
-      visual = '<div class="fgpx-gallery-card-visual is-fallback"><div class="fgpx-gallery-card-icon" aria-hidden="true">⛰</div></div>';
+      visual =
+        '<div class="fgpx-gallery-card-visual is-fallback"><div class="fgpx-gallery-card-icon" aria-hidden="true">⛰</div></div>';
     }
-    var meta = '<div class="fgpx-gallery-card-meta">'
-      + '<span><strong>' + escHtml(strings.distance) + ':</strong> ' + escHtml(track.distanceKm) + ' km</span>'
-      + '<span><strong>' + escHtml(strings.duration) + ':</strong> ' + escHtml(track.durationLabel) + '</span>'
-      + '<span><strong>' + escHtml(strings.gain) + ':</strong> ' + escHtml(track.elevationGainLabel) + ' m</span>'
-      + '<span><strong>' + escHtml(strings.uploaded) + ':</strong> ' + escHtml(track.dateLabel) + '</span>'
-      + '</div>';
+    var meta =
+      '<div class="fgpx-gallery-card-meta">' +
+      '<span><strong>' +
+      escHtml(strings.distance) +
+      ':</strong> ' +
+      escHtml(track.distanceKm) +
+      ' km</span>' +
+      '<span><strong>' +
+      escHtml(strings.duration) +
+      ':</strong> ' +
+      escHtml(track.durationLabel) +
+      '</span>' +
+      '<span><strong>' +
+      escHtml(strings.gain) +
+      ':</strong> ' +
+      escHtml(track.elevationGainLabel) +
+      ' m</span>' +
+      '<span><strong>' +
+      escHtml(strings.uploaded) +
+      ':</strong> ' +
+      escHtml(track.dateLabel) +
+      '</span>' +
+      '</div>';
 
-    return '<article class="fgpx-gallery-card' + (listMode ? ' fgpx-gallery-card-list' : '') + (isActive ? ' is-active' : '') + '" aria-current="' + (isActive ? 'true' : 'false') + '" data-track-id="' + escHtml(track.id) + '" role="button" tabindex="0">'
-      + visual
-      + '<div class="fgpx-gallery-card-main">'
-      + '<h3 class="fgpx-gallery-card-title">' + escHtml(track.title) + '</h3>'
-      + meta
-      + '</div>'
-      + '</article>';
+    return (
+      '<article class="fgpx-gallery-card' +
+      (listMode ? ' fgpx-gallery-card-list' : '') +
+      (isActive ? ' is-active' : '') +
+      '" aria-current="' +
+      (isActive ? 'true' : 'false') +
+      '" data-track-id="' +
+      escHtml(track.id) +
+      '" role="button" tabindex="0">' +
+      visual +
+      '<div class="fgpx-gallery-card-main">' +
+      '<h3 class="fgpx-gallery-card-title">' +
+      escHtml(track.title) +
+      '</h3>' +
+      meta +
+      '</div>' +
+      '</article>'
+    );
   }
 
   function buildUrl(base, params) {
@@ -386,12 +460,15 @@
       });
       return url.toString();
     } catch (_) {
-      var query = Object.keys(params || {}).filter(function (key) {
-        var value = params[key];
-        return value !== null && typeof value !== 'undefined' && value !== '';
-      }).map(function (key) {
-        return encodeURIComponent(key) + '=' + encodeURIComponent(String(params[key]));
-      }).join('&');
+      var query = Object.keys(params || {})
+        .filter(function (key) {
+          var value = params[key];
+          return value !== null && typeof value !== 'undefined' && value !== '';
+        })
+        .map(function (key) {
+          return encodeURIComponent(key) + '=' + encodeURIComponent(String(params[key]));
+        })
+        .join('&');
       if (!query) {
         return String(base);
       }
@@ -436,24 +513,34 @@
         return Promise.reject(new Error('No gallery endpoint available.'));
       }
       if (window.FGPX && window.FGPX.debugEnabled) {
-        console.log('[FGPX Gallery] Trying endpoint', { index: index, url: urls[index], isAjax: urls[index].indexOf('admin-ajax.php') !== -1 });
+        console.log('[FGPX Gallery] Trying endpoint', {
+          index: index,
+          url: urls[index],
+          isAjax: urls[index].indexOf('admin-ajax.php') !== -1,
+        });
       }
-      return fetchJson(urls[index]).then(function(json) {
-        if (window.FGPX && window.FGPX.debugEnabled) {
-          console.log('[FGPX Gallery] Endpoint success', { 
-            index: index, 
-            url: urls[index], 
-            isAjax: urls[index].indexOf('admin-ajax.php') !== -1,
-            payload: json 
-          });
-        }
-        return json;
-      }).catch(function (err) {
-        if (window.FGPX && window.FGPX.debugEnabled) {
-          console.warn('[FGPX Gallery] Endpoint failed', { index: index, url: urls[index], error: err });
-        }
-        return tryUrl(index + 1);
-      });
+      return fetchJson(urls[index])
+        .then(function (json) {
+          if (window.FGPX && window.FGPX.debugEnabled) {
+            console.log('[FGPX Gallery] Endpoint success', {
+              index: index,
+              url: urls[index],
+              isAjax: urls[index].indexOf('admin-ajax.php') !== -1,
+              payload: json,
+            });
+          }
+          return json;
+        })
+        .catch(function (err) {
+          if (window.FGPX && window.FGPX.debugEnabled) {
+            console.warn('[FGPX Gallery] Endpoint failed', {
+              index: index,
+              url: urls[index],
+              error: err,
+            });
+          }
+          return tryUrl(index + 1);
+        });
     }
 
     return tryUrl(0);
@@ -493,7 +580,10 @@
       }
 
       var staggerIndex = index - fromIndex;
-      card.style.setProperty('--fgpx-gallery-reveal-delay', String(Math.min(staggerIndex, 7) * 45) + 'ms');
+      card.style.setProperty(
+        '--fgpx-gallery-reveal-delay',
+        String(Math.min(staggerIndex, 7) * 45) + 'ms'
+      );
       card.classList.add('fgpx-gallery-card-reveal');
     });
   }
@@ -502,7 +592,10 @@
     if (results) {
       results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
       if (isLoading && resetResults) {
-        results.innerHTML = '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span><span class="fgpx-gallery-loading-label">' + escHtml(strings.loading || 'Loading tracks...') + '</span></div>';
+        results.innerHTML =
+          '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span><span class="fgpx-gallery-loading-label">' +
+          escHtml(strings.loading || 'Loading tracks...') +
+          '</span></div>';
       }
     }
 
@@ -540,25 +633,45 @@
 
     function renderPlayer() {
       var playerId = 'fgpx-gallery-player-' + String(track.id) + '-' + String(Date.now());
-      mount.innerHTML = '<div id="' + playerId + '" class="fgpx" style="height:' + escHtml(cfg.playerHeight || '636px') + '" data-track-id="' + escHtml(track.id) + '" data-style="' + escHtml(cfg.playerStyle || 'raster') + '" data-style-url="' + escHtml(cfg.playerStyleUrl || '') + '"></div>';
+      mount.innerHTML =
+        '<div id="' +
+        playerId +
+        '" class="fgpx" style="height:' +
+        escHtml(cfg.playerHeight || '636px') +
+        '" data-track-id="' +
+        escHtml(track.id) +
+        '" data-style="' +
+        escHtml(cfg.playerStyle || 'raster') +
+        '" data-style-url="' +
+        escHtml(cfg.playerStyleUrl || '') +
+        '"></div>';
 
       // Set per-player instance override for gallery photo enrichment strategy
       if (!window.FGPX.instances) {
         window.FGPX.instances = {};
       }
       var autoSpeedOverride = {};
-      if (cfg.autoSpeedEnabled && track.distanceKm && Number(track.distanceKm) > Number(cfg.autoSpeedThresholdKm || 200)) {
+      if (
+        cfg.autoSpeedEnabled &&
+        track.distanceKm &&
+        Number(track.distanceKm) > Number(cfg.autoSpeedThresholdKm || 200)
+      ) {
         autoSpeedOverride = { defaultSpeed: Number(cfg.autoSpeedValue) || 100 };
       }
-      window.FGPX.instances[playerId] = Object.assign({}, cfg.playerConfig || {}, autoSpeedOverride, {
-        galleryPhotoStrategy: 'latest_embed',
-        gpxDownloadUrl: track.gpxDownloadUrl || ''
-      });
+      window.FGPX.instances[playerId] = Object.assign(
+        {},
+        cfg.playerConfig || {},
+        autoSpeedOverride,
+        {
+          galleryPhotoStrategy: 'latest_embed',
+          gpxDownloadUrl: track.gpxDownloadUrl || '',
+        }
+      );
 
       if (window.FGPX && window.FGPX.debugEnabled) {
         console.log('[FGPX Gallery] renderPlayer - instance config', {
           playerId: playerId,
-          config: window.FGPX.instances[playerId]
+          config: window.FGPX.instances[playerId],
         });
       }
 
@@ -590,10 +703,13 @@
     if (window.FGPX && typeof window.FGPX.initContainer === 'function') {
       renderPlayer();
     } else {
-      mount.innerHTML = '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span></div>';
-      ensurePlayerAssets(cfg).then(renderPlayer).catch(function () {
-        renderPlayerError(panel, mount, title, strings);
-      });
+      mount.innerHTML =
+        '<div class="fgpx-gallery-loading"><span class="fgpx-gallery-spinner" aria-hidden="true"></span></div>';
+      ensurePlayerAssets(cfg)
+        .then(renderPlayer)
+        .catch(function () {
+          renderPlayerError(panel, mount, title, strings);
+        });
     }
 
     var pageUrl = shareUrlBaseWithHash(track.id);
@@ -632,7 +748,7 @@
     var resolvedPerPage = resolvePerPageValue();
 
     var tracks = Array.isArray(cfg.tracks) ? cfg.tracks.slice() : [];
-    var galleryRootId = String(root && root.getAttribute('data-root-id') || '');
+    var galleryRootId = String((root && root.getAttribute('data-root-id')) || '');
     var strings = cfg.strings || {};
     var searchInput = qs('.fgpx-gallery-search', root);
     var sortSelect = qs('.fgpx-gallery-sort', root);
@@ -640,14 +756,15 @@
     var loadMoreBtn = qs('.fgpx-gallery-load-more', root);
     var viewButtons = qsa('.fgpx-gallery-view-btn', root);
 
-    var serverMode = !Array.isArray(cfg.tracks) && !!(cfg.endpointUrl || (cfg.ajaxUrl && cfg.ajaxAction));
+    var serverMode =
+      !Array.isArray(cfg.tracks) && !!(cfg.endpointUrl || (cfg.ajaxUrl && cfg.ajaxAction));
     if (window.FGPX && window.FGPX.debugEnabled) {
-      console.log('[FGPX Gallery] initGallery source check', { 
-        serverMode: serverMode, 
+      console.log('[FGPX Gallery] initGallery source check', {
+        serverMode: serverMode,
         hasLocalizedTracks: Array.isArray(cfg.tracks),
         localizedTrackCount: Array.isArray(cfg.tracks) ? cfg.tracks.length : 0,
         endpointUrl: cfg.endpointUrl,
-        ajaxUrl: cfg.ajaxUrl
+        ajaxUrl: cfg.ajaxUrl,
       });
     }
     var viewMode = 'grid';
@@ -686,11 +803,16 @@
       if (loadError) {
         results.innerHTML = '<div class="fgpx-gallery-empty">' + escHtml(loadError) + '</div>';
       } else if (visible.length === 0) {
-        results.innerHTML = '<div class="fgpx-gallery-empty">' + escHtml(strings.noResults || 'No tracks found.') + '</div>';
+        results.innerHTML =
+          '<div class="fgpx-gallery-empty">' +
+          escHtml(strings.noResults || 'No tracks found.') +
+          '</div>';
       } else {
-        results.innerHTML = visible.map(function (track) {
-          return buildCard(track, strings, listMode, activeTrackId);
-        }).join('');
+        results.innerHTML = visible
+          .map(function (track) {
+            return buildCard(track, strings, listMode, activeTrackId);
+          })
+          .join('');
       }
 
       if (listMode) {
@@ -748,42 +870,45 @@
         page: nextPage,
         per_page: resolvedPerPage,
         sort: sortKey,
-        search: searchTerm
-      }).then(function (payload) {
-        if (currentToken !== requestToken) {
-          return;
-        }
-
-        var items = Array.isArray(payload && payload.items) ? payload.items : [];
-        if (!resolvedPerPage) {
-          var pp = Number(payload && payload.pagination && payload.pagination.perPage);
-          if (isFinite(pp) && pp > 0) {
-            resolvedPerPage = Math.max(4, Math.min(48, pp | 0));
+        search: searchTerm,
+      })
+        .then(function (payload) {
+          if (currentToken !== requestToken) {
+            return;
           }
-        }
-        tracks = reset ? items : tracks.concat(items);
-  pendingRevealFromIndex = reset ? -1 : Math.max(0, tracks.length - items.length);
-        currentPage = nextPage;
-        hasMore = !!(payload && payload.pagination && payload.pagination.hasMore);
-        loadError = '';
-      }).catch(function () {
-        if (currentToken !== requestToken) {
-          return;
-        }
 
-        if (reset) {
-          tracks = [];
-        }
-        hasMore = false;
-        loadError = strings.listLoadFailed || 'Could not load the track list. Please try again.';
-      }).then(function () {
-        if (currentToken !== requestToken) {
-          return;
-        }
-        isLoading = false;
-        setLoadingState(results, loadMoreBtn, false, strings, false);
-        render();
-      });
+          var items = Array.isArray(payload && payload.items) ? payload.items : [];
+          if (!resolvedPerPage) {
+            var pp = Number(payload && payload.pagination && payload.pagination.perPage);
+            if (isFinite(pp) && pp > 0) {
+              resolvedPerPage = Math.max(4, Math.min(48, pp | 0));
+            }
+          }
+          tracks = reset ? items : tracks.concat(items);
+          pendingRevealFromIndex = reset ? -1 : Math.max(0, tracks.length - items.length);
+          currentPage = nextPage;
+          hasMore = !!(payload && payload.pagination && payload.pagination.hasMore);
+          loadError = '';
+        })
+        .catch(function () {
+          if (currentToken !== requestToken) {
+            return;
+          }
+
+          if (reset) {
+            tracks = [];
+          }
+          hasMore = false;
+          loadError = strings.listLoadFailed || 'Could not load the track list. Please try again.';
+        })
+        .then(function () {
+          if (currentToken !== requestToken) {
+            return;
+          }
+          isLoading = false;
+          setLoadingState(results, loadMoreBtn, false, strings, false);
+          render();
+        });
     }
 
     function maybeAutoOpenTrack() {
@@ -794,7 +919,12 @@
         consumedMap = {};
       }
 
-      if (!galleryRootId || consumedMap[galleryRootId] || !initialHash || initialHash.indexOf('#track-') !== 0) {
+      if (
+        !galleryRootId ||
+        consumedMap[galleryRootId] ||
+        !initialHash ||
+        initialHash.indexOf('#track-') !== 0
+      ) {
         return Promise.resolve();
       }
 
@@ -817,17 +947,19 @@
         return Promise.resolve();
       }
 
-      return requestGalleryPayload(cfg, { track_id: autoId }).then(function (payload) {
-        if (payload && payload.item) {
-          window.__FGPXGalleryConsumedHash = consumedMap;
-          window.__FGPXGalleryConsumedHash[galleryRootId] = true;
-          activeTrackId = autoId;
-          render();
-          mountPlayer(root, payload.item, cfg);
-        }
-      }).catch(function () {
-        return null;
-      });
+      return requestGalleryPayload(cfg, { track_id: autoId })
+        .then(function (payload) {
+          if (payload && payload.item) {
+            window.__FGPXGalleryConsumedHash = consumedMap;
+            window.__FGPXGalleryConsumedHash[galleryRootId] = true;
+            activeTrackId = autoId;
+            render();
+            mountPlayer(root, payload.item, cfg);
+          }
+        })
+        .catch(function () {
+          return null;
+        });
     }
 
     if (searchInput) {
@@ -868,7 +1000,7 @@
           return;
         }
         pendingRevealFromIndex = visibleCount;
-        visibleCount += (resolvedPerPage || 16);
+        visibleCount += resolvedPerPage || 16;
         render();
       });
     }
@@ -908,17 +1040,21 @@
       }
     });
 
-    root.addEventListener('error', function (ev) {
-      var target = ev.target;
-      if (!target || !target.classList || !target.classList.contains('fgpx-gallery-card-image')) {
-        return;
-      }
+    root.addEventListener(
+      'error',
+      function (ev) {
+        var target = ev.target;
+        if (!target || !target.classList || !target.classList.contains('fgpx-gallery-card-image')) {
+          return;
+        }
 
-      target.style.display = 'none';
-      if (target.parentNode && target.parentNode.classList) {
-        target.parentNode.classList.add('is-fallback');
-      }
-    }, true);
+        target.style.display = 'none';
+        if (target.parentNode && target.parentNode.classList) {
+          target.parentNode.classList.add('is-fallback');
+        }
+      },
+      true
+    );
 
     root.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Enter' && ev.key !== ' ') {
@@ -952,9 +1088,10 @@
 
     roots.forEach(function (root) {
       var rootId = root.getAttribute('data-root-id');
-      var cfg = (window.FGPXGalleryInstances && rootId && window.FGPXGalleryInstances[rootId])
-        || window.FGPXGallery
-        || null;
+      var cfg =
+        (window.FGPXGalleryInstances && rootId && window.FGPXGalleryInstances[rootId]) ||
+        window.FGPXGallery ||
+        null;
       if (!cfg) {
         return;
       }

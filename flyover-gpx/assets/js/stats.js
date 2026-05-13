@@ -44,7 +44,7 @@
       histogram: getCssVar(styles, '--fgpx-stats-chart-histogram', '#6366f1'),
       weekday: getCssVar(styles, '--fgpx-stats-chart-weekday', '#0ea5e9'),
       hour: getCssVar(styles, '--fgpx-stats-chart-hour', '#f59e0b'),
-      lineFill: getCssVar(styles, '--fgpx-stats-chart-line-fill', 'rgba(37,206,255,0.18)')
+      lineFill: getCssVar(styles, '--fgpx-stats-chart-line-fill', 'rgba(37,206,255,0.18)'),
     };
   }
 
@@ -56,23 +56,28 @@
           type: 'raster',
           tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
           tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors'
-        }
+          attribution: '&copy; OpenStreetMap contributors',
+        },
       },
       layers: [
         {
           id: 'osm',
           type: 'raster',
-          source: 'osm'
-        }
-      ]
+          source: 'osm',
+        },
+      ],
     };
   }
 
   function fetchStats(config) {
     var maxPoints = Math.max(1000, Math.min(50000, Number(config.maxPoints || 15000)));
     var includeHeatmap = config.showHeatmap !== false ? '1' : '0';
-    var restUrl = String(config.endpointUrl || '') + '?max_points=' + encodeURIComponent(String(maxPoints)) + '&include_heatmap=' + includeHeatmap;
+    var restUrl =
+      String(config.endpointUrl || '') +
+      '?max_points=' +
+      encodeURIComponent(String(maxPoints)) +
+      '&include_heatmap=' +
+      includeHeatmap;
 
     return fetch(restUrl, { credentials: 'same-origin' })
       .then(function (resp) {
@@ -82,7 +87,14 @@
       .catch(function () {
         var ajaxUrl = String(config.ajaxUrl || '');
         var action = String(config.ajaxAction || 'fgpx_stats');
-        var fallbackUrl = ajaxUrl + '?action=' + encodeURIComponent(action) + '&max_points=' + encodeURIComponent(String(maxPoints)) + '&include_heatmap=' + includeHeatmap;
+        var fallbackUrl =
+          ajaxUrl +
+          '?action=' +
+          encodeURIComponent(action) +
+          '&max_points=' +
+          encodeURIComponent(String(maxPoints)) +
+          '&include_heatmap=' +
+          includeHeatmap;
         return fetch(fallbackUrl, { credentials: 'same-origin' }).then(function (resp) {
           if (!resp.ok) throw new Error('AJAX request failed');
           return resp.json();
@@ -97,11 +109,20 @@
       { label: strings.distance || 'Distance', value: formatKm(summary.totalDistanceM) },
       { label: strings.avgDistance || 'Avg distance', value: formatKm(summary.avgDistanceM) },
       { label: strings.maxDistance || 'Max distance', value: formatKm(summary.maxDistanceM) },
-      { label: strings.elevation || 'Elevation gain', value: formatMeters(summary.totalElevationGainM) },
-      { label: strings.avgElevation || 'Avg elevation', value: formatMeters(summary.avgElevationGainM) },
-      { label: strings.maxElevation || 'Max elevation', value: formatMeters(summary.maxElevationGainM) },
+      {
+        label: strings.elevation || 'Elevation gain',
+        value: formatMeters(summary.totalElevationGainM),
+      },
+      {
+        label: strings.avgElevation || 'Avg elevation',
+        value: formatMeters(summary.avgElevationGainM),
+      },
+      {
+        label: strings.maxElevation || 'Max elevation',
+        value: formatMeters(summary.maxElevationGainM),
+      },
       { label: strings.avgSpeed || 'Avg speed', value: formatSpeed(summary.avgSpeedKmh) },
-      { label: strings.maxSpeed || 'Max speed', value: formatSpeed(summary.maxSpeedKmh) }
+      { label: strings.maxSpeed || 'Max speed', value: formatSpeed(summary.maxSpeedKmh) },
     ];
 
     items.forEach(function (item) {
@@ -116,7 +137,7 @@
 
   var CHART_ALIASES = {
     monthly: 'distance_by_month',
-    yearly: 'tracks_by_year'
+    yearly: 'tracks_by_year',
   };
 
   function makeChartCanvas(wrap, title) {
@@ -138,8 +159,14 @@
     }
 
     // Backward-compatible fallback for payloads generated before `charts` was added.
-    var monthly = payload && payload.trends && Array.isArray(payload.trends.monthly) ? payload.trends.monthly : [];
-    var yearly = payload && payload.trends && Array.isArray(payload.trends.yearly) ? payload.trends.yearly : [];
+    var monthly =
+      payload && payload.trends && Array.isArray(payload.trends.monthly)
+        ? payload.trends.monthly
+        : [];
+    var yearly =
+      payload && payload.trends && Array.isArray(payload.trends.yearly)
+        ? payload.trends.yearly
+        : [];
 
     if (key === 'distance_by_month') return monthly;
     if (key === 'tracks_by_year') return yearly;
@@ -166,19 +193,21 @@
     if (key === 'avg_speed_by_month') {
       return monthly.map(function (m) {
         var duration = Number(m.durationS || 0);
-        var speed = duration > 0 ? ((Number(m.distanceM || 0) / duration) * 3.6) : 0;
+        var speed = duration > 0 ? (Number(m.distanceM || 0) / duration) * 3.6 : 0;
         return { period: m.period, avgSpeedKmh: speed };
       });
     }
     if (key === 'avg_speed_by_year') {
       return yearly.map(function (y) {
         var duration = Number(y.durationS || 0);
-        var speed = duration > 0 ? ((Number(y.distanceM || 0) / duration) * 3.6) : 0;
+        var speed = duration > 0 ? (Number(y.distanceM || 0) / duration) * 3.6 : 0;
         return { period: y.period, avgSpeedKmh: speed };
       });
     }
     if (key === 'playbacks_by_month' || key === 'playbacks_by_year') {
-      return payload && payload.charts && Array.isArray(payload.charts[key]) ? payload.charts[key] : [];
+      return payload && payload.charts && Array.isArray(payload.charts[key])
+        ? payload.charts[key]
+        : [];
     }
 
     return [];
@@ -189,16 +218,18 @@
       type: 'bar',
       data: {
         labels: labels,
-        datasets: [{
-          label: label,
-          data: data,
-          backgroundColor: color || '#b45309'
-        }]
+        datasets: [
+          {
+            label: label,
+            data: data,
+            backgroundColor: color || '#b45309',
+          },
+        ],
       },
       options: {
         responsive: false,
-        plugins: { legend: { display: true } }
-      }
+        plugins: { legend: { display: true } },
+      },
     });
   }
 
@@ -207,19 +238,21 @@
       type: 'line',
       data: {
         labels: labels,
-        datasets: [{
-          label: label,
-          data: data,
-          borderColor: color || '#0f766e',
-          backgroundColor: fillColor || 'rgba(15,118,110,0.15)',
-          fill: true,
-          tension: 0.25
-        }]
+        datasets: [
+          {
+            label: label,
+            data: data,
+            borderColor: color || '#0f766e',
+            backgroundColor: fillColor || 'rgba(15,118,110,0.15)',
+            fill: true,
+            tension: 0.25,
+          },
+        ],
       },
       options: {
         responsive: false,
-        plugins: { legend: { display: true } }
-      }
+        plugins: { legend: { display: true } },
+      },
     });
   }
 
@@ -231,9 +264,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartDistanceByMonth || 'Distance by Month');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartDistanceKm || 'Distance (km)',
-        rows.map(function (r) { return Number(r.distanceM || 0) / 1000; }),
+        rows.map(function (r) {
+          return Number(r.distanceM || 0) / 1000;
+        }),
         theme.distance
       );
       return true;
@@ -244,9 +281,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartTracksByYear || 'Tracks by Year');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartTracksCount || 'Track count',
-        rows.map(function (r) { return Number(r.trackCount || 0); }),
+        rows.map(function (r) {
+          return Number(r.trackCount || 0);
+        }),
         theme.tracks
       );
       return true;
@@ -257,9 +298,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartTracksByMonth || 'Tracks by Month');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartTracksCount || 'Track count',
-        rows.map(function (r) { return Number(r.trackCount || 0); }),
+        rows.map(function (r) {
+          return Number(r.trackCount || 0);
+        }),
         theme.tracks
       );
       return true;
@@ -270,9 +315,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartPlaybacksByMonth || 'Playbacks by Month');
       renderLineChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartPlaybacksCount || 'Playback count',
-        rows.map(function (r) { return Number(r.playbackCount || 0); }),
+        rows.map(function (r) {
+          return Number(r.playbackCount || 0);
+        }),
         theme.speed,
         theme.lineFill
       );
@@ -284,9 +333,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartPlaybacksByYear || 'Playbacks by Year');
       renderLineChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartPlaybacksCount || 'Playback count',
-        rows.map(function (r) { return Number(r.playbackCount || 0); }),
+        rows.map(function (r) {
+          return Number(r.playbackCount || 0);
+        }),
         theme.speed,
         theme.lineFill
       );
@@ -298,9 +351,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartDistanceByYear || 'Distance by Year');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartDistanceKm || 'Distance (km)',
-        rows.map(function (r) { return Number(r.distanceM || 0) / 1000; }),
+        rows.map(function (r) {
+          return Number(r.distanceM || 0) / 1000;
+        }),
         theme.distance
       );
       return true;
@@ -311,9 +368,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartElevationByMonth || 'Elevation by Month');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartElevationM || 'Elevation gain (m)',
-        rows.map(function (r) { return Number(r.elevationGainM || 0); }),
+        rows.map(function (r) {
+          return Number(r.elevationGainM || 0);
+        }),
         theme.elevation
       );
       return true;
@@ -324,9 +385,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartElevationByYear || 'Elevation by Year');
       renderBarChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartElevationM || 'Elevation gain (m)',
-        rows.map(function (r) { return Number(r.elevationGainM || 0); }),
+        rows.map(function (r) {
+          return Number(r.elevationGainM || 0);
+        }),
         theme.elevation
       );
       return true;
@@ -337,9 +402,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartAvgSpeedByMonth || 'Average Speed by Month');
       renderLineChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartAvgSpeedKmh || 'Average speed (km/h)',
-        rows.map(function (r) { return Number(r.avgSpeedKmh || 0); }),
+        rows.map(function (r) {
+          return Number(r.avgSpeedKmh || 0);
+        }),
         theme.speed,
         theme.lineFill
       );
@@ -351,9 +420,13 @@
       var canvas = makeChartCanvas(wrap, strings.chartAvgSpeedByYear || 'Average Speed by Year');
       renderLineChart(
         canvas,
-        rows.map(function (r) { return r.period; }),
+        rows.map(function (r) {
+          return r.period;
+        }),
         strings.chartAvgSpeedKmh || 'Average speed (km/h)',
-        rows.map(function (r) { return Number(r.avgSpeedKmh || 0); }),
+        rows.map(function (r) {
+          return Number(r.avgSpeedKmh || 0);
+        }),
         theme.speed,
         theme.lineFill
       );
@@ -362,12 +435,19 @@
     track_length_histogram: function (wrap, payload, strings, theme) {
       var rows = getChartRows(payload, 'track_length_histogram');
       if (!rows.length) return false;
-      var canvas = makeChartCanvas(wrap, strings.chartTrackLengthHistogram || 'Track Length Distribution');
+      var canvas = makeChartCanvas(
+        wrap,
+        strings.chartTrackLengthHistogram || 'Track Length Distribution'
+      );
       renderBarChart(
         canvas,
-        rows.map(function (r) { return String(r.bucket || ''); }),
+        rows.map(function (r) {
+          return String(r.bucket || '');
+        }),
         strings.chartTracksCount || 'Track count',
-        rows.map(function (r) { return Number(r.count || 0); }),
+        rows.map(function (r) {
+          return Number(r.count || 0);
+        }),
         theme.histogram
       );
       return true;
@@ -383,7 +463,7 @@
         3: strings.weekdayWed || 'Wed',
         4: strings.weekdayThu || 'Thu',
         5: strings.weekdayFri || 'Fri',
-        6: strings.weekdaySat || 'Sat'
+        6: strings.weekdaySat || 'Sat',
       };
       var orderedWeekdays = [1, 2, 3, 4, 5, 6, 0];
       var countsByDay = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
@@ -395,12 +475,19 @@
         }
       });
 
-      var canvas = makeChartCanvas(wrap, strings.chartWeekdayDistribution || 'Weekday Distribution');
+      var canvas = makeChartCanvas(
+        wrap,
+        strings.chartWeekdayDistribution || 'Weekday Distribution'
+      );
       renderBarChart(
         canvas,
-        orderedWeekdays.map(function (d) { return labelByDay[d]; }),
+        orderedWeekdays.map(function (d) {
+          return labelByDay[d];
+        }),
         strings.chartTracksCount || 'Track count',
-        orderedWeekdays.map(function (d) { return countsByDay[d]; }),
+        orderedWeekdays.map(function (d) {
+          return countsByDay[d];
+        }),
         theme.weekday
       );
       return true;
@@ -423,13 +510,17 @@
       var canvas = makeChartCanvas(wrap, strings.chartHourDistribution || 'Hour Distribution');
       renderBarChart(
         canvas,
-        Array.from({ length: 24 }, function (_, i) { return String(i); }),
+        Array.from({ length: 24 }, function (_, i) {
+          return String(i);
+        }),
         strings.chartTracksCount || 'Track count',
-        Array.from({ length: 24 }, function (_, i) { return countsByHour[i]; }),
+        Array.from({ length: 24 }, function (_, i) {
+          return countsByHour[i];
+        }),
         theme.hour
       );
       return true;
-    }
+    },
   };
 
   function buildCharts(root, config, payload) {
@@ -439,7 +530,9 @@
     if (Array.isArray(config.charts)) {
       enabled = config.charts
         .map(function (key) {
-          var cleanKey = String(key || '').trim().toLowerCase();
+          var cleanKey = String(key || '')
+            .trim()
+            .toLowerCase();
           return CHART_ALIASES[cleanKey] || cleanKey;
         })
         .filter(function (key, idx, arr) {
@@ -462,7 +555,9 @@
       }
     });
     if (!built) {
-      wrap.appendChild(createEl('div', 'fgpx-stats-empty', strings.noTrendData || 'No trend data available yet.'));
+      wrap.appendChild(
+        createEl('div', 'fgpx-stats-empty', strings.noTrendData || 'No trend data available yet.')
+      );
     }
     root.appendChild(wrap);
   }
@@ -471,12 +566,20 @@
     if (!window.maplibregl || typeof window.maplibregl.Map !== 'function') return;
 
     var strings = payload.__strings || {};
-    var points = (payload.heatmap && payload.heatmap.points) ? payload.heatmap.points : [];
+    var points = payload.heatmap && payload.heatmap.points ? payload.heatmap.points : [];
     var mapCard = createEl('div', 'fgpx-stats-map-card');
-    mapCard.appendChild(createEl('h3', 'fgpx-stats-chart-title', strings.heatmapTitle || 'All Tracks Heatmap'));
+    mapCard.appendChild(
+      createEl('h3', 'fgpx-stats-chart-title', strings.heatmapTitle || 'All Tracks Heatmap')
+    );
 
     if (!points.length) {
-      mapCard.appendChild(createEl('div', 'fgpx-stats-empty', strings.noHeatmapData || 'No track points available for heatmap yet.'));
+      mapCard.appendChild(
+        createEl(
+          'div',
+          'fgpx-stats-empty',
+          strings.noHeatmapData || 'No track points available for heatmap yet.'
+        )
+      );
       root.appendChild(mapCard);
       return;
     }
@@ -490,7 +593,10 @@
       center = [Number(points[0][1] || 0), Number(points[0][0] || 0)];
     }
 
-    var uniqueSuffix = String(config.rootId || ('root-' + Math.random())).replace(/[^a-zA-Z0-9_-]/g, '_');
+    var uniqueSuffix = String(config.rootId || 'root-' + Math.random()).replace(
+      /[^a-zA-Z0-9_-]/g,
+      '_'
+    );
     var sourceId = 'fgpx-stats-heatmap-' + uniqueSuffix;
     var layerId = 'fgpx-stats-heatmap-layer-' + uniqueSuffix;
 
@@ -503,7 +609,7 @@
       container: mapEl,
       style: mapStyle,
       center: center,
-      zoom: points.length > 0 ? 4 : 1
+      zoom: points.length > 0 ? 4 : 1,
     });
 
     map.addControl(new window.maplibregl.NavigationControl(), 'top-right');
@@ -514,11 +620,11 @@
           type: 'Feature',
           geometry: {
             type: 'Point',
-            coordinates: [Number(p[1] || 0), Number(p[0] || 0)]
+            coordinates: [Number(p[1] || 0), Number(p[0] || 0)],
           },
           properties: {
-            weight: Number(p[2] || 1)
-          }
+            weight: Number(p[2] || 1),
+          },
         };
       });
 
@@ -526,8 +632,8 @@
         type: 'geojson',
         data: {
           type: 'FeatureCollection',
-          features: features
-        }
+          features: features,
+        },
       });
 
       map.addLayer({
@@ -537,26 +643,24 @@
         paint: {
           'heatmap-weight': ['get', 'weight'],
           'heatmap-intensity': 0.8,
-          'heatmap-radius': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            0, 1,
-            8, 3,
-            12, 6
-          ],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 1, 8, 3, 12, 6],
           'heatmap-color': [
             'interpolate',
             ['linear'],
             ['heatmap-density'],
-            0, 'rgba(3,105,161,0)',
-            0.2, '#60a5fa',
-            0.5, '#34d399',
-            0.8, '#f59e0b',
-            1, '#ef4444'
+            0,
+            'rgba(3,105,161,0)',
+            0.2,
+            '#60a5fa',
+            0.5,
+            '#34d399',
+            0.8,
+            '#f59e0b',
+            1,
+            '#ef4444',
           ],
-          'heatmap-opacity': 0.9
-        }
+          'heatmap-opacity': 0.9,
+        },
       });
 
       if (typeof window.maplibregl.LngLatBounds === 'function' && points.length > 1) {
@@ -578,7 +682,9 @@
     renderPayload.__strings = strings;
 
     if (!Number(summary.totalTracks || 0)) {
-      root.appendChild(createEl('div', 'fgpx-stats-empty', strings.noTracks || 'No published tracks yet.'));
+      root.appendChild(
+        createEl('div', 'fgpx-stats-empty', strings.noTracks || 'No published tracks yet.')
+      );
       buildKpis(root, summary, strings);
       return;
     }
@@ -597,14 +703,18 @@
     root.dataset.fgpxStatsInit = '1';
 
     var strings = config.strings || {};
-    root.innerHTML = '<div class="fgpx-stats-loading">' + (strings.loading || 'Loading statistics...') + '</div>';
+    root.innerHTML =
+      '<div class="fgpx-stats-loading">' + (strings.loading || 'Loading statistics...') + '</div>';
 
     fetchStats(config)
       .then(function (payload) {
         renderRoot(root, config, payload || {});
       })
       .catch(function () {
-        root.innerHTML = '<div class="fgpx-stats-error">' + (strings.failed || 'Could not load statistics.') + '</div>';
+        root.innerHTML =
+          '<div class="fgpx-stats-error">' +
+          (strings.failed || 'Could not load statistics.') +
+          '</div>';
       });
   }
 

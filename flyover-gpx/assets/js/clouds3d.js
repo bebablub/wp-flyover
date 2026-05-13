@@ -40,21 +40,21 @@
   /* GLSL shaders                                                         */
   /* ------------------------------------------------------------------ */
 
-  var VERT_SHADER = /* glsl */[
+  var VERT_SHADER = /* glsl */ [
     'precision mediump float;',
     '',
-    'attribute vec3 position;',         // quad local [-0.5..0.5]
+    'attribute vec3 position;', // quad local [-0.5..0.5]
     'attribute vec2 uv;',
-    'attribute vec3 instanceOffset;',   // world-space Mercator XYZ offsets per instance
-    'attribute float instanceScale;',   // per-instance size (m in Mercator units)
+    'attribute vec3 instanceOffset;', // world-space Mercator XYZ offsets per instance
+    'attribute float instanceScale;', // per-instance size (m in Mercator units)
     'attribute float instanceOpacity;', // per-instance base opacity',
     '',
     'varying vec2 vUv;',
     'varying float vOpacity;',
     '',
-    'uniform mat4 uProjMatrix;',   // MapLibre projection matrix (view * proj)
-    'uniform vec3 uCameraRight;',  // camera right vector (world space)
-    'uniform vec3 uCameraUp;',     // camera up vector (world space)
+    'uniform mat4 uProjMatrix;', // MapLibre projection matrix (view * proj)
+    'uniform vec3 uCameraRight;', // camera right vector (world space)
+    'uniform vec3 uCameraUp;', // camera up vector (world space)
     '',
     'void main() {',
     '  // Billboard: rotate quad to face camera',
@@ -79,8 +79,8 @@
       '',
       'uniform float uTime;',
       'uniform float uGlobalOpacity;', // 0-1 from cloud_cover_pct
-      'uniform float uCoverNorm;',     // cloud_cover_pct normalized to 0-1
-      'uniform vec3  uSunDir;',        // normalised sun direction
+      'uniform float uCoverNorm;', // cloud_cover_pct normalized to 0-1
+      'uniform vec3  uSunDir;', // normalised sun direction
       'uniform bool  uSunShading;',
       '',
       '// Hash / noise helpers',
@@ -113,7 +113,7 @@
       '}',
       '',
       'void main() {',
-      '  vec2 centered = vUv - 0.5;',               // center quad at (0,0)
+      '  vec2 centered = vUv - 0.5;', // center quad at (0,0)
       '  float dist = length(centered);',
       '  // soft circular mask (discard corners of quad)',
       '  float mask = 1.0 - smoothstep(0.18, 0.56, dist);',
@@ -146,9 +146,9 @@
   /* ------------------------------------------------------------------ */
 
   var QUALITY_PRESETS = {
-    low:    { instances: 32,  octaves: 2, sunShading: false, drift: false },
-    medium: { instances: 96,  octaves: 2, sunShading: true,  drift: true  },
-    high:   { instances: 192, octaves: 3, sunShading: true,  drift: true  },
+    low: { instances: 32, octaves: 2, sunShading: false, drift: false },
+    medium: { instances: 96, octaves: 2, sunShading: true, drift: true },
+    high: { instances: 192, octaves: 3, sunShading: true, drift: true },
   };
 
   /* ------------------------------------------------------------------ */
@@ -176,31 +176,52 @@
   function create(map, opts) {
     opts = opts || {};
     var qualityKey = String(opts.quality || 'medium').toLowerCase();
-    if (!QUALITY_PRESETS[qualityKey]) { qualityKey = 'medium'; }
+    if (!QUALITY_PRESETS[qualityKey]) {
+      qualityKey = 'medium';
+    }
     var preset = QUALITY_PRESETS[qualityKey];
     var weatherPoints = Array.isArray(opts.weatherPoints) ? opts.weatherPoints : [];
-    var getCloudCover = typeof opts.getCloudCover === 'function' ? opts.getCloudCover : function () { return 0; };
-    var getSunAzimuth = typeof opts.getSunAzimuth === 'function' ? opts.getSunAzimuth : function () { return 0; };
-    var intensityCap  = (typeof opts.intensity === 'number' && isFinite(opts.intensity)) ? Math.max(0.1, Math.min(1.0, opts.intensity)) : 0.7;
+    var getCloudCover =
+      typeof opts.getCloudCover === 'function'
+        ? opts.getCloudCover
+        : function () {
+            return 0;
+          };
+    var getSunAzimuth =
+      typeof opts.getSunAzimuth === 'function'
+        ? opts.getSunAzimuth
+        : function () {
+            return 0;
+          };
+    var intensityCap =
+      typeof opts.intensity === 'number' && isFinite(opts.intensity)
+        ? Math.max(0.1, Math.min(1.0, opts.intensity))
+        : 0.7;
 
     /* ---- internal state ---- */
     var THREE = window.THREE;
     if (!THREE) {
       // three.js not loaded — return a no-op layer so front.js doesn't crash
-      return { id: 'fgpx-clouds-3d', type: 'custom', renderingMode: '3d',
-               onAdd: function () {}, render: function () {}, onRemove: function () {} };
+      return {
+        id: 'fgpx-clouds-3d',
+        type: 'custom',
+        renderingMode: '3d',
+        onAdd: function () {},
+        render: function () {},
+        onRemove: function () {},
+      };
     }
 
     var renderer = null;
-    var scene    = null;
-    var camera   = null;
-    var mesh     = null;
+    var scene = null;
+    var camera = null;
+    var mesh = null;
     var material = null;
-    var mapRef   = null; // stored in onAdd for zoom guard
+    var mapRef = null; // stored in onAdd for zoom guard
 
     /* ---- attribute arrays ---- */
-    var instanceOffsets  = null;
-    var instanceScales   = null;
+    var instanceOffsets = null;
+    var instanceScales = null;
     var instanceOpacities = null;
 
     // Lerp state for smooth opacity transitions
@@ -217,22 +238,22 @@
 
     function buildInstances(MercatorCoordinate) {
       var N = preset.instances;
-      offsetArr   = new Float32Array(N * 3);
-      scaleArr    = new Float32Array(N);
-      opacityArr  = new Float32Array(N);
+      offsetArr = new Float32Array(N * 3);
+      scaleArr = new Float32Array(N);
+      opacityArr = new Float32Array(N);
 
       // If we have weather points, seed around them. Else scatter along track.
-      var seeds = weatherPoints.length > 0 ? weatherPoints :
-        [{ lng: 0, lat: 0, cloudCoverPct: 100 }];
+      var seeds =
+        weatherPoints.length > 0 ? weatherPoints : [{ lng: 0, lat: 0, cloudCoverPct: 100 }];
 
       for (var i = 0; i < N; i++) {
-        var seed  = seeds[i % seeds.length];
-        var rng   = seededRand(i * 7.3 + 13.1);
-        var rng2  = seededRand(i * 3.7 + 41.9);
-        var rng3  = seededRand(i * 11.1 + 2.3);
+        var seed = seeds[i % seeds.length];
+        var rng = seededRand(i * 7.3 + 13.1);
+        var rng2 = seededRand(i * 3.7 + 41.9);
+        var rng3 = seededRand(i * 11.1 + 2.3);
 
         // Keep clusters compact so clouds read as fluffy masses, not wide nebula.
-        var lngOffset = (rng  - 0.5) * 0.04;
+        var lngOffset = (rng - 0.5) * 0.04;
         var latOffset = (rng2 - 0.5) * 0.04;
         var altM = 1700 + rng3 * 1500; // 1700 – 3200 m
 
@@ -240,15 +261,16 @@
           { lng: seed.lng + lngOffset, lat: seed.lat + latOffset },
           altM
         );
-        offsetArr[i * 3    ] = mc.x;
+        offsetArr[i * 3] = mc.x;
         offsetArr[i * 3 + 1] = mc.y;
         offsetArr[i * 3 + 2] = mc.z;
 
         // Scale: 900 – 2300 m keeps cloud bodies larger and less speckled.
         var meterScale = 900 + seededRand(i * 5.5 + 7.7) * 1400;
         // MercatorCoordinate.meterInMercatorCoordinateUnits() at the seed location
-        var meterInMerc = mc.meterInMercatorCoordinateUnits ? mc.meterInMercatorCoordinateUnits() :
-          (1 / (Math.cos(seed.lat * Math.PI / 180) * 20037508.34 * 2));
+        var meterInMerc = mc.meterInMercatorCoordinateUnits
+          ? mc.meterInMercatorCoordinateUnits()
+          : 1 / (Math.cos((seed.lat * Math.PI) / 180) * 20037508.34 * 2);
         scaleArr[i] = meterScale * meterInMerc;
 
         // Narrow opacity spread for more consistent fluffy coverage.
@@ -270,8 +292,7 @@
         mapRef = m;
 
         // Build per-instance position data using MapLibre's Mercator helpers
-        var MercatorCoordinate = window.maplibregl &&
-          window.maplibregl.MercatorCoordinate;
+        var MercatorCoordinate = window.maplibregl && window.maplibregl.MercatorCoordinate;
         if (!MercatorCoordinate) {
           // Fallback: disable layer gracefully if projection API missing
           return;
@@ -287,21 +308,16 @@
         });
         renderer.autoClear = false;
 
-        scene  = new THREE.Scene();
+        scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(); // matrix replaced each frame
 
         /* Geometry: unit quad */
         var geo = new THREE.BufferGeometry();
-        var verts = new Float32Array([
-          -0.5, -0.5, 0,
-           0.5, -0.5, 0,
-           0.5,  0.5, 0,
-          -0.5,  0.5, 0,
-        ]);
+        var verts = new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]);
         var uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
         var idx = new Uint16Array([0, 1, 2, 0, 2, 3]);
         geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        geo.setAttribute('uv',       new THREE.BufferAttribute(uvs,   2));
+        geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         geo.setIndex(new THREE.BufferAttribute(idx, 1));
 
         /* Per-instance attributes */
@@ -309,31 +325,31 @@
         // Mark geometry as instanced so three.js calls gl.drawElementsInstanced
         geo.isInstancedBufferGeometry = true;
         geo.instanceCount = N;
-        var offAttr   = new THREE.InstancedBufferAttribute(offsetArr,   3);
-        var scaleAttr = new THREE.InstancedBufferAttribute(scaleArr,    1);
-        var opAttr    = new THREE.InstancedBufferAttribute(opacityArr,  1);
-        geo.setAttribute('instanceOffset',  offAttr);
-        geo.setAttribute('instanceScale',   scaleAttr);
+        var offAttr = new THREE.InstancedBufferAttribute(offsetArr, 3);
+        var scaleAttr = new THREE.InstancedBufferAttribute(scaleArr, 1);
+        var opAttr = new THREE.InstancedBufferAttribute(opacityArr, 1);
+        geo.setAttribute('instanceOffset', offAttr);
+        geo.setAttribute('instanceScale', scaleAttr);
         geo.setAttribute('instanceOpacity', opAttr);
 
         /* Custom shader material */
         material = new THREE.RawShaderMaterial({
-          vertexShader:   VERT_SHADER,
+          vertexShader: VERT_SHADER,
           fragmentShader: buildFragShader(preset.octaves),
           uniforms: {
-            uProjMatrix:      { value: new THREE.Matrix4() },
-            uCameraRight:     { value: new THREE.Vector3() },
-            uCameraUp:        { value: new THREE.Vector3() },
-            uTime:            { value: 0.0 },
-            uGlobalOpacity:   { value: 0.0 },
-            uCoverNorm:       { value: 0.0 },
-            uSunDir:          { value: new THREE.Vector3(0, 1, 0) },
-            uSunShading:      { value: preset.sunShading },
+            uProjMatrix: { value: new THREE.Matrix4() },
+            uCameraRight: { value: new THREE.Vector3() },
+            uCameraUp: { value: new THREE.Vector3() },
+            uTime: { value: 0.0 },
+            uGlobalOpacity: { value: 0.0 },
+            uCoverNorm: { value: 0.0 },
+            uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+            uSunShading: { value: preset.sunShading },
           },
           transparent: true,
-          depthWrite:  false,
-          blending:    THREE.NormalBlending,
-          side:        THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.NormalBlending,
+          side: THREE.DoubleSide,
         });
 
         mesh = new THREE.Mesh(geo, material);
@@ -342,11 +358,13 @@
       },
 
       render: function (gl, args) {
-        if (!renderer || !scene || !camera || !mesh) { return; }
+        if (!renderer || !scene || !camera || !mesh) {
+          return;
+        }
 
         /* ----- visibility check: respect weatherVisible toggle ----- */
         var cover = getCloudCover();
-        var coverNorm = (cover >= 0) ? Math.min(1.0, cover / 100) : 0;
+        var coverNorm = cover >= 0 ? Math.min(1.0, cover / 100) : 0;
         targetGlobalOpacity = Math.min(intensityCap, Math.pow(coverNorm, 0.9) * intensityCap);
         // Lerp for smooth fade (≈0.05 per frame at 60 fps ≈ ~0.3 s)
         currentGlobalOpacity += (targetGlobalOpacity - currentGlobalOpacity) * 0.05;
@@ -370,7 +388,9 @@
         /* ----- build projection matrix from MapLibre args ----- */
         var projData = args.defaultProjectionData;
         var mat = projData && projData.mainMatrix;
-        if (!mat) { return; }
+        if (!mat) {
+          return;
+        }
 
         // MapLibre passes a flat 16-element Float64Array in column-major order.
         // THREE.Matrix4.fromArray() reads column-major directly — do NOT use
@@ -396,9 +416,7 @@
         /* ----- sun direction (simplified: azimuth → horizontal unit vector) ----- */
         if (preset.sunShading) {
           var azRad = (getSunAzimuth() * Math.PI) / 180;
-          material.uniforms.uSunDir.value.set(
-            Math.sin(azRad), 0.6, Math.cos(azRad)
-          ).normalize();
+          material.uniforms.uSunDir.value.set(Math.sin(azRad), 0.6, Math.cos(azRad)).normalize();
         }
 
         material.uniforms.uCoverNorm.value = coverNorm;
@@ -410,10 +428,20 @@
       },
 
       onRemove: function () {
-        if (mesh)     { mesh.geometry.dispose(); }
-        if (material) { material.dispose(); }
-        if (renderer) { renderer.dispose(); }
-        mesh = null; material = null; renderer = null; scene = null; camera = null;
+        if (mesh) {
+          mesh.geometry.dispose();
+        }
+        if (material) {
+          material.dispose();
+        }
+        if (renderer) {
+          renderer.dispose();
+        }
+        mesh = null;
+        material = null;
+        renderer = null;
+        scene = null;
+        camera = null;
       },
     };
 
@@ -425,5 +453,4 @@
   /* ------------------------------------------------------------------ */
 
   window.FGPXClouds3D = { create: create };
-
 })();

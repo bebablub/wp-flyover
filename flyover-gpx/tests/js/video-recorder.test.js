@@ -729,4 +729,115 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
     expect(resetSection[0]).toContain('this.sessionId');
     expect(resetSection[0]).toContain('this.sessionToken');
   });
+
+  test('REGRESSION: Chunk rotation must wait for threshold, not show save dialog immediately', () => {
+    // BUG FIX: recreateMediaRecorder had duplicate inline event handlers that didn't include 
+    // chunk rotation logic, causing immediate finalizeCurrentChunk() on stop
+    // EXPECTED: ondataavailable should only call finalizeCurrentChunk when chunk size threshold is reached
+    // and isRotatingChunk is true, otherwise just accumulate chunks
+    // FIXED: setupEventHandlers() now properly handles rotation vs final stop
+    
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+    
+    // Verify recreateMediaRecorder uses setupEventHandlers, not inline handlers
+    const recreateSection = code.match(/VideoRecorder\.prototype\.recreateMediaRecorder = function\(\) \{[\s\S]*?^      \};/m);
+    expect(recreateSection).toBeTruthy();
+    expect(recreateSection[0]).toContain('setupEventHandlers');
+    
+    // OLD BUG: Had inline ondataavailable without rotation check
+    // Should NOT have inline ondataavailable defined in recreateMediaRecorder
+    expect(recreateSection[0]).not.toContain('this.mediaRecorder.ondataavailable = function');
+    
+    // Verify setupEventHandlers has the rotation logic
+    const setupSection = code.match(/VideoRecorder\.prototype\.setupEventHandlers = function\(\) \{[\s\S]*?^      \};/m);
+    expect(setupSection).toBeTruthy();
+    
+    // Must check chunk size threshold before rotating
+    expect(setupSection[0]).toContain('this.currentChunkSize >= this.CHUNK_SIZE_TARGET');
+    
+    // Must set isRotatingChunk flag
+    expect(setupSection[0]).toContain('this.isRotatingChunk = true');
+    
+    // Must only restart (not finalizeCurrentChunk) if rotating
+    expect(setupSection[0]).toContain('shouldRestart');
+    expect(setupSection[0]).toContain('rotating && !self.stopRequested');
+    
+    // Must call recreateMediaRecorder() during rotation
+    expect(setupSection[0]).toContain('this.recreateMediaRecorder');
+  });
+
+  test('REGRESSION: startRecording must reset when playback is already at end', () => {
+    // BUG FIX: Recording started at end-of-track would immediately stop and trigger save.
+    // FIXED: startRecording now mirrors Play behavior and calls reset() before starting.
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const startRecordingSection = code.match(/function startRecording\(\) \{[\s\S]*?^      \}/m);
+    expect(startRecordingSection).toBeTruthy();
+    expect(startRecordingSection[0]).toContain('var atEnd = privacyEnabled ? (progress >= (privacyEndP - 1e-6)) : (progress >= 1);');
+    expect(startRecordingSection[0]).toContain('if (atEnd)');
+    expect(startRecordingSection[0]).toContain('reset();');
+  });
+
+  test('REGRESSION: Start Recording must not open directory picker immediately', () => {
+    // BUG FIX: Start Recording opened a Save/Directory dialog before recording started.
+    // FIXED: Modal confirms preset and starts recording directly.
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const modalStartSection = code.match(/modalContent\.querySelector\('#fgpx-start-recording'\)\.addEventListener\('click', function\(\) \{[\s\S]*?^        \}\);/m);
+    expect(modalStartSection).toBeTruthy();
+    expect(modalStartSection[0]).not.toContain('chooseRecordingOutput(');
+    expect(modalStartSection[0]).toContain("outputConfig: { mode: 'download', directoryHandle: null }");
+
+    // Ensure legacy pre-start picker code is gone.
+    expect(code).not.toContain('function chooseRecordingOutput(');
+    expect(code).not.toContain('showDirectoryPicker({ id: \'fgpx-recordings\'');
+  });
+
+  test('REGRESSION: seek during recording must keep recording active', () => {
+    // BUG FIX: Seeking should never interrupt an active recording session.
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const seekSection = code.match(/function seekToFraction\(frac\) \{[\s\S]*?^      \}/m);
+    expect(seekSection).toBeTruthy();
+    expect(seekSection[0]).toContain('if (isRecording) {');
+    expect(seekSection[0]).toContain('if (!playing) setPlaying(true);');
+    expect(seekSection[0]).toContain('scheduleRaf();');
+    expect(seekSection[0]).toContain('return;');
+  });
+
+  test('REGRESSION: startRecording must not be blocked by preloading state', () => {
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const startRecordingSection = code.match(/function startRecording\(\) \{[\s\S]*?^      \}/m);
+    expect(startRecordingSection).toBeTruthy();
+    expect(startRecordingSection[0]).toContain('if (isRecording) return;');
+    expect(startRecordingSection[0]).not.toContain('if (isRecording || preloadingInProgress) return;');
+  });
+
+  test('REGRESSION: updateButtonStates must keep record button enabled', () => {
+    const code = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      'utf8'
+    );
+
+    const updateButtonsSection = code.match(/function updateButtonStates\(\) \{[\s\S]*?^      \}/m);
+    expect(updateButtonsSection).toBeTruthy();
+    expect(updateButtonsSection[0]).toContain('ui.controls.btnRecord.disabled = false;');
+    expect(updateButtonsSection[0]).not.toContain('ui.controls.btnRecord.disabled = preloadingInProgress;');
+  });
 });
