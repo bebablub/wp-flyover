@@ -794,23 +794,6 @@
     }
   }
 
-  // Helper function to create a location key for grouping photos by location
-  // Uses rounded coordinates to group nearby photos (within ~10 meters)
-  /**
-   * Create a location key for grouping photos by location (rounded coordinates).
-   * @param {number} lat
-   * @param {number} lon
-   * @returns {string|null}
-   */
-  function getLocationKey(lat, lon) {
-    if (typeof lat !== 'number' || typeof lon !== 'number') {
-      return null;
-    }
-    var roundedLat = Math.round(lat * 10000) / 10000;
-    var roundedLon = Math.round(lon * 10000) / 10000;
-    return roundedLat + ',' + roundedLon;
-  }
-
   /**
    * Escape HTML special characters in a string.
    * @param {string} str
@@ -2313,11 +2296,6 @@
 
     function shouldShowMapModeControl() {
       return contoursModeAvailable || !!resolvedSatelliteTilesUrl || hasSatelliteLayer();
-    }
-
-    function getMapModeLabel(mode) {
-      if (mode === 'satellite_contours') return i18nMapMode.mapModeSatelliteContours || 'Satellite + Contours';
-      return i18nMapMode.mapModeSatellite || 'Satellite';
     }
 
     function syncMapModeControl() {
@@ -4567,7 +4545,7 @@
         mediaViewerIndex = safeIndex;
         overlayActive = true;
         currentDisplayedPhoto = item.photo || null;
-        showOverlay(item.fullUrl || item.thumbUrl || '', item.caption || item.title || 'Photo', item.photo && item.photo.source_post_id, item.photo && item.photo.source_post_title ? item.photo.source_post_title : '', item.photo && item.photo.timestamp ? item.photo.timestamp : '', extractFilenameFromUrl(item.fullUrl || item.thumbUrl || ''));
+        showOverlay(item.fullUrl || item.thumbUrl || '', item.caption || item.title || 'Photo', item.photo && item.photo.source_post_id, item.photo && item.photo.source_post_title ? item.photo.source_post_title : '', item.photo && item.photo.timestamp ? item.photo.timestamp : '');
       }
 
       // Invalidate media grid cache when track data changes
@@ -4824,7 +4802,7 @@
             el.appendChild(inner);
             el.addEventListener('mouseenter', function(){ inner.style.transform = 'scale(1.8)'; });
             el.addEventListener('mouseleave', function(){ inner.style.transform = 'scale(1)'; });
-            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '') || 'Photo', ph.source_post_id, ph.source_post_title || '', ph.timestamp || '', extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '')); });
+            el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); showOverlay(ph.fullUrl || ph.thumbUrl || '', nonEmptyText(ph.caption) || nonEmptyText(ph.description) || nonEmptyText(ph.title) || extractFilenameFromUrl(ph.fullUrl || ph.thumbUrl || '') || 'Photo', ph.source_post_id, ph.source_post_title || '', ph.timestamp || ''); });
             var marker = new window.maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
             photoMarkers.push({ marker: marker, photo: ph, lngLat: lngLat, pDist: pDistApprox });
             if (pDistApprox != null) { tmpByDist.push({ p: ph, pDist: pDistApprox, lngLat: lngLat }); }
@@ -7670,6 +7648,13 @@
           });
         } catch(_) { return Promise.resolve(); }
       }
+      /**
+       * Prefetches map tiles for the current viewport area at the current or next zoom level.
+       * Used to ensure smooth playback by requesting all needed tiles for the visible map area.
+       * @param {number} [margin] - Margin to expand bounds (default 0.2).
+       * @param {boolean} [extraZoom] - If true, also prefetch one zoom level higher.
+       * @param {number} [bearingDeg] - Map bearing in degrees for rotation-aware prefetch.
+       */
       function prefetchViewportTiles(margin, extraZoom, bearingDeg) {
         try {
           var templates = getPrefetchTileTemplates(); if (!templates || templates.length === 0) return;
@@ -7822,7 +7807,7 @@
       overlay.appendChild(overlayClose);
       ui.mapEl.appendChild(overlay);
       var overlayLastFocusedElement = null;
-      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp, photoFilename) { 
+      function showOverlay(url, caption, sourcePostId, sourcePostTitle, photoTimestamp) { 
         DBG.log('overlay show', { url:url, caption: !!caption, sourcePostId: sourcePostId, sourcePostTitle: sourcePostTitle, photoTimestamp: photoTimestamp });
         
         // Clear any existing map layer first to prevent distorted frames
@@ -8199,7 +8184,7 @@
         overlayActive = true;
         currentDisplayedPhoto = next; // Track the currently displayed photo
         DBG.log('show photo overlay', { url: next.fullUrl || next.thumbUrl });
-        showOverlay(next.fullUrl || next.thumbUrl || '', nonEmptyText(next.caption) || nonEmptyText(next.description) || nonEmptyText(next.title) || extractFilenameFromUrl(next.fullUrl || next.thumbUrl || '') || 'Photo', next.source_post_id, next.source_post_title || '', next.timestamp || '', extractFilenameFromUrl(next.fullUrl || next.thumbUrl || ''));
+        showOverlay(next.fullUrl || next.thumbUrl || '', nonEmptyText(next.caption) || nonEmptyText(next.description) || nonEmptyText(next.title) || extractFilenameFromUrl(next.fullUrl || next.thumbUrl || '') || 'Photo', next.source_post_id, next.source_post_title || '', next.timestamp || '');
         
         // If recording, also draw the photo overlay on the canvas
         if (videoRecorder && videoRecorder.isRecording) {
@@ -11393,6 +11378,12 @@
             }
             
             // Function to get color for each sector based on wind direction
+            /**
+             * Returns the color for a wind rose sector based on its index.
+             * Maps 16 compass sectors to 4 main directions (N, E, S, W) and returns the corresponding color.
+             * @param {number} sectorIndex - Index of the wind rose sector (0-15)
+             * @returns {string} Hex color string for the sector direction
+             */
             function getSectorColor(sectorIndex) {
               // Map 16 sectors to 4 main directions (±45°)
               // N: sectors 0,1,14,15 (315°-45°)
