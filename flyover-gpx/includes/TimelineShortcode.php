@@ -448,9 +448,10 @@ final class TimelineShortcode
             $gainLabel = \number_format($elevationGainM, 0);
             $title = (string) \get_the_title($id);
             $postDateTs = (int) \get_post_time('U', true, $id);
-            
-            // Activity date from post meta (earliest GPX timestamp), fallback to post date
-            $activityDateTs = (int) ($meta[$id]['fgpx_activity_date_unix'] ?? $postDateTs);
+
+            // Guard against legacy/empty meta that can produce Unix epoch in timeline output.
+            $rawActivityDateTs = (int) ($meta[$id]['fgpx_activity_date_unix'] ?? 0);
+            $activityDateTs = $this->normalizeTrackTimestamp($rawActivityDateTs, $postDateTs);
             $dateLabel = (string) \date_i18n(\get_option('date_format'), $activityDateTs);
             
             $filePath = isset($meta[$id]['fgpx_file_path']) ? (string) $meta[$id]['fgpx_file_path'] : '';
@@ -480,9 +481,19 @@ final class TimelineShortcode
             $tracks[] = $track;
         }
 
-        // Sort by activity date (oldest first)
+        // Sort by effective activity date (oldest first)
         usort($tracks, static function (array $left, array $right): int {
-            return (int) ($left['activityDateTs'] ?? 0) <=> (int) ($right['activityDateTs'] ?? 0);
+            $leftTs = (int) ($left['activityDateTs'] ?? 0);
+            if ($leftTs <= 0) {
+                $leftTs = (int) ($left['postDateTs'] ?? 0);
+            }
+
+            $rightTs = (int) ($right['activityDateTs'] ?? 0);
+            if ($rightTs <= 0) {
+                $rightTs = (int) ($right['postDateTs'] ?? 0);
+            }
+
+            return $leftTs <=> $rightTs;
         });
 
         \set_transient($cacheKey, $tracks, 5 * MINUTE_IN_SECONDS);
@@ -503,7 +514,10 @@ final class TimelineShortcode
         $groupedMap = [];
 
         foreach ($tracks as $track) {
-            $ts = (int) ($track['activityDateTs'] ?? 0);
+            $ts = $this->normalizeTrackTimestamp(
+                (int) ($track['activityDateTs'] ?? 0),
+                (int) ($track['postDateTs'] ?? 0)
+            );
             $monthKey = \date('Y-m', $ts); // e.g., "2025-03"
             $monthLabel = \date_i18n('F Y', $ts);
             $monthTs = (int) \strtotime($monthKey . '-01');
@@ -542,6 +556,10 @@ final class TimelineShortcode
     {
         $trackId = (int) ($track['id'] ?? 0);
         $filePath = (string) ($track['filePath'] ?? '');
+        $activityDateTs = $this->normalizeTrackTimestamp(
+            (int) ($track['activityDateTs'] ?? 0),
+            (int) ($track['postDateTs'] ?? 0)
+        );
 
         // Generate fresh nonce for GPX download
         $gpxDownloadNonce = $downloadEnabled && $filePath !== ''
@@ -555,10 +573,22 @@ final class TimelineShortcode
             'durationLabel' => (string) ($track['durationLabel'] ?? ''),
             'elevationGainLabel' => (string) ($track['elevationGainLabel'] ?? ''),
             'dateLabel' => (string) ($track['dateLabel'] ?? ''),
-            'activityDateTs' => (int) ($track['activityDateTs'] ?? 0),
+            'activityDateTs' => $activityDateTs,
             'previewUrl' => $previewUrl,
             'gpxDownloadNonce' => $gpxDownloadNonce,
         ];
+    }
+
+    private function normalizeTrackTimestamp(int $activityDateTs, int $postDateTs = 0): int
+    {
+        if ($activityDateTs > 0) {
+            return $activityDateTs;
+        }
+        if ($postDateTs > 0) {
+            return $postDateTs;
+        }
+
+        return (int) \time();
     }
 
     /**

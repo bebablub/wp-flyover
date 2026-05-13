@@ -187,6 +187,37 @@ class TimelineShortcodeTest extends TestCase
         $this->assertEmpty($grouped);
     }
 
+    public function test_normalize_track_timestamp_falls_back_to_post_date(): void
+    {
+        $postDateTs = (int) strtotime('2025-04-08 12:00:00');
+        $normalized = $this->invokeMethod($this->timeline, 'normalizeTrackTimestamp', [0, $postDateTs]);
+
+        $this->assertSame($postDateTs, $normalized);
+    }
+
+    public function test_group_tracks_by_month_uses_post_date_when_activity_ts_is_zero(): void
+    {
+        $tracks = [
+            [
+                'id' => 11,
+                'title' => 'Legacy Track',
+                'activityDateTs' => 0,
+                'postDateTs' => (int) strtotime('2025-04-08 12:00:00'),
+                'distanceKm' => 3.2,
+                'durationLabel' => '20m',
+                'elevationGainLabel' => '40',
+                'dateLabel' => 'April 8, 2025',
+            ],
+        ];
+
+        $grouped = $this->invokeMethod($this->timeline, 'groupTracksByMonth', [$tracks, []]);
+
+        $this->assertCount(1, $grouped);
+        $this->assertNotSame(0, (int) $grouped[0]['monthTs']);
+        $this->assertStringNotContainsString('1970', (string) $grouped[0]['month']);
+        $this->assertSame((int) strtotime('2025-04-01'), (int) $grouped[0]['monthTs']);
+    }
+
     /**
      * Test batch get preview URLs handles empty input.
      */
