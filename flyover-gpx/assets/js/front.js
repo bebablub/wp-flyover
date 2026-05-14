@@ -9061,7 +9061,7 @@
         metricsElevBox.className = 'fgpx-metrics-elevation';
         metricsElevBox.style.cssText = metricsBoxStyle + 'right:12%;';
         metricsElevLabel = document.createElement('span');
-        metricsElevLabel.textContent = '0 m';
+        metricsElevLabel.textContent = '+0° / 0m';
         metricsElevBox.appendChild(metricsElevLabel);
         ui.mapEl.appendChild(metricsElevBox);
         // Bottom direction overlay (bearing and cardinal)
@@ -15684,6 +15684,29 @@
         }
       }
 
+      function gradeAtIndex(index) {
+        if (!Array.isArray(coords) || coords.length < 2) return 0;
+        if (!Array.isArray(cumDist) || cumDist.length !== coords.length) return 0;
+
+        var idx = Math.max(0, Math.min(coords.length - 1, Number(index) || 0));
+        var fromIdx = Math.max(0, idx - 3);
+        var toIdx = Math.min(coords.length - 1, idx + 3);
+        if (toIdx <= fromIdx) return 0;
+
+        var elevFrom = Number(coords[fromIdx] && coords[fromIdx][2]);
+        var elevTo = Number(coords[toIdx] && coords[toIdx][2]);
+        if (!isFinite(elevFrom) || !isFinite(elevTo)) return 0;
+
+        var distFrom = Number(cumDist[fromIdx]);
+        var distTo = Number(cumDist[toIdx]);
+        if (!isFinite(distFrom) || !isFinite(distTo)) return 0;
+
+        var distDiff = distTo - distFrom;
+        if (distDiff <= 0.5) return 0;
+
+        return ((elevTo - elevFrom) / distDiff) * 100;
+      }
+
       /**
        * Returns playback cadence parameters based on speed, terrain, and tab.
        * @param {number} speedMul - Speed multiplier.
@@ -16376,9 +16399,11 @@
               // Skip expensive text churn this frame.
             } else {
               hudCooldown = 0;
-              // Elevation (m) from nearest point
-              var elevNow = Math.round(yNow);
-              setTextIfChanged(metricsElevLabel, elevNow + ' m');
+              // Elevation and local grade around the current track index.
+              var elevNow = isFinite(Number(yNow)) ? Math.round(Number(yNow)) : 0;
+              var gradeNow = Math.round(gradeAtIndex(idxForY));
+              var gradePrefix = gradeNow > 0 ? '+' : '';
+              setTextIfChanged(metricsElevLabel, gradePrefix + gradeNow + '° / ' + elevNow + 'm');
               // Distance (km) from start or privacy start
               var dStart = privacyEnabled ? privacyStartD : 0;
               var distKm = Math.max(0, (d - dStart) / 1000);
