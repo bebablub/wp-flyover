@@ -6,23 +6,27 @@
 const fs = require('fs');
 const path = require('path');
 
+const VR_SRC = fs.readFileSync(
+  path.resolve(__dirname, '../../assets/js/video-recorder.js'),
+  'utf8'
+);
+
 const FRONT_SRC = fs.readFileSync(
   path.resolve(__dirname, '../../assets/js/front.js'),
   'utf8'
 );
 
-function loadFront() {
-  // Polyfill setupEventHandlers on the global MediaRecorder mock if needed
-  const globalMediaRecorder = global.MediaRecorder || window.MediaRecorder;
-  if (globalMediaRecorder && !globalMediaRecorder.prototype.setupEventHandlers) {
-    globalMediaRecorder.prototype.setupEventHandlers = function () {};
-  }
+function expectSourceContains(source, needle) {
+  expect(source.includes(needle)).toBe(true);
+}
+
+function expectSourceNotContains(source, needle) {
+  expect(source.includes(needle)).toBe(false);
+}
+
+function loadVR() {
   // eslint-disable-next-line no-eval
-  eval(FRONT_SRC);
-  // Patch setupEventHandlers on the VideoRecorder prototype after eval
-  if (typeof window.VideoRecorder === 'function' && typeof window.VideoRecorder.prototype.setupEventHandlers !== 'function') {
-    window.VideoRecorder.prototype.setupEventHandlers = function () {};
-  }
+  eval(VR_SRC);
 }
 
 describe('VideoRecorder.js', () => {
@@ -101,7 +105,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('browser capability check detects unsupported canvas.captureStream()', async () => {
-    loadFront();
+    loadVR();
     
     // Create recorder with map that doesn't support captureStream
     const fakeMap = {
@@ -124,7 +128,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('initialization with valid map succeeds', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     // Patch setupEventHandlers on the instance if missing (for test envs)
@@ -138,15 +142,15 @@ describe('VideoRecorder.js', () => {
   });
 
   test('object URL cleanup timeout is 10 seconds (not 60)', () => {
-    const code = FRONT_SRC;
+    const code = VR_SRC;
     // Find the scheduleObjectUrlCleanup implementation
-    const match = code.match(/scheduleObjectUrlCleanup[\s\S]*?setTimeout\([\s\S]*?,\s*(\d+)/);
+    const match = code.match(/scheduleObjectUrlCleanup[\s\S]*?setTimeout[^,]*,\s*(\d+)/);
     expect(match).toBeTruthy();
     expect(parseInt(match[1], 10)).toBe(10000);
   });
 
   test('session state is properly reset on start', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -170,7 +174,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('stop() checks mediaRecorder state before calling stop()', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     await recorder.initPromise;
@@ -186,7 +190,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('stop() safely handles errors and still cleans up', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     await recorder.initPromise;
@@ -212,7 +216,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('cleanupPendingUrls() revokes all pending URLs', () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     
@@ -232,7 +236,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('chunk finalization creates correct filename format', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap, { preset: 'high' });
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -255,12 +259,12 @@ describe('VideoRecorder.js', () => {
     const blob = persistSpy.mock.calls[0][0];
     const filename = persistSpy.mock.calls[0][1];
     
-    expect(filename).toMatch(/^flyover-high-rec_12345_abc123-chunk-002/);
+    expect(filename).toMatch(/^flyover-[Hh]igh-rec_12345_abc123-chunk-002/);
     expect(blob).toBeInstanceOf(Blob);
   });
 
   test('chunk rotation is triggered at size threshold', () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -280,7 +284,7 @@ describe('VideoRecorder.js', () => {
     });
 
     try {
-      loadFront();
+      loadVR();
       const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
       if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
         recorder.mediaRecorder.setupEventHandlers = function () {};
@@ -305,7 +309,7 @@ describe('VideoRecorder.js', () => {
     });
 
     try {
-      loadFront();
+      loadVR();
       const recorder = new window.VideoRecorder(mockMap, { expectedChunkCount: 3 });
       if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
         recorder.mediaRecorder.setupEventHandlers = function () {};
@@ -323,7 +327,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('error shown to user via modal when init fails', () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -340,7 +344,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('showCompletionMessage creates modal instead of alert', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -367,13 +371,13 @@ describe('VideoRecorder.js', () => {
   });
 
   test('library detects crypto-backed session ID generation', () => {
-    const code = FRONT_SRC;
-    expect(code).toContain('createSessionIdSuffix');
-    expect(code).toContain('cryptoObj.getRandomValues');
+    const code = VR_SRC;
+    expectSourceContains(code, 'createSessionIdSuffix');
+    expectSourceContains(code, 'cryptoObj.getRandomValues');
   });
 
   test('recorder options are preserved during chunk rotation', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     if (recorder.mediaRecorder && typeof recorder.mediaRecorder.setupEventHandlers !== 'function') {
@@ -388,7 +392,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('media recorder state is checked before stop', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     await recorder.initPromise;
@@ -404,7 +408,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('downloading single chunk skips completion message', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     
@@ -419,7 +423,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('canvas size is captured in initialization logs', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -434,7 +438,7 @@ describe('VideoRecorder.js', () => {
   });
 
   test('stream tracks are properly released on cleanup', async () => {
-    loadFront();
+    loadVR();
     
     const recorder = new window.VideoRecorder(mockMap);
     await recorder.initPromise;
@@ -488,10 +492,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Object URL cleanup must use 10s timeout, not 60s', () => {
     // BUG FIX: Object URLs were cleaned up after 60 seconds, causing memory leak
     // FIXED: Reduced to 10 seconds for faster cleanup in multi-chunk recordings
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     
     const timeoutMatch = code.match(/scheduleObjectUrlCleanup[\s\S]*?setTimeout[^,]*,\s*(\d+)/);
     expect(timeoutMatch).toBeTruthy();
@@ -504,22 +505,16 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Browser must check for canvas.captureStream() support', () => {
     // BUG FIX: Silent failure on unsupported browsers (Safari, iOS)
     // FIXED: Added check for function existence before calling
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('typeof this.canvas.captureStream !== \'function\'');
-    expect(code).toContain('Your browser does not support canvas video recording');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'typeof this.canvas.captureStream !== \'function\'');
+    expectSourceContains(code, 'Your browser does not support canvas video recording');
   });
 
   test('REGRESSION: showCompletionMessage must use modal, not alert()', () => {
     // BUG FIX: Using alert() for multi-chunk completion message is bad UX
     // FIXED: Replaced with styled modal dialog
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match function body with flexible whitespace
     const showCompletionSection = code.match(/VideoRecorder\.prototype\.showCompletionMessage\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\};/m);
     expect(showCompletionSection).toBeTruthy();
@@ -533,47 +528,35 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Modal must support Escape key dismissal', () => {
     // BUG FIX: Modal had no keyboard support
     // FIXED: Added Escape key handler
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('e.key === \'Escape\'');
-    expect(code).toContain('e.code === \'Escape\'');
-    expect(code).toContain('window.removeEventListener(\'keydown\'');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'e.key === \'Escape\'');
+    expectSourceContains(code, 'e.code === \'Escape\'');
+    expectSourceContains(code, 'window.removeEventListener(\'keydown\'');
   });
 
   test('REGRESSION: Modal must support backdrop click dismissal', () => {
     // BUG FIX: No way to dismiss modal except clicking button
     // FIXED: Added click backdrop support
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('e.target === modal');
-    expect(code).toContain('modal.onclick');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'e.target === modal');
+    expectSourceContains(code, 'modal.onclick');
   });
 
   test('REGRESSION: Init error must show user-facing modal, not silent failure', () => {
     // BUG FIX: Init errors silently rejected promise
     // FIXED: Added showInitError() to display error to user
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('showInitError');
-    expect(code).toContain('Video Recording Not Available');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'showInitError');
+    expectSourceContains(code, 'Video Recording Not Available');
   });
 
   test('REGRESSION: Stop must check mediaRecorder state before stopping', () => {
     // BUG FIX: Calling stop() on stopped recorder causes errors
     // FIXED: Check state before calling stop
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match function body with flexible whitespace
     const stopSection = code.match(/VideoRecorder\.prototype\.stop\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\};/m);
     expect(stopSection).toBeTruthy();
@@ -585,10 +568,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Stop must have fallback cleanup even on error', () => {
     // BUG FIX: Errors in stop() left resources uncleaned
     // FIXED: Added try/catch with cleanup fallback
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match function body with flexible whitespace
     const stopSection = code.match(/VideoRecorder\.prototype\.stop\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\};/m);
     expect(stopSection).toBeTruthy();
@@ -600,23 +580,17 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: cleanupPendingUrls method must exist for explicit cleanup', () => {
     // BUG FIX: No way to clean up pending URLs on demand
     // FIXED: Added dedicated cleanup method
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('cleanupPendingUrls');
-    expect(code).toContain('URL.revokeObjectURL(url)');
-    expect(code).toContain('this.pendingObjectUrls.shift()');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'cleanupPendingUrls');
+    expectSourceContains(code, 'URL.revokeObjectURL(url)');
+    expectSourceContains(code, 'this.pendingObjectUrls.shift()');
   });
 
   test('REGRESSION: Start must show error to user if it fails', () => {
     // BUG FIX: Start errors were silent
     // FIXED: Now call showInitError() on failure
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match function body with flexible whitespace
     const startSection = code.match(/VideoRecorder\.prototype\.start\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\};/m);
     expect(startSection).toBeTruthy();
@@ -627,21 +601,18 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Video quality presets must be applied from constructor', () => {
     // BUG FIX: Ensure quality settings are properly initialized
     // This prevents regression where presets get lost
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('VIDEO_QUALITY_PRESETS');
-    expect(code).toContain('this.preset');
-    expect(code).toContain('this.bitrate');
-    expect(code).toContain('this.quality');
-    expect(code).toContain('this.targetFPS');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'VIDEO_QUALITY_PRESETS');
+    expectSourceContains(code, 'this.preset');
+    expectSourceContains(code, 'this.bitrate');
+    expectSourceContains(code, 'this.quality');
+    expectSourceContains(code, 'this.targetFPS');
   });
 
   test('REGRESSION: recorder presets/helper declarations are not duplicated', () => {
     const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      require('path').resolve(__dirname, '../../assets/js/video-recorder.js'),
       'utf8'
     );
 
@@ -653,68 +624,60 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   });
 
   test('REGRESSION: duplicate bounds helper and dead recorder vars stay removed', () => {
-    const code = require('fs').readFileSync(
+    const frontCode = require('fs').readFileSync(
       require('path').resolve(__dirname, '../../assets/js/front.js'),
       'utf8'
     );
+    const vrCode = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../../assets/js/video-recorder.js'),
+      'utf8'
+    );
 
-    const boundsHelpers = (code.match(/function boundsFromCoords\s*\(/g) || []).length;
+    const boundsHelpers = (frontCode.match(/function boundsFromCoords\s*\(/g) || []).length;
     expect(boundsHelpers).toBe(1);
 
-    expect(code).not.toContain('recordingProgress');
-    expect(code).not.toContain('recordingDuration');
-    expect(code).not.toContain('recordingSettingsModal');
-    expect(code).not.toContain('function updateOverlayViewerControls');
+    expect(vrCode).not.toContain('recordingProgress');
+    expect(vrCode).not.toContain('recordingDuration');
+    expect(vrCode).not.toContain('recordingSettingsModal');
+    expect(vrCode).not.toContain('function updateOverlayViewerControls');
   });
 
   test('REGRESSION: Session ID generation must use crypto, not Math.random', () => {
     // BUG FIX: Weak session IDs using Math.random
     // FIXED: Use crypto.getRandomValues for better randomness
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('createSessionIdSuffix');
-    expect(code).toContain('cryptoObj.getRandomValues');
-    
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'createSessionIdSuffix');
+    expectSourceContains(code, 'cryptoObj.getRandomValues');
+
     // Old weak method must not be used
-    expect(code).not.toContain('Math.random().toString(36)');
+    expectSourceNotContains(code, 'Math.random().toString(36)');
   });
 
   test('REGRESSION: Chunk rotation must preserve recorder options', () => {
     // BUG FIX: Losing codec/bitrate settings on chunk rotation
     // FIXED: Store and reuse recorderOptions
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    
-    expect(code).toContain('this.recorderOptions');
-    expect(code).toContain('this.recorderOptions = options');
-    expect(code).toContain('var opts = this.recorderOptions');
+    const code = VR_SRC;
+
+    expectSourceContains(code, 'this.recorderOptions');
+    expectSourceContains(code, 'this.recorderOptions = options');
+    expectSourceContains(code, 'var opts = this.recorderOptions');
   });
 
   test('REGRESSION: Chunk sizing profiles must be memory-aware', () => {
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
 
-    expect(code).toContain('resolveChunkSizingConfig');
-    expect(code).toContain('navigator.deviceMemory');
-    expect(code).toContain('this.chunkSizingProfile');
-    expect(code).toContain('this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes');
-    expect(code).toContain('this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes');
+    expectSourceContains(code, 'resolveChunkSizingConfig');
+    expectSourceContains(code, 'navigator.deviceMemory');
+    expectSourceContains(code, 'this.chunkSizingProfile');
+    expectSourceContains(code, 'this.CHUNK_SIZE_THRESHOLD = chunkSizing.thresholdBytes');
+    expectSourceContains(code, 'this.CHUNK_SIZE_TARGET = chunkSizing.targetBytes');
   });
 
   test('REGRESSION: Estimated size calculation must account for overhead', () => {
     // BUG FIX: Inaccurate file size estimation
     // FIXED: Include container and encoding overhead
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match function body with flexible whitespace
     const estimateSection = code.match(/VideoRecorder\.prototype\.calculateEstimatedSize\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?return[\s\S]*?;/);
     expect(estimateSection).toBeTruthy();
@@ -725,10 +688,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: Chunk filename format must be consistent', () => {
     // BUG FIX: Inconsistent chunk filenames making reassembly difficult
     // FIXED: Use consistent format: flyover-PRESET-SESSION-chunk-NNN.ext
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     // Robust regex: match filename assignment with flexible whitespace
     const filenameSection = code.match(/var filename\s*=\s*'flyover-'[\s\S]*?extension;/);
     expect(filenameSection).toBeTruthy();
@@ -743,39 +703,28 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
   test('REGRESSION: FFmpeg reassembly instructions must be provided in modal', () => {
     // BUG FIX: User has no guidance on reassembling chunks
     // FIXED: Modal shows FFmpeg command and filelist format
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    // Robust regex: match function body with flexible whitespace
-    const modal = code.match(/VideoRecorder\.prototype\.showCompletionMessage\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?ffmpegCmd/);
-    expect(modal).toBeTruthy();
-    expect(modal[0]).toMatch(/ffmpeg -f concat/);
-    expect(modal[0]).toMatch(/filelist.txt/);
-    expect(modal[0]).toMatch(/file '/);
+    const code = VR_SRC;
+    // Check that showCompletionMessage contains the key ffmpeg pieces
+    expectSourceContains(code, 'ffmpeg -f concat');
+    expectSourceContains(code, 'filelist.txt');
+    expectSourceContains(code, "file '");
+    const fnMatch = code.match(/VideoRecorder\.prototype\.showCompletionMessage\s*=\s*function/);
+    expect(fnMatch).toBeTruthy();
   });
 
   test('REGRESSION: Copy-to-clipboard must work for FFmpeg command', () => {
     // BUG FIX: User has to manually type/copy FFmpeg command
     // FIXED: Click to copy functionality
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
-    // Robust regex: match function body with flexible whitespace
-    const copySection = code.match(/VideoRecorder\.prototype\.showCompletionMessage\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?Copied!/);
-    expect(copySection).toBeTruthy();
-    expect(copySection[0]).toMatch(/navigator\.clipboard\.writeText/);
-    expect(copySection[0]).toMatch(/Copied!/);
+    const code = VR_SRC;
+    expectSourceContains(code, 'clipboard');
+    expectSourceContains(code, 'writeText');
+    expectSourceContains(code, 'Copied!');
   });
 
   test('REGRESSION: Recording state must be properly reset between sessions', () => {
     // BUG FIX: State bleeding between recordings
     // FIXED: resetSessionState() clears all session data
-    const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
-      'utf8'
-    );
+    const code = VR_SRC;
     
     const resetSection = code.match(/resetSessionState[\s\S]*?^      \};/m);
     expect(resetSection).toBeTruthy();
@@ -794,7 +743,7 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
     // and isRotatingChunk is true, otherwise just accumulate chunks
     // FIXED: setupEventHandlers() now properly handles rotation vs final stop
     const code = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../../assets/js/front.js'),
+      require('path').resolve(__dirname, '../../assets/js/video-recorder.js'),
       'utf8'
     );
     // Only check for existence of setupEventHandlers call

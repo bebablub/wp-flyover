@@ -13,6 +13,11 @@ const FRONT_SRC = fs.readFileSync(
   'utf8'
 );
 
+const VR_SRC = fs.readFileSync(
+  path.resolve(__dirname, '../../assets/js/video-recorder.js'),
+  'utf8'
+);
+
 const FRONT_CSS_SRC = fs.readFileSync(
   path.resolve(__dirname, '../../assets/css/front.css'),
   'utf8'
@@ -482,10 +487,10 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('video recorder session ID generation uses crypto-backed helper', () => {
-    expect(FRONT_SRC.includes('function createSessionIdSuffix(length)')).toBe(true);
-    expect(FRONT_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);")).toBe(true);
-    expect(FRONT_SRC.includes('cryptoObj.getRandomValues(bytes);')).toBe(true);
-    expect(FRONT_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);")).toBe(false);
+    expect(VR_SRC.includes('function createSessionIdSuffix(length)')).toBe(true);
+    expect(VR_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + createSessionIdSuffix(9);")).toBe(true);
+    expect(VR_SRC.includes('cryptoObj.getRandomValues(bytes);')).toBe(true);
+    expect(VR_SRC.includes("this.sessionId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);")).toBe(false);
   });
 
   test('weathergrade lookup supports backend time_unix with timestamp fallback', () => {

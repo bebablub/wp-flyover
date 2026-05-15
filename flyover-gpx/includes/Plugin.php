@@ -105,10 +105,19 @@ final class Plugin
             true
         );
 
+        // Video recorder module
+        \wp_register_script(
+            'fgpx-video-recorder',
+            \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/video-recorder.js'),
+            ['fgpx-dbg'],
+            FGPX_VERSION,
+            true
+        );
+
         \wp_register_script(
             'fgpx-front',
             \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
-            ['maplibre-gl-js', 'chartjs', 'suncalc', 'fgpx-dbg'],
+            ['maplibre-gl-js', 'chartjs', 'suncalc', 'fgpx-dbg', 'fgpx-video-recorder'],
             FGPX_VERSION,
             true
         );
@@ -576,6 +585,7 @@ final class Plugin
                       '"' . esc_js($chartJs) . '",' .
                       '"' . esc_js($suncalcJs) . '",' .
                       '"' . esc_js($dbgJs) . '",' .
+                      '"' . esc_js(\esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/video-recorder.js')) . '",' .
                       '"' . esc_js($frontJs) . '"' .
                       $lazyExtras .
                     '];',

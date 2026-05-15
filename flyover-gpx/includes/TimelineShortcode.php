@@ -226,6 +226,7 @@ final class TimelineShortcode
                 AssetManager::getAssetUrl('chartjs'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/dbg.js'),
+                \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/video-recorder.js'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
             ])),
         ];
