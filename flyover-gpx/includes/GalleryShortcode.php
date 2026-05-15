@@ -563,7 +563,7 @@ final class GalleryShortcode
             \wp_register_script(
                 'fgpx-front',
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
-                ['maplibre-gl-js', 'chartjs', 'suncalc'],
+                ['maplibre-gl-js', 'chartjs', 'suncalc', 'fgpx-dbg'],
                 FGPX_VERSION,
                 true
             );
@@ -709,6 +709,7 @@ final class GalleryShortcode
                 AssetManager::getAssetUrl('maplibre-gl-js'),
                 AssetManager::getAssetUrl('chartjs'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js'),
+                \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/dbg.js'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
             ])),
             'strings' => [

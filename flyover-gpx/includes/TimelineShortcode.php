@@ -225,6 +225,7 @@ final class TimelineShortcode
                 AssetManager::getAssetUrl('maplibre-gl-js'),
                 AssetManager::getAssetUrl('chartjs'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js'),
+                \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/dbg.js'),
                 \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
             ])),
         ];
@@ -270,7 +271,7 @@ final class TimelineShortcode
         \wp_enqueue_script(
             'fgpx-timeline',
             \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/timeline.js'),
-            [],
+            ['fgpx-dbg'],
             FGPX_VERSION,
             true
         );

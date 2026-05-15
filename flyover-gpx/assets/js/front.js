@@ -21,84 +21,11 @@
     return (root || document).querySelector(selector);
   }
 
-  /**
-   * Central Debug Logger (DBG)
-   *
-   * Provides conditional debug logging that respects the admin setting
-   * "Output detailed console debug messages". All debug messages are
-   * prefixed with [FGPX] for easy identification and filtering.
-   *
-   * Features:
-   * - Zero performance overhead when debug logging is disabled
-   * - Graceful fallback if console is unavailable
-   * - Consistent message formatting across the application
-   * - Performance timing utilities for optimization analysis
-   *
-   * @namespace DBG
-   */
-  var DBG = (function () {
-    /**
-     * Check if debug logging is enabled via admin settings
-     * @returns {boolean} True if debug logging should be active
-     */
-    function isEnabled() {
-      return !!(window.FGPX && window.FGPX.debugLogging);
-    }
-
-    /**
-     * Log informational debug message
-     * @param {...*} args - Arguments to log (same as console.info)
-     */
-    function log() {
-      if (!isEnabled()) return;
-      try {
-        console.info.apply(console, ['[FGPX]'].concat([].slice.call(arguments)));
-      } catch (e) {
-        /* console unavailable */
-      }
-    }
-
-    /**
-     * Log warning debug message
-     * @param {...*} args - Arguments to log (same as console.warn)
-     */
-    function warn() {
-      if (!isEnabled()) return;
-      try {
-        console.warn.apply(console, ['[FGPX]'].concat([].slice.call(arguments)));
-      } catch (e) {
-        /* console unavailable */
-      }
-    }
-
-    /**
-     * Start performance timer
-     * @param {string} label - Timer label for identification
-     */
-    function time(label) {
-      if (!isEnabled()) return;
-      try {
-        console.time('[FGPX] ' + label);
-      } catch (e) {
-        /* console unavailable */
-      }
-    }
-
-    /**
-     * End performance timer and log duration
-     * @param {string} label - Timer label to end
-     */
-    function timeEnd(label) {
-      if (!isEnabled()) return;
-      try {
-        console.timeEnd('[FGPX] ' + label);
-      } catch (e) {
-        /* console unavailable */
-      }
-    }
-
-    return { isEnabled: isEnabled, log: log, warn: warn, time: time, timeEnd: timeEnd };
-  })();
+  // Debug logger — provided by dbg.js (loaded before front.js).
+  // Fallback no-op keeps front.js safe if dbg.js is missing (e.g. unit tests).
+  var _noop = function () {};
+  var _noopDBG = { isEnabled: function () { return false; }, log: _noop, warn: _noop, time: _noop, timeEnd: _noop };
+  var DBG = window.DBG || _noopDBG;
 
   DBG.log('Front.js initialization started');
 

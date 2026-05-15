@@ -8,29 +8,11 @@
 (function () {
   'use strict';
 
-  /**
-   * Checks if timeline debug logging is enabled.
-   * @returns {boolean}
-   */
-  function isTimelineDebugEnabled() {
-    return !!(window.FGPX && window.FGPX.debugLogging);
-  }
-
-  /**
-   * Timeline debug logger. Uses window.DBG if available, otherwise console.log.
-   */
-  function DBG() {
-    if (typeof window.DBG === 'function') {
-      window.DBG.apply(window, arguments);
-      return;
-    }
-    if (!isTimelineDebugEnabled() || !window.console || typeof window.console.log !== 'function') {
-      return;
-    }
-    var args = Array.prototype.slice.call(arguments);
-    args.unshift('[FGPX Timeline]');
-    window.console.log.apply(window.console, args);
-  }
+  // Debug logger — provided by dbg.js (loaded as a dependency).
+  // Fallback no-op keeps timeline.js safe if dbg.js is missing (e.g. unit tests).
+  var _noop = function () {};
+  var _noopDBG = { isEnabled: function () { return false; }, log: _noop, warn: _noop, time: _noop, timeEnd: _noop };
+  var DBG = window.DBG || _noopDBG;
 
   // ---- Asset loading (same pattern as gallery.js) ----
 
@@ -239,7 +221,7 @@
   function initTimeline(container, config) {
     // Seed global config (including debugLogging) before first log message.
     applyPlayerConfig(config);
-    DBG('Timeline init', { rootId: config.rootId, orientation: config.orientation });
+    DBG.log('Timeline init', { rootId: config.rootId, orientation: config.orientation });
     applyTimelineCssVariables(container, config);
 
     var monthGroupingRaw = config.monthGrouping;
@@ -332,12 +314,12 @@
     var requestPromise;
     if (preferAjaxFirst) {
       requestPromise = ajaxLoadTracks(state, params).catch(function (error) {
-        DBG('AJAX load failed, trying REST', error);
+        DBG.log('AJAX load failed, trying REST', error);
         return fetchRestTracks();
       });
     } else if (typeof window.fetch === 'function') {
       requestPromise = fetchRestTracks().catch(function (error) {
-        DBG('REST fetch failed, trying AJAX', error);
+        DBG.log('REST fetch failed, trying AJAX', error);
         return ajaxLoadTracks(state, params);
       });
     } else {
@@ -349,7 +331,7 @@
         state.isLoading = false;
 
         if (!data || !Array.isArray(data.months)) {
-          DBG('Invalid response structure', data);
+          DBG.log('Invalid response structure', data);
           showTimelineError(contentWrapper, new Error('Invalid response structure'));
           return;
         }
@@ -389,13 +371,13 @@
           state.observedItem = null;
         }
 
-        DBG('Timeline batch loaded', {
+        DBG.log('Timeline batch loaded', {
           months: data.months.length,
           hasMore: state.hasMore,
         });
       })
       .catch(function (error) {
-        DBG('Timeline load error', error);
+        DBG.warn('Timeline load error', error);
         state.isLoading = false;
         showTimelineError(contentWrapper, error);
       });
@@ -706,7 +688,7 @@
     }
 
     state.modalOpen = true;
-    DBG('Opening modal for track', track.id);
+    DBG.log('Opening modal for track', track.id);
 
     // Create modal overlay
     var modal = document.createElement('div');
@@ -799,7 +781,7 @@
         window.FGPX.initContainer(playerContainer);
       })
       .catch(function (err) {
-        DBG('Player asset load failed', err);
+        DBG.warn('Player asset load failed', err);
         playerContainer.innerHTML = '';
         var errorMsg = document.createElement('div');
         errorMsg.className = 'timeline-error';
@@ -824,7 +806,7 @@
    */
   function closeTrackModal(state, modal, modalState) {
     state.modalOpen = false;
-    DBG('Closing modal');
+    DBG.log('Closing modal');
 
     // Remove event listeners
     if (modalState && modalState.escHandler) {

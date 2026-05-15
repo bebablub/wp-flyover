@@ -96,10 +96,19 @@ final class Plugin
             true
         );
 
+        // Shared debug logger (consumed by front.js, timeline.js, etc.)
+        \wp_register_script(
+            'fgpx-dbg',
+            \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/dbg.js'),
+            [],
+            FGPX_VERSION,
+            true
+        );
+
         \wp_register_script(
             'fgpx-front',
             \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js'),
-            ['maplibre-gl-js', 'chartjs', 'suncalc'],
+            ['maplibre-gl-js', 'chartjs', 'suncalc', 'fgpx-dbg'],
             FGPX_VERSION,
             true
         );
@@ -547,6 +556,7 @@ final class Plugin
                 $maplibreJs = AssetManager::getAssetUrl('maplibre-gl-js', 'script');
                 $chartJs = AssetManager::getAssetUrl('chartjs', 'script');
                 $suncalcJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/suncalc.js');
+                $dbgJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/dbg.js');
                 $frontJs = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/js/front.js');
                 $maplibreCss = AssetManager::getAssetUrl('maplibre-gl-css', 'style');
                 $frontCss = \esc_url_raw(\trailingslashit(FGPX_DIR_URL) . 'assets/css/front.css');
@@ -565,6 +575,7 @@ final class Plugin
                       '"' . esc_js($maplibreJs) . '",' .
                       '"' . esc_js($chartJs) . '",' .
                       '"' . esc_js($suncalcJs) . '",' .
+                      '"' . esc_js($dbgJs) . '",' .
                       '"' . esc_js($frontJs) . '"' .
                       $lazyExtras .
                     '];',
