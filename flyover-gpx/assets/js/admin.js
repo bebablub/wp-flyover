@@ -1381,4 +1381,99 @@
       );
     }
   }
+
+  // ============================================================================
+  // TAB SWITCHING FOR SETTINGS PAGE
+  // ============================================================================
+  function initSettingsTabs() {
+    const STORAGE_KEY = 'fgpx_settings_active_tab';
+    const $tabButtons = $('.fgpx-settings-tabs button');
+    const $tabContents = $('.fgpx-tab-content');
+
+    if (!$tabButtons.length || !$tabContents.length) {
+      return; // Tab elements not present on this page
+    }
+
+    // Ensure tabs/panels are linked for accessibility and deterministic visibility.
+    $tabButtons.each(function () {
+      const tabName = $(this).data('tab');
+      if (!tabName) return;
+      const tabId = 'fgpx-tab-' + tabName;
+      const panelId = tabName + '-content';
+      $(this).attr({
+        id: tabId,
+        'aria-controls': panelId,
+        tabindex: '-1',
+      });
+      $('#' + panelId).attr({
+        role: 'tabpanel',
+        'aria-labelledby': tabId,
+      });
+    });
+
+    // Load previously selected tab from localStorage
+    const savedTab = localStorage.getItem(STORAGE_KEY);
+    let activeTab = savedTab || 'display-layout'; // Default to first tab
+
+    // Make sure the active tab exists
+    if (!$('[data-tab="' + activeTab + '"]').length) {
+      activeTab = $tabButtons.first().data('tab') || 'display-layout';
+    }
+
+    // Initialize: show active tab
+    showTab(activeTab);
+
+    // Bind tab button clicks
+    $tabButtons.on('click', function (e) {
+      e.preventDefault();
+      const tab = $(this).data('tab');
+      if (tab) {
+        showTab(tab);
+      }
+    });
+
+    // Keyboard navigation (arrow keys)
+    $tabButtons.on('keydown', function (e) {
+      let target = null;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        target = $(this).prev('.fgpx-settings-tabs button');
+        if (!target.length) {
+          target = $tabButtons.last();
+        }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        target = $(this).next('.fgpx-settings-tabs button');
+        if (!target.length) {
+          target = $tabButtons.first();
+        }
+      }
+      if (target && target.length) {
+        e.preventDefault();
+        target.focus().trigger('click');
+      }
+    });
+
+    function showTab(tabName) {
+      // Deactivate all tabs and contents
+      $tabButtons.removeClass('active').attr({
+        'aria-selected': 'false',
+        tabindex: '-1',
+      });
+      $tabContents.removeClass('active').attr('hidden', true);
+
+      // Activate selected tab and content
+      $('[data-tab="' + tabName + '"]').addClass('active').attr({
+        'aria-selected': 'true',
+        tabindex: '0',
+      });
+      $('#' + tabName + '-content').addClass('active').removeAttr('hidden');
+
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEY, tabName);
+    }
+  }
+
+  // Initialize tabs when DOM is ready
+  $(document).ready(function () {
+    initSettingsTabs();
+  });
 })(jQuery);

@@ -52,9 +52,71 @@ final class AdminSettingsValidationTest extends TestCase
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
         $source = (string) file_get_contents($adminFile);
 
-        $this->assertStringContainsString('if (!\\in_array($mapSelectorDefault, [\'basic\', \'basic_contours\', \'satellite\'], true))', $source);
-        $this->assertStringContainsString('$mapSelectorDefault = \'basic\';', $source);
+        $this->assertStringContainsString('if ($mapSelectorDefault === \'basic\' || $mapSelectorDefault === \'\') { $mapSelectorDefault = \'satellite\'; }', $source);
+        $this->assertStringContainsString('if ($mapSelectorDefault === \'basic_contours\') { $mapSelectorDefault = \'satellite_contours\'; }', $source);
+        $this->assertStringContainsString('if (!\\in_array($mapSelectorDefault, [\'satellite\', \'satellite_contours\'], true)) { $mapSelectorDefault = \'satellite\'; }', $source);
         $this->assertStringContainsString('\\update_option(\'fgpx_map_selector_default\', $mapSelectorDefault, true);', $source);
+    }
+
+    public function test_settings_tabs_include_performance_panel_and_content_container(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('data-tab="performance"', $source);
+        $this->assertStringContainsString('id="performance-content" class="fgpx-tab-content"', $source);
+    }
+
+    public function test_playback_tab_content_is_not_split_by_visualization_panel(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $playbackClosePos = strpos($source, "echo '</div>'; // Close playback-content-content tab");
+        $visualizationPos = strpos($source, "// Tab 3: Visualization");
+
+        $this->assertNotFalse($playbackClosePos, 'Playback tab closing marker should exist.');
+        $this->assertNotFalse($visualizationPos, 'Visualization tab marker should exist.');
+        $this->assertLessThan($visualizationPos, $playbackClosePos, 'Playback panel should close before visualization panel starts.');
+        $this->assertStringNotContainsString('rest of Media & Privacy continues below', $source);
+    }
+
+    public function test_custom_css_section_is_in_visualization_tab_only(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $visualizationStart = strpos($source, "// Tab 3: Visualization");
+        $visualizationEnd = strpos($source, "echo '</div>'; // Close visualization-content tab");
+        $customCssPos = strpos($source, "Player Theme (Custom CSS)");
+
+        $this->assertNotFalse($visualizationStart);
+        $this->assertNotFalse($visualizationEnd);
+        $this->assertNotFalse($customCssPos);
+        $this->assertGreaterThan($visualizationStart, $customCssPos);
+        $this->assertLessThan($visualizationEnd, $customCssPos);
+        $this->assertStringNotContainsString("Save CSS", $source);
+    }
+
+    public function test_diagnostics_and_playback_statistics_are_in_advanced_tab_only(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $advancedStart = strpos($source, "// Tab 6: Advanced");
+        $advancedEnd = strpos($source, "echo '</div>'; // Close advanced-content tab");
+        $diagnosticsPos = strpos($source, "Error Logging & Diagnostics");
+        $playbackStatsPos = strpos($source, "Playback Statistics");
+
+        $this->assertNotFalse($advancedStart);
+        $this->assertNotFalse($advancedEnd);
+        $this->assertNotFalse($diagnosticsPos);
+        $this->assertNotFalse($playbackStatsPos);
+        $this->assertGreaterThan($advancedStart, $diagnosticsPos);
+        $this->assertLessThan($advancedEnd, $diagnosticsPos);
+        $this->assertGreaterThan($advancedStart, $playbackStatsPos);
+        $this->assertLessThan($advancedEnd, $playbackStatsPos);
+        $this->assertStringNotContainsString('Error Logging Section (separate, outside tabs)', $source);
     }
 
     public function test_contour_settings_are_rendered_and_persisted_with_bounds(): void

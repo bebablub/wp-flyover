@@ -397,9 +397,6 @@ final class Admin
 		if ($mapSelectorDefault === 'basic' || $mapSelectorDefault === '') { $mapSelectorDefault = 'satellite'; }
 		if ($mapSelectorDefault === 'basic_contours') { $mapSelectorDefault = 'satellite_contours'; }
 		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) { $mapSelectorDefault = 'satellite'; }
-		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
-			$mapSelectorDefault = 'basic';
-		}
 		$contoursEnabled = ($options['fgpx_contours_enabled'] ?? '1') === '1';
 		$contoursTilesUrl = (string) ($options['fgpx_contours_tiles_url'] ?? '');
 		$contoursSourceLayer = \trim((string) ($options['fgpx_contours_source_layer'] ?? 'contour'));
@@ -503,7 +500,18 @@ final class Admin
 		echo '<input type="hidden" name="action" value="fgpx_save_settings" />';
 		echo '<input type="hidden" name="fgpx_nonce" value="' . \esc_attr(\wp_create_nonce('fgpx_save_settings')) . '" />';
 		
-		// Map Display & Styling Section
+		// Tab Navigation
+		echo '<div class="fgpx-settings-tabs" role="tablist">';
+		echo '<button type="button" data-tab="display-layout" class="active" role="tab" aria-selected="true">' . \esc_html__('Display & Layout', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="playback-content" role="tab" aria-selected="false">' . \esc_html__('Playback & Content', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="visualization" role="tab" aria-selected="false">' . \esc_html__('Visualization', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="weather" role="tab" aria-selected="false">' . \esc_html__('Weather & Environmental', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="performance" role="tab" aria-selected="false">' . \esc_html__('Performance', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="advanced" role="tab" aria-selected="false">' . \esc_html__('Advanced', 'flyover-gpx') . '</button>';
+		echo '</div>';
+		
+		// Tab 1: Display & Layout
+		echo '<div id="display-layout-content" class="fgpx-tab-content active">';
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🗺️ Map Display & Styling', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row"><label for="fgpx_default_style">' . \esc_html__('Map style source', 'flyover-gpx') . '</label></th><td>';
@@ -663,6 +671,10 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_timeline_month_grouping" name="fgpx_timeline_month_grouping" value="1"' . ($timelineMonthGrouping === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show month headers and groups by default.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
+		echo '</div>'; // Close display-layout-content tab
+
+		// Tab 2: Playback & Content
+		echo '<div id="playback-content-content" class="fgpx-tab-content">';
 
 		// Playback Controls Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('▶️ Playback Controls & Interface', 'flyover-gpx') . '</h3>';
@@ -680,6 +692,44 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_hud_enabled" name="fgpx_hud_enabled" value="1"' . ($hudEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show live HUD overlay on the map', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
+
+		// Continue Playback & Content tab with Media & Privacy Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📷 Media & Privacy', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
+		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_order_mode">' . \esc_html__('Photo ordering mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_photo_order_mode" name="fgpx_photo_order_mode">';
+		echo '<option value="geo_first"' . selected($photoOrderMode, 'geo_first', false) . '>' . \esc_html__('Route order (GPS first)', 'flyover-gpx') . '</option>';
+		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_queue_rotation_enabled">' . \esc_html__('Rotate media gallery with playback', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"' . ($photoQueueRotationEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Keep the next upcoming photo in the first gallery position and move passed photos to the end with animation', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('When enabled, the Media tab behaves like a rotating queue during playback and recomputes order after seek or rewind.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Can be overridden per embed via shortcode attribute gpx_download="1" or gpx_download="0".', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_privacy_enabled">' . \esc_html__('Enable privacy mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_privacy_enabled" name="fgpx_privacy_enabled" value="1"' . ($privacyEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Hide first/last N km from playback (stats unaffected)', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_privacy_km">' . \esc_html__('Privacy distance (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_privacy_km" name="fgpx_privacy_km" class="small-text" min="0" step="0.1" value="' . \esc_attr($privacyKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Each end hidden by this distance when privacy mode is enabled. Default 3 km.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</table>';
+		echo '</div>'; // Close playback-content-content tab
+
+		// Tab 3: Visualization  
+		echo '<div id="visualization-content" class="fgpx-tab-content">';
 
 		// Route Visualization Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🎨 Route Visualization & Charts', 'flyover-gpx') . '</h3>';
@@ -768,39 +818,14 @@ final class Admin
 		echo '</div></td></tr>';
 		echo '</table>';
 
-		// Media & Privacy Section
-		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📷 Media & Privacy', 'flyover-gpx') . '</h3>';
-		echo '<table class="form-table" role="presentation">';
-		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
-		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_order_mode">' . \esc_html__('Photo ordering mode', 'flyover-gpx') . '</label></th><td>';
-		echo '<select id="fgpx_photo_order_mode" name="fgpx_photo_order_mode">';
-		echo '<option value="geo_first"' . selected($photoOrderMode, 'geo_first', false) . '>' . \esc_html__('Route order (GPS first)', 'flyover-gpx') . '</option>';
-		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
-		echo '</select>';
-		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_queue_rotation_enabled">' . \esc_html__('Rotate media gallery with playback', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"' . ($photoQueueRotationEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Keep the next upcoming photo in the first gallery position and move passed photos to the end with animation', 'flyover-gpx') . '</label>';
-		echo '<p class="description">' . \esc_html__('When enabled, the Media tab behaves like a rotating queue during playback and recomputes order after seek or rewind.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
-		echo '<p class="description">' . \esc_html__('Can be overridden per embed via shortcode attribute gpx_download="1" or gpx_download="0".', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_privacy_enabled">' . \esc_html__('Enable privacy mode', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_privacy_enabled" name="fgpx_privacy_enabled" value="1"' . ($privacyEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Hide first/last N km from playback (stats unaffected)', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_privacy_km">' . \esc_html__('Privacy distance (km)', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_privacy_km" name="fgpx_privacy_km" class="small-text" min="0" step="0.1" value="' . \esc_attr($privacyKm) . '" />';
-		echo '<p class="description">' . \esc_html__('Each end hidden by this distance when privacy mode is enabled. Default 3 km.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '</table>';
+		// Player Theme (Custom CSS) Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🎨 Player Theme (Custom CSS)', 'flyover-gpx') . '</h3>';
+		echo '<p>' . \esc_html__('Add custom CSS to override the player styles. These rules load after the default stylesheet.', 'flyover-gpx') . '</p>';
+		echo '<textarea name="fgpx_custom_css" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($customCss) . '</textarea>';
+		echo '</div>'; // Close visualization-content tab
+
+		// Tab 4: Weather & Environmental
+		echo '<div id="weather-content" class="fgpx-tab-content">';
 
 		// Weather Integration Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌦️ Weather Integration', 'flyover-gpx') . '</h3>';
@@ -988,6 +1013,10 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_daynight_map_enabled" name="fgpx_daynight_map_enabled" value="1"' . ($options['fgpx_daynight_map_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show animated night overlay on the map during track playback', 'flyover-gpx') . '</label>';
 		echo '<p class="description">' . \esc_html__('Displays a smooth blue overlay on the map during night periods with animated transitions at sunrise/sunset.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_daynight_visible_by_default">' . \esc_html__('Show day/night overlay by default', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_daynight_visible_by_default" name="fgpx_daynight_visible_by_default" value="1"' . ($options['fgpx_daynight_visible_by_default'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Make the night overlay visible when playback starts (can be toggled off by users)', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('If unchecked, users must click the visibility toggle to enable the day/night overlay.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_daynight_map_color">' . \esc_html__('Night overlay color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_daynight_map_color" name="fgpx_daynight_map_color" value="' . \esc_attr($options['fgpx_daynight_map_color']) . '" />';
 		echo '<p class="description">' . \esc_html__('Color of the night overlay on the map. Default is deep blue (#000080).', 'flyover-gpx') . '</p>';
@@ -997,31 +1026,10 @@ final class Admin
 		echo '<p class="description">' . \esc_html__('Opacity of the night overlay (0.1 = very transparent, 1.0 = opaque). Default 0.4.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
+		echo '</div>'; // Close weather-content tab
 
-		// Theme / Dark Mode Section
-		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌗 Theme / Dark Mode', 'flyover-gpx') . '</h3>';
-		echo '<table class="form-table" role="presentation">';
-		$themeMode = $options['fgpx_theme_mode'];
-		echo '<tr><th scope="row"><label for="fgpx_theme_mode">' . \esc_html__('Theme mode', 'flyover-gpx') . '</label></th><td>';
-		echo '<select id="fgpx_theme_mode" name="fgpx_theme_mode" onchange="(function(v){var r=document.getElementById(\'fgpx-theme-auto-rows\');r.style.display=v===\'auto\'?\'contents\':\'none\';})(this.value)">';
-		echo '<option value="system"' . selected($themeMode, 'system', false) . '>' . \esc_html__('System defined (follow OS/browser preference)', 'flyover-gpx') . '</option>';
-		echo '<option value="dark"' . selected($themeMode, 'dark', false) . '>' . \esc_html__('Always dark', 'flyover-gpx') . '</option>';
-		echo '<option value="bright"' . selected($themeMode, 'bright', false) . '>' . \esc_html__('Always bright (light)', 'flyover-gpx') . '</option>';
-		echo '<option value="auto"' . selected($themeMode, 'auto', false) . '>' . \esc_html__('Auto (time-based: configure start/end of dark mode)', 'flyover-gpx') . '</option>';
-		echo '</select>';
-		echo '<p class="description">' . \esc_html__('Controls the player appearance. "System defined" uses your OS/browser dark mode preference. "Auto" switches to dark mode between the configured hours.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tbody id="fgpx-theme-auto-rows" style="display:' . ($themeMode === 'auto' ? 'contents' : 'none') . '">';
-		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_start">' . \esc_html__('Dark mode starts at', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="time" id="fgpx_theme_auto_dark_start" name="fgpx_theme_auto_dark_start" value="' . \esc_attr($options['fgpx_theme_auto_dark_start']) . '" />';
-		echo '<p class="description">' . \esc_html__('Local time when dark mode activates (e.g. 22:00).', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_end">' . \esc_html__('Dark mode ends at', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="time" id="fgpx_theme_auto_dark_end" name="fgpx_theme_auto_dark_end" value="' . \esc_attr($options['fgpx_theme_auto_dark_end']) . '" />';
-		echo '<p class="description">' . \esc_html__('Local time when dark mode deactivates (e.g. 06:00). Overnight spans (e.g. 22:00–06:00) are supported.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '</tbody>';
-		echo '</table>';
+		// Tab 5: Performance
+		echo '<div id="performance-content" class="fgpx-tab-content">';
 
 		// Performance & Optimization Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('⚡ Performance & Optimization', 'flyover-gpx') . '</h3>';
@@ -1048,6 +1056,35 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_ajax_first" name="fgpx_ajax_first" value="1"' . ($ajaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before /wp-json for all track data requests (recommended when the REST API is blocked by a firewall or security plugin).', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
+		echo '</div>'; // Close performance-content tab
+
+		// Tab 6: Advanced
+		echo '<div id="advanced-content" class="fgpx-tab-content">';
+
+		// Theme / Dark Mode Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌗 Theme / Dark Mode', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		$themeMode = $options['fgpx_theme_mode'];
+		echo '<tr><th scope="row"><label for="fgpx_theme_mode">' . \esc_html__('Theme mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_theme_mode" name="fgpx_theme_mode" onchange="(function(v){var r=document.getElementById(\'fgpx-theme-auto-rows\');r.style.display=v===\'auto\'?\'contents\':\'none\';})(this.value)">';
+		echo '<option value="system"' . selected($themeMode, 'system', false) . '>' . \esc_html__('System defined (follow OS/browser preference)', 'flyover-gpx') . '</option>';
+		echo '<option value="dark"' . selected($themeMode, 'dark', false) . '>' . \esc_html__('Always dark', 'flyover-gpx') . '</option>';
+		echo '<option value="bright"' . selected($themeMode, 'bright', false) . '>' . \esc_html__('Always bright (light)', 'flyover-gpx') . '</option>';
+		echo '<option value="auto"' . selected($themeMode, 'auto', false) . '>' . \esc_html__('Auto (time-based: configure start/end of dark mode)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Controls the player appearance. "System defined" uses your OS/browser dark mode preference. "Auto" switches to dark mode between the configured hours.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tbody id="fgpx-theme-auto-rows" style="display:' . ($themeMode === 'auto' ? 'contents' : 'none') . '">';
+		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_start">' . \esc_html__('Dark mode starts at', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="time" id="fgpx_theme_auto_dark_start" name="fgpx_theme_auto_dark_start" value="' . \esc_attr($options['fgpx_theme_auto_dark_start']) . '" />';
+		echo '<p class="description">' . \esc_html__('Local time when dark mode activates (e.g. 22:00).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_theme_auto_dark_end">' . \esc_html__('Dark mode ends at', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="time" id="fgpx_theme_auto_dark_end" name="fgpx_theme_auto_dark_end" value="' . \esc_attr($options['fgpx_theme_auto_dark_end']) . '" />';
+		echo '<p class="description">' . \esc_html__('Local time when dark mode deactivates (e.g. 06:00). Overnight spans (e.g. 22:00–06:00) are supported.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</tbody>';
+		echo '</table>';
 
 		// Development & Debugging Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🔧 Development & Debugging', 'flyover-gpx') . '</h3>';
@@ -1060,10 +1097,10 @@ final class Admin
 		echo '</td></tr>';
 		echo '</table>';
 
-		// Error Logging Section
+		// Error Logging & Diagnostics Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📋 Error Logging & Diagnostics', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
-		
+
 		$logStats = ErrorHandler::getLogStats();
 		echo '<tr><th scope="row">' . \esc_html__('Log Status', 'flyover-gpx') . '</th><td>';
 		if ($logStats['log_file_exists']) {
@@ -1073,7 +1110,7 @@ final class Admin
 			echo '<span style="color: #666;">—</span> ' . \esc_html__('No log file', 'flyover-gpx');
 		}
 		echo '</td></tr>';
-		
+
 		echo '<tr><th scope="row">' . \esc_html__('Log Actions', 'flyover-gpx') . '</th><td>';
 		if ($logStats['log_file_exists']) {
 			$downloadNonce = \wp_create_nonce('fgpx_download_logs');
@@ -1085,22 +1122,16 @@ final class Admin
 		}
 		echo '</td></tr>';
 		echo '</table>';
-		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save defaults', 'flyover-gpx') . '</button></p>';
-		echo '</form>';
 
-		echo '<hr />';
-		echo '<h2>' . \esc_html__('Player Theme (Custom CSS)', 'flyover-gpx') . '</h2>';
-		echo '<form method="post" action="' . $actionUrl . '">';
-		echo '<input type="hidden" name="action" value="fgpx_save_settings" />';
-		echo '<input type="hidden" name="fgpx_nonce" value="' . \esc_attr(\wp_create_nonce('fgpx_save_settings')) . '" />';
-		echo '<p>' . \esc_html__('Add custom CSS to override the player styles. These rules load after the default stylesheet.', 'flyover-gpx') . '</p>';
-		echo '<textarea name="fgpx_custom_css" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($customCss) . '</textarea>';
-		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save CSS', 'flyover-gpx') . '</button></p>';
-		echo '</form>';
-		echo '<hr />';
-		echo '<h2>' . \esc_html__('Playback Statistics', 'flyover-gpx') . '</h2>';
+		// Playback Statistics Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('▶ Playback Statistics', 'flyover-gpx') . '</h3>';
 		echo '<p>' . \esc_html__('Clear all aggregated playback counters used by the statistics page and dashboard widgets.', 'flyover-gpx') . '</p>';
 		echo '<p><button type="button" class="button button-secondary" id="fgpx-clear-playback-stats" data-nonce="' . \esc_attr(\wp_create_nonce('fgpx_clear_playback_stats')) . '">' . \esc_html__('Clear Playback Statistics', 'flyover-gpx') . '</button></p>';
+		echo '</div>'; // Close advanced-content tab
+
+		// Form submission button
+		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save defaults', 'flyover-gpx') . '</button></p>';
+		echo '</form>';
 		echo '</div>';
 	}
 
@@ -2571,6 +2602,7 @@ final class Admin
 		if (isset($_POST['fgpx_wind_rose_color_west'])) { \update_option('fgpx_wind_rose_color_west', \sanitize_hex_color($_POST['fgpx_wind_rose_color_west']), true); }
 		\update_option('fgpx_daynight_enabled', isset($_POST['fgpx_daynight_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_daynight_map_enabled', isset($_POST['fgpx_daynight_map_enabled']) ? '1' : '0', true);
+		\update_option('fgpx_daynight_visible_by_default', isset($_POST['fgpx_daynight_visible_by_default']) ? '1' : '0', true);
 		if (isset($_POST['fgpx_daynight_map_color'])) { \update_option('fgpx_daynight_map_color', \sanitize_hex_color($_POST['fgpx_daynight_map_color']), true); }
 		if (isset($_POST['fgpx_daynight_map_opacity'])) { \update_option('fgpx_daynight_map_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_daynight_map_opacity'])), true); }
 		\update_option('fgpx_elevation_coloring', isset($_POST['fgpx_elevation_coloring']) ? '1' : '0', true);
@@ -2594,7 +2626,6 @@ final class Admin
 		if (isset($_POST['fgpx_weather_step_min'])) { \update_option('fgpx_weather_step_min', (string) max(5, min(60, (int) $_POST['fgpx_weather_step_min'])), true); }
 		if (isset($_POST['fgpx_weather_opacity'])) { \update_option('fgpx_weather_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_opacity'])), true); }
 		\update_option('fgpx_weather_visible_by_default', isset($_POST['fgpx_weather_visible_by_default']) ? '1' : '0', true);
-		\update_option('fgpx_daynight_visible_by_default', isset($_POST['fgpx_daynight_visible_by_default']) ? '1' : '0', true);
 		if (isset($_POST['fgpx_weather_heatmap_zoom0'])) { \update_option('fgpx_weather_heatmap_zoom0', (string) max(10, min(100, (int) $_POST['fgpx_weather_heatmap_zoom0'])), true); }
 		if (isset($_POST['fgpx_weather_heatmap_zoom9'])) { \update_option('fgpx_weather_heatmap_zoom9', (string) max(50, min(500, (int) $_POST['fgpx_weather_heatmap_zoom9'])), true); }
 		if (isset($_POST['fgpx_weather_heatmap_zoom12'])) { \update_option('fgpx_weather_heatmap_zoom12', (string) max(200, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom12'])), true); }

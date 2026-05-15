@@ -134,13 +134,6 @@ final class Options
 		'fgpx_weather_heatmap_zoom14' => '3000',
 		'fgpx_weather_heatmap_zoom15' => '5000',
 
-		// Weather Circle Settings (for high zoom levels)
-		'fgpx_weather_circle_zoom12' => '40',   // Circle radius at zoom 12
-		'fgpx_weather_circle_zoom14' => '80',   // Circle radius at zoom 14
-		'fgpx_weather_circle_zoom16' => '120',  // Circle radius at zoom 16
-		'fgpx_weather_circle_zoom18' => '200',  // Circle radius at zoom 18
-		'fgpx_weather_circle_blur' => '1.5',    // Circle blur amount (0-2)
-
 		// Wind Analysis
 		'fgpx_wind_analysis_enabled' => '0',
 		'fgpx_wind_interpolation_density' => '3',
