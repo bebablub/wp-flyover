@@ -6157,6 +6157,7 @@
       var zoomOverlayTimer = null;
       var countdownOverlay = null;
       var countdownTimer = null;
+      var countdownHideTimer = null;
       var startupCountdownDone = false;
 
       try {
@@ -6192,18 +6193,66 @@
           countdownTimer = null;
         }
       }
+
+      function clearCountdownHideTimer() {
+        if (countdownHideTimer) {
+          try {
+            clearTimeout(countdownHideTimer);
+          } catch (_) {}
+          countdownHideTimer = null;
+        }
+      }
+
+      function countdownVeilForValue(value) {
+        var num = Number(value);
+        if (num === 3) {
+          return { opacity: 0.68, bgAlpha: 0.82, blurPx: 3.5 };
+        }
+        if (num === 2) {
+          return { opacity: 0.62, bgAlpha: 0.54, blurPx: 2.5 };
+        }
+        if (num === 1) {
+          return { opacity: 0.56, bgAlpha: 0.28, blurPx: 1.2 };
+        }
+        return { opacity: 0.55, bgAlpha: 0.22, blurPx: 1.0 };
+      }
+
       /**
        * Hides the countdown overlay and resets its state.
+       * @param {boolean} animateOut - Whether to fade out quickly before hiding.
        */
-      function hideCountdownOverlay() {
+      function hideCountdownOverlay(animateOut) {
         clearCountdownTimer();
+        clearCountdownHideTimer();
         try {
           if (!countdownOverlay) return;
+          if (animateOut) {
+            countdownOverlay.style.transition = 'opacity 0.18s ease';
+            countdownOverlay.style.opacity = '0';
+            countdownHideTimer = setTimeout(function () {
+              try {
+                if (!countdownOverlay) return;
+                countdownOverlay.style.display = 'none';
+                countdownOverlay.textContent = '';
+                countdownOverlay.style.transition = 'none';
+                countdownOverlay.style.transform = '';
+                countdownOverlay.style.opacity = '';
+                countdownOverlay.style.background = 'rgba(0,0,0,0.18)';
+                countdownOverlay.style.backdropFilter = 'none';
+                countdownOverlay.style.webkitBackdropFilter = 'none';
+              } catch (_) {}
+              countdownHideTimer = null;
+            }, 190);
+            return;
+          }
           countdownOverlay.style.display = 'none';
           countdownOverlay.textContent = '';
           countdownOverlay.style.transition = 'none';
           countdownOverlay.style.transform = '';
           countdownOverlay.style.opacity = '';
+          countdownOverlay.style.background = 'rgba(0,0,0,0.18)';
+          countdownOverlay.style.backdropFilter = 'none';
+          countdownOverlay.style.webkitBackdropFilter = 'none';
         } catch (_) {}
       }
       /**
@@ -6213,8 +6262,13 @@
       function showCountdownOverlay(value) {
         try {
           if (!countdownOverlay) return;
+          clearCountdownHideTimer();
+          var veil = countdownVeilForValue(value);
           countdownOverlay.textContent = String(value);
           countdownOverlay.style.display = 'flex';
+          countdownOverlay.style.background = 'rgba(0,0,0,' + veil.bgAlpha + ')';
+          countdownOverlay.style.backdropFilter = 'blur(' + veil.blurPx + 'px)';
+          countdownOverlay.style.webkitBackdropFilter = 'blur(' + veil.blurPx + 'px)';
           // Animate: scale pop + fade pulse so each second has a clear visual beat
           countdownOverlay.style.transition = 'none';
           countdownOverlay.style.transform = 'scale(1.35)';
@@ -6224,7 +6278,7 @@
           countdownOverlay.style.transition =
             'transform 0.8s cubic-bezier(0.22,1,0.36,1), opacity 0.8s ease';
           countdownOverlay.style.transform = 'scale(1)';
-          countdownOverlay.style.opacity = '0.55';
+          countdownOverlay.style.opacity = String(veil.opacity);
         } catch (_) {}
       }
       /**
@@ -6262,7 +6316,7 @@
             if (nextRemaining <= 0) {
               countdownRafId = null;
               startupCountdownDone = true;
-              hideCountdownOverlay();
+              hideCountdownOverlay(true);
               resolve();
               return;
             }
@@ -10089,6 +10143,30 @@
       // Initial stopped view already set via constructor bounds; keep references for later reset/end fits
       var fullBoundsRef = fullBounds;
       var innerBoundsRef = innerBounds;
+
+      // Capture the overview camera state (center + zoom) matching how the map looks before Play.
+      // Used by the end-of-track zoom-out to return to exactly this position.
+      var overviewCameraState = null;
+      try {
+        var _ovBounds = innerBoundsRef || fullBoundsRef;
+        if (typeof map.cameraForBounds === 'function' && _ovBounds) {
+          var _ovDefaultPitch = window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
+          var _ovCam = map.cameraForBounds(_ovBounds, { padding: 40 });
+          if (_ovCam && isFinite(Number(_ovCam.zoom))) {
+            overviewCameraState = {
+              center: _ovCam.center,
+              zoom: Number(_ovCam.zoom),
+              pitch: 0,   // end animation always targets flat top-down view
+              bearing: 0,
+            };
+            console.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
+          } else {
+            console.log('[FGPX end-zoom] cameraForBounds returned invalid result', _ovCam);
+          }
+        }
+      } catch (_e) {
+        console.log('[FGPX end-zoom] overviewCameraState capture threw', _e);
+      }
 
       // Stats panel
       try {
@@ -17248,36 +17326,123 @@
         if (!endReached) {
           scheduleRaf();
         } else {
+          console.log('[FGPX end-zoom] track ended — reachedPrivacyEnd:', reachedPrivacyEnd, 'progress:', progress);
           setPlaying(false);
-          // Stop recording if active when track completes
-          if (isRecording && videoRecorder) {
-            stopRecording();
-          }
-          // At end handoff, prefetch once and briefly settle terrain before zoom-out transition.
+          var shouldStopRecordingAfterEndZoom = !!(isRecording && videoRecorder);
+          // At end handoff, prefetch once to warm tiles at overview zoom.
           try {
             if (prefetchEnabled && Date.now() >= prefetchBackoffUntilMs) {
               prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, bearing);
             }
           } catch (_) {}
+
+          // Cinematic end zoom-out: slowly ease back to the initial overview state
+          // (same position/zoom the user saw before pressing Play).
+          // Camera slowly rotates back to bearing 0 during the zoom-out.
           var endTransitionStarted = false;
-          var endFitDuration = hasTerrain ? 1100 : 800;
-          var endTransitionTimer = setTimeout(
-            function () {
-              if (endTransitionStarted) return;
-              endTransitionStarted = true;
-              fitMapToBounds(endFitDuration, hasTerrain ? { pitch: 0 } : null);
-            },
-            hasTerrain ? 320 : 0
-          );
-          if (hasTerrain) {
-            map.once('idle', function () {
-              if (endTransitionStarted) return;
-              endTransitionStarted = true;
+          var END_ZOOMOUT_DURATION = 5000;
+          function stopRecordingAfterEndZoom(durationMs) {
+            if (!shouldStopRecordingAfterEndZoom) return;
+            var finished = false;
+            var stopDelay = Math.max(0, Number(durationMs) || 0) + 150;
+            var fallbackTimer = setTimeout(function () {
+              if (finished) return;
+              finished = true;
+              console.log('[FGPX end-zoom] stopRecording fallback timer fired');
+              if (isRecording && videoRecorder) {
+                stopRecording();
+              }
+            }, stopDelay);
+            map.once('moveend', function () {
+              if (finished) return;
+              finished = true;
               try {
-                clearTimeout(endTransitionTimer);
+                clearTimeout(fallbackTimer);
               } catch (_) {}
-              fitMapToBounds(endFitDuration, { pitch: 0 });
+              console.log('[FGPX end-zoom] stopRecording on moveend');
+              if (isRecording && videoRecorder) {
+                stopRecording();
+              }
             });
+          }
+          function doEndZoomOut() {
+            if (endTransitionStarted) return;
+            endTransitionStarted = true;
+            // Stop idle sway FIRST — its RAF calls jumpTo() every frame which cancels any easeTo.
+            stopIdleSway();
+            console.log('[FGPX end-zoom] doEndZoomOut called, overviewCameraState:', overviewCameraState);
+            try {
+              // Prefer the pre-computed overview state captured at map load.
+              // Fall back to a fresh cameraForBounds call if not available.
+              var ov = overviewCameraState;
+              if (!ov) {
+                var targetBounds = innerBoundsRef || fullBoundsRef;
+                var camFallback =
+                  typeof map.cameraForBounds === 'function'
+                    ? map.cameraForBounds(targetBounds, { padding: 40 })
+                    : null;
+                if (camFallback && isFinite(Number(camFallback.zoom))) {
+                  ov = { center: camFallback.center, zoom: Number(camFallback.zoom), pitch: 0, bearing: 0 };
+                }
+              }
+              if (ov) {
+                // Read current camera state so the animation starts from exactly where playback ended.
+                var bearingNow = 0;
+                var pitchNow = 60;
+                var zoomNow = 13;
+                try {
+                  if (typeof map.getBearing === 'function') bearingNow = map.getBearing();
+                  if (typeof map.getPitch === 'function') pitchNow = map.getPitch();
+                  if (typeof map.getZoom === 'function') zoomNow = map.getZoom();
+                } catch (_) {}
+                // Do NOT change center — zoom out from the current marker position.
+                // At zoom ~9 the viewport covers ~700–900 km, so the whole route fits in frame
+                // without any panning needed. Keeping center fixed means the end-of-track marker
+                // stays anchored on screen while the map zooms out around it.
+                console.log('[FGPX end-zoom] easeTo target:', { zoom: ov.zoom, fromZoom: zoomNow, fromPitch: pitchNow, bearingNow: bearingNow, duration: END_ZOOMOUT_DURATION });
+                stopRecordingAfterEndZoom(END_ZOOMOUT_DURATION);
+                map.easeTo({
+                  zoom: ov.zoom,
+                  pitch: 0,
+                  bearing: 0,
+                  duration: END_ZOOMOUT_DURATION,
+                  easing: easeInOutCubic,
+                });
+              } else {
+                // Fallback — no overviewCameraState and cameraForBounds failed
+                console.log('[FGPX end-zoom] no ov — using fitMapToBounds fallback');
+                stopRecordingAfterEndZoom(END_ZOOMOUT_DURATION);
+                fitMapToBounds(END_ZOOMOUT_DURATION, { pitch: 0 });
+              }
+            } catch (_e2) {
+              console.log('[FGPX end-zoom] doEndZoomOut threw', _e2);
+              stopRecordingAfterEndZoom(1800);
+              fitMapToBounds(1800, { pitch: 0 });
+            }
+          }
+          console.log('[FGPX end-zoom] hasTerrain:', hasTerrain);
+          if (hasTerrain) {
+            // Disable terrain mesh before zoom-out to avoid shimmer/pop during pitch→0 animation.
+            // Terrain is restored by zoomInThenStartPlayback / reset when user plays again.
+            try {
+              map.setTerrain(null);
+              terrainActive = false;
+              terrainTemporarilyDisabled = true;
+            } catch (_) {}
+            var terrainIdleForEnd = false;
+            var terrainEndTimer = setTimeout(function () {
+              if (terrainIdleForEnd) return;
+              doEndZoomOut();
+            }, 280);
+            map.once('idle', function () {
+              terrainIdleForEnd = true;
+              try {
+                clearTimeout(terrainEndTimer);
+              } catch (_) {}
+              doEndZoomOut();
+            });
+          } else {
+            doEndZoomOut();
           }
         }
       }
