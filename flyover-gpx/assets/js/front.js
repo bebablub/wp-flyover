@@ -1200,9 +1200,10 @@
     var btnDayNight = createEl('button', 'fgpx-btn fgpx-btn-daynight', '');
     try {
       // Force text presentation (avoid emoji image replacement) using Variation Selector-15 (\uFE0E)
-      btnPlay.textContent = '▶\uFE0E';
-      btnPlay.setAttribute('aria-label', I18N.play || 'Play');
-      btnPlay.setAttribute('title', I18N.play || 'Play');
+      var playLabel = I18N.play || 'Play';
+      btnPlay.textContent = '▶\uFE0E ' + playLabel;
+      btnPlay.setAttribute('aria-label', playLabel);
+      btnPlay.setAttribute('title', playLabel);
       btnPause.textContent = '❚❚';
       btnPause.setAttribute('aria-label', I18N.pause || 'Pause');
       btnPause.setAttribute('title', I18N.pause || 'Pause');
@@ -2925,9 +2926,9 @@
       // Re-run on map idle so tiles loaded during playback are included.
       if (simulationCitiesEnabled) {
         var _citiesLastPrecompute = 0;
-        var _citiesIdleThrottleMs = 5000;
+        var _citiesIdleThrottleMs = 15000;
         try {
-          precomputeMapCities();
+          precomputeMapCities(distanceAtPlaybackTime(lastPlaybackSec || 0));
           _citiesLastPrecompute = Date.now();
         } catch (_) {}
         map.on('idle', function () {
@@ -2936,7 +2937,7 @@
           if (now - _citiesLastPrecompute < _citiesIdleThrottleMs) return;
           _citiesLastPrecompute = now;
           try {
-            precomputeMapCities();
+            precomputeMapCities(distanceAtPlaybackTime(lastPlaybackSec || 0));
           } catch (_) {}
         });
       }
@@ -5060,7 +5061,325 @@
       var photoPtr = 0; // moving pointer into photosByTime
 
       // MapTiler cities/landmarks (POIs from map tiles)
-      var mapCities = []; // [{name, lat, lon, distanceMeters, type}] sorted by distanceMeters
+      var CITY_CHUNK_METERS = 10000;
+      var CITY_SCAN_HALF_SIZE_PX = 90;
+      var CITY_MAX_FEATURES_PER_CHUNK = 30;
+      var CITY_BATCH_TIME_BUDGET_MS = 4;
+      var HIGH_SPEED_CADENCE_MULTIPLIER = 40;
+      var VERY_HIGH_SPEED_CADENCE_MULTIPLIER = 80;
+      var cityChunks = {}; // chunkId -> [{name, lat, lon, distanceMeters, type}]
+      var cityChunkLoading = {}; // chunkId -> generation token while loading
+      var cityChunkGeneration = 0;
+      var cityChunkPauseUntilMs = 0;
+      var cityChunkPauseReason = '';
+
+      function pauseCityChunkLoadsFor(ms, reason) {
+        var waitMs = Math.max(0, Number(ms) || 0);
+        if (waitMs <= 0) {
+          cityChunkPauseUntilMs = 0;
+          cityChunkPauseReason = String(reason || '');
+          return;
+        }
+        var until = Date.now() + waitMs;
+        if (until <= cityChunkPauseUntilMs) return;
+        cityChunkPauseUntilMs = until;
+        cityChunkPauseReason = String(reason || '');
+      }
+
+      function isCityChunkLoadPaused(nowMs) {
+        return Number(nowMs) < Number(cityChunkPauseUntilMs || 0);
+      }
+
+      function cancelScheduledCityScan() {
+        cityChunkGeneration += 1;
+        cityChunkLoading = {};
+      }
+
+      function getCityChunkId(distanceMeters) {
+        var dist = Math.max(0, Number(distanceMeters) || 0);
+        return Math.max(0, Math.floor(dist / CITY_CHUNK_METERS));
+      }
+
+      function getLoadedCityCount() {
+        var total = 0;
+        for (var key in cityChunks) {
+          if (Object.prototype.hasOwnProperty.call(cityChunks, key) && Array.isArray(cityChunks[key])) {
+            total += cityChunks[key].length;
+          }
+        }
+        return total;
+      }
+
+      function getCityScanBbox() {
+        if (!map || typeof map.getCanvas !== 'function' || typeof map.project !== 'function') {
+          return null;
+        }
+        try {
+          var canvas = map.getCanvas();
+          var width = canvas && canvas.clientWidth ? canvas.clientWidth : canvas.width || 0;
+          var height = canvas && canvas.clientHeight ? canvas.clientHeight : canvas.height || 0;
+          if (!width || !height) return null;
+          var center = map.getCenter ? map.getCenter() : null;
+          if (!center) return null;
+          var centerPx = map.project([center.lng, center.lat]);
+          var halfW = Math.min(CITY_SCAN_HALF_SIZE_PX, Math.max(80, Math.round(width * 0.22)));
+          var halfH = Math.min(CITY_SCAN_HALF_SIZE_PX, Math.max(80, Math.round(height * 0.22)));
+          return [
+            [Math.max(0, centerPx.x - halfW), Math.max(0, centerPx.y - halfH)],
+            [Math.min(width, centerPx.x + halfW), Math.min(height, centerPx.y + halfH)],
+          ];
+        } catch (_) {
+          return null;
+        }
+      }
+
+      // Queue city chunk work via idle time when available, with a timeout fallback
+      // to guarantee we exit "loading" even under sustained frame pressure.
+      function queueCityChunkLoad(fn, timeoutMs) {
+        var delay = Math.max(0, Number(timeoutMs) || 0);
+        var done = false;
+        var idleId = null;
+        var timerId = null;
+
+        function run() {
+          if (done) return;
+          done = true;
+          if (timerId) {
+            clearTimeout(timerId);
+            timerId = null;
+          }
+          if (idleId != null && typeof window.cancelIdleCallback === 'function') {
+            try {
+              window.cancelIdleCallback(idleId);
+            } catch (_) {}
+          }
+          fn();
+        }
+
+        timerId = setTimeout(run, Math.max(24, delay));
+        if (typeof window.requestIdleCallback === 'function') {
+          try {
+            idleId = window.requestIdleCallback(run, { timeout: Math.max(80, delay + 40) });
+          } catch (_) {}
+        }
+        return timerId;
+      }
+
+      function ensureCityChunkLoaded(chunkId) {
+        if (!simulationCitiesEnabled || !map || !coords || coords.length === 0) return;
+        if (cityChunks[chunkId] || cityChunkLoading[chunkId]) return;
+        var nowMs = Date.now();
+        if (isCityChunkLoadPaused(nowMs)) {
+          if (dbgAllow('city-chunk-paused', 2000)) {
+            DBG.log('City chunk load paused', {
+              chunkId: chunkId,
+              remainingMs: Math.max(0, Math.round(cityChunkPauseUntilMs - nowMs)),
+              reason: cityChunkPauseReason || 'cooloff',
+            });
+          }
+          return;
+        }
+        // Keep city chunk scans strictly serialized to avoid parallel queryRenderedFeatures bursts.
+        if (Object.keys(cityChunkLoading).length > 0) return;
+
+        var loadGeneration = cityChunkGeneration;
+        cityChunkLoading[chunkId] = loadGeneration;
+
+        queueCityChunkLoad(function () {
+          var chunkLoadStartedAt =
+            typeof performance !== 'undefined' && typeof performance.now === 'function'
+              ? performance.now()
+              : Date.now();
+          if (cityChunkGeneration !== loadGeneration || cityChunkLoading[chunkId] !== loadGeneration) {
+            return;
+          }
+
+          var layerFilter = _getPlaceLayers();
+          if (!Array.isArray(layerFilter) || layerFilter.length === 0) {
+            cityChunks[chunkId] = [];
+            delete cityChunkLoading[chunkId];
+            if (dbgAllow('city-layer-missing', 4000)) {
+              DBG.log('City chunk skipped (no place layers)', { chunkId: chunkId });
+            }
+            return;
+          }
+          var queryOpts = { layers: layerFilter };
+          var bbox = getCityScanBbox();
+          var features = [];
+          try {
+            features = queryOpts
+              ? map.queryRenderedFeatures(bbox || undefined, queryOpts)
+              : map.queryRenderedFeatures(bbox || undefined);
+          } catch (error) {
+            features = [];
+          }
+          if (!Array.isArray(features)) features = [];
+          var queryDoneAt =
+            typeof performance !== 'undefined' && typeof performance.now === 'function'
+              ? performance.now()
+              : Date.now();
+
+          var chunkStart = chunkId * CITY_CHUNK_METERS;
+          var chunkEnd = chunkStart + CITY_CHUNK_METERS;
+          var loadedCities = [];
+          var seenKeys = {};
+          var seenNames = {};
+          var index = 0;
+          var batchSize = 8;
+          var batchCount = 0;
+          var mapCenter = null;
+          try {
+            mapCenter = map.getCenter ? map.getCenter() : null;
+          } catch (_) {
+            mapCenter = null;
+          }
+
+          function processBatch() {
+            if (cityChunkGeneration !== loadGeneration) return;
+            batchCount++;
+            var startedAt = Date.now();
+            var batchEnd = Math.min(features.length, index + batchSize);
+            for (; index < batchEnd; index++) {
+              var feat = features[index];
+              if (!feat || !feat.geometry || feat.geometry.type !== 'Point') continue;
+              var props = feat.properties || {};
+              var rawClass = (
+                props['class'] || props['type'] || props['place'] || props['kind'] || ''
+              )
+                .toString()
+                .toLowerCase();
+              var sl = ((feat.layer && feat.layer['source-layer']) || '').toLowerCase();
+              var isPlaceFeature =
+                /place|settle|locality|city|town|village|hamlet|landmark/.test(rawClass) ||
+                /place|settle|locality/.test(sl);
+              if (!isPlaceFeature) continue;
+
+              var cityName = (props.name || props.name_en || props['name:en'] || '')
+                .toString()
+                .trim();
+              if (!cityName) continue;
+              var nameKey = cityName.toLowerCase();
+              if (seenNames[nameKey]) continue;
+
+              var coords2 = feat.geometry.coordinates;
+              var featLon = Array.isArray(coords2) ? Number(coords2[0]) : NaN;
+              var featLat = Array.isArray(coords2) ? Number(coords2[1]) : NaN;
+              if (!isFinite(featLon) || !isFinite(featLat)) continue;
+
+              // Fast guard: skip labels that are far from current camera center.
+              if (mapCenter && isFinite(Number(mapCenter.lng)) && isFinite(Number(mapCenter.lat))) {
+                var distFromCenter = haversineMeters([mapCenter.lng, mapCenter.lat], [featLon, featLat]);
+                if (!isFinite(distFromCenter) || distFromCenter > 15000) continue;
+              }
+
+              var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);
+              var cityDistM =
+                Array.isArray(cumDist) && nearestIdx < cumDist.length
+                  ? Number(cumDist[nearestIdx])
+                  : NaN;
+              if (!isFinite(cityDistM)) continue;
+              if (
+                cityDistM < chunkStart - CITY_CHUNK_METERS ||
+                cityDistM > chunkEnd + CITY_CHUNK_METERS
+              ) {
+                continue;
+              }
+
+              var nearestCoord = coords[nearestIdx];
+              var trackDistanceMeters = haversineMeters(
+                [nearestCoord[0], nearestCoord[1]],
+                [featLon, featLat]
+              );
+              if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 1800) {
+                continue;
+              }
+
+              var dedupeKey = cityName + '|' + Math.round(cityDistM / 50);
+              if (seenKeys[dedupeKey]) continue;
+              seenKeys[dedupeKey] = true;
+              seenNames[nameKey] = true;
+
+              loadedCities.push({
+                name: cityName,
+                lat: featLat,
+                lon: featLon,
+                distanceMeters: cityDistM,
+                type: rawClass || 'place',
+              });
+
+              if (loadedCities.length >= CITY_MAX_FEATURES_PER_CHUNK) {
+                index = features.length;
+                break;
+              }
+
+              if (Date.now() - startedAt >= CITY_BATCH_TIME_BUDGET_MS) {
+                batchEnd = Math.min(features.length, index + 1);
+              }
+            }
+
+            if (index < features.length) {
+              queueCityChunkLoad(processBatch, 16);
+              return;
+            }
+
+            loadedCities.sort(function (a, b) {
+              return a.distanceMeters - b.distanceMeters;
+            });
+            cityChunks[chunkId] = loadedCities;
+            delete cityChunkLoading[chunkId];
+
+            var finishedAt =
+              typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now()
+                : Date.now();
+            var queryMs = queryDoneAt - chunkLoadStartedAt;
+            var totalMs = finishedAt - chunkLoadStartedAt;
+
+            DBG.log('City chunk loaded', {
+              chunkId: chunkId,
+              featuresQueried: features.length,
+              loaded: loadedCities.length,
+              totalCached: getLoadedCityCount(),
+              layersUsed: layerFilter ? layerFilter.length : 'all',
+              queryMs: Math.round(queryMs),
+              totalMs: Math.round(totalMs),
+              batchCount: batchCount,
+            });
+            if (totalMs >= 80) {
+              DBG.warn('City chunk load slow', {
+                chunkId: chunkId,
+                featuresQueried: features.length,
+                loaded: loadedCities.length,
+                queryMs: Math.round(queryMs),
+                totalMs: Math.round(totalMs),
+                batchCount: batchCount,
+              });
+            }
+          }
+
+          processBatch();
+        }, 0);
+      }
+
+      function ensureCityChunksForDistance(distanceMeters) {
+        if (!simulationCitiesEnabled || !isFinite(Number(distanceMeters))) return;
+
+        // Hard guard: do not start any new city chunk work while actively playing.
+        if (playing) return;
+
+        var dist = Math.max(0, Number(distanceMeters) || 0);
+        var centerChunk = getCityChunkId(dist);
+        ensureCityChunkLoaded(centerChunk);
+
+        // Prefetch only one neighbor when close to chunk boundaries.
+        var withinChunk = dist - centerChunk * CITY_CHUNK_METERS;
+        var edgeThreshold = 1500;
+        if (withinChunk <= edgeThreshold && centerChunk > 0) {
+          ensureCityChunkLoaded(centerChunk - 1);
+        } else if (CITY_CHUNK_METERS - withinChunk <= edgeThreshold) {
+          ensureCityChunkLoaded(centerChunk + 1);
+        }
+      }
 
       /**
        * Returns a unique key for a media item, used for ordering and deduplication.
@@ -8639,22 +8958,25 @@
       var vpInflightKeys = new Set();
       var forwardPrefetchCooldown = 0; // seconds
       var forwardPrefetchInflight = new Set();
+      var prefetchBackoffUntilMs = 0; // wall clock ms; suppress prefetch after long stalls
 
       // Prefetch tiles along the route ahead of current position.
       // Helps high-speed playback (50x+) where camera outpaces normal viewport prefetch.
       function prefetchForwardRoute(currentDist, speedMult) {
         try {
+          var nowMs = Date.now();
+          if (prefetchBackoffUntilMs > nowMs) return;
           var templates = getPrefetchTileTemplates();
           if (!templates || templates.length === 0) return;
-          // Look ahead distance scales with speed: at 1x = 200m, at 100x = 2000m, capped at 4000m
-          var lookAhead = Math.max(200, Math.min(4000, 200 * Math.max(1, speedMult || 1)));
+          // Keep look-ahead bounded to avoid heavy main-thread key generation while playing.
+          var lookAhead = Math.max(200, Math.min(2200, 150 * Math.max(1, speedMult || 1)));
           var dEnd = privacyEnabled ? privacyEndD : totalDistance;
           var dTarget = Math.min(dEnd, currentDist + lookAhead);
           if (dTarget <= currentDist) return;
           var zNow = Math.round(map.getZoom ? map.getZoom() : defaultZoomSetting);
           var levels = [zNow, zNow + 1];
-          var sampleStep = Math.max(150, Math.floor(lookAhead / 8));
-          var maxTiles = 80;
+          var sampleStep = Math.max(260, Math.floor(lookAhead / 5));
+          var maxTiles = 24;
           var keys = new Set();
           for (var dCur = currentDist; dCur <= dTarget; dCur += sampleStep) {
             var pt = positionAtDistance(dCur);
@@ -8905,6 +9227,8 @@
        */
       function prefetchViewportTiles(margin, extraZoom, bearingDeg) {
         try {
+          var nowMs = Date.now();
+          if (prefetchBackoffUntilMs > nowMs) return;
           var templates = getPrefetchTileTemplates();
           if (!templates || templates.length === 0) return;
           var b = map.getBounds();
@@ -8916,7 +9240,7 @@
           if (extraZoom === true) {
             levels.push(zNow + 1);
           }
-          var maxTiles = extraZoom ? 500 : 300;
+          var maxTiles = extraZoom ? 180 : 110;
           var perTemplateBudget = Math.max(
             40,
             Math.floor(maxTiles / Math.max(1, templates.length))
@@ -10072,12 +10396,87 @@
         }
       };
 
+      function scheduleWeatherCinemaRefresh(
+        cinemaEl,
+        payloadData,
+        currentTimeSec,
+        isCurrentlyPlaying,
+        forceUpdate,
+        delayMs
+      ) {
+        if (!cinemaEl) return;
+        var waitMs = Math.max(0, Number(delayMs) || 0);
+        cinemaEl._pendingCinemaRefresh = {
+          payloadData: payloadData,
+          currentTimeSec: currentTimeSec,
+          isCurrentlyPlaying: isCurrentlyPlaying,
+          forceUpdate: !!forceUpdate,
+        };
+
+        if (cinemaEl._pendingCinemaRefreshTimer) {
+          clearTimeout(cinemaEl._pendingCinemaRefreshTimer);
+          cinemaEl._pendingCinemaRefreshTimer = null;
+        }
+        if (cinemaEl._pendingCinemaRefreshRaf) {
+          try {
+            window.cancelAnimationFrame(cinemaEl._pendingCinemaRefreshRaf);
+          } catch (_) {}
+          cinemaEl._pendingCinemaRefreshRaf = null;
+        }
+
+        var runRefresh = function () {
+          cinemaEl._pendingCinemaRefreshTimer = null;
+          cinemaEl._pendingCinemaRefreshRaf = null;
+          var pending = cinemaEl._pendingCinemaRefresh;
+          cinemaEl._pendingCinemaRefresh = null;
+          if (!pending) return;
+          if (cinemaEl.style.display === 'none') return;
+          updateWeatherCinema(
+            cinemaEl,
+            pending.payloadData,
+            pending.currentTimeSec,
+            pending.isCurrentlyPlaying,
+            pending.forceUpdate
+          );
+        };
+
+        if (waitMs <= 16 && typeof window.requestAnimationFrame === 'function') {
+          cinemaEl._pendingCinemaRefreshRaf = window.requestAnimationFrame(runRefresh);
+          return;
+        }
+
+        cinemaEl._pendingCinemaRefreshTimer = setTimeout(runRefresh, waitMs);
+      }
+
       // Define switchChartTab function here where event listeners can access it
       /**
        * Switches the chart to the specified tab type and updates UI accordingly.
        * @param {string} tabType - The tab type to switch to.
        */
       var switchChartTab = function (tabType) {
+        var tabSwitchPerfStart =
+          typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        function finishTabSwitch(branch) {
+          var elapsed =
+            (typeof performance !== 'undefined' && typeof performance.now === 'function'
+              ? performance.now()
+              : Date.now()) - tabSwitchPerfStart;
+          var payload = {
+            branch: branch,
+            tabType: tabType,
+            ms: Math.round(elapsed),
+            playing: !!playing,
+            chartExists: !!chart,
+          };
+          if (elapsed >= 60) {
+            DBG.warn('Tab switch slow path', payload);
+          } else if (dbgAllow('tab-switch-perf', 1200)) {
+            DBG.log('Tab switch perf', payload);
+          }
+        }
+
         DBG.log('Switching to tab', { tabType: tabType });
         if (
           (tabType === 'weathergrade' || tabType === 'weatheroverview') &&
@@ -10163,9 +10562,7 @@
             renderMediaGrid();
             ui.mediaPanel.style.display = 'block';
           }
-          try {
-            applyWeatherOverlayProfile(true);
-          } catch (_) {}
+          finishTabSwitch('media');
           return;
         } else {
           if (ui.mediaPanel) ui.mediaPanel.style.display = 'none';
@@ -10178,6 +10575,10 @@
             var hasOverviewCards =
               ui.weatherOverviewPanel.querySelectorAll('.fgpx-weather-overview-card').length > 0;
             if (!ui.weatherOverviewPanel.getAttribute('data-rendered') || !hasOverviewCards) {
+              var overviewBuildStart =
+                typeof performance !== 'undefined' && typeof performance.now === 'function'
+                  ? performance.now()
+                  : Date.now();
               try {
                 var wLookup = buildWeatherLookup({ weather: weatherData });
                 var slices = buildWeatherOverviewSlices(wLookup, totalDuration || 0);
@@ -10190,6 +10591,18 @@
                 renderWeatherOverviewLegend(ui.weatherOverviewLegend, weatherOverviewI18n);
                 if (renderedCount > 0) {
                   ui.weatherOverviewPanel.setAttribute('data-rendered', '1');
+                  var overviewBuildMs =
+                    (typeof performance !== 'undefined' && typeof performance.now === 'function'
+                      ? performance.now()
+                      : Date.now()) - overviewBuildStart;
+                  if (overviewBuildMs >= 50) {
+                    DBG.warn('Weather overview build slow', {
+                      ms: Math.round(overviewBuildMs),
+                      lookupCount: (wLookup && wLookup.length) || 0,
+                      sliceCount: (slices && slices.length) || 0,
+                      renderedCount: renderedCount,
+                    });
+                  }
                 } else {
                   ui.weatherOverviewPanel.removeAttribute('data-rendered');
                   DBG.warn('Weather overview rendered zero cards', {
@@ -10206,9 +10619,7 @@
             ui.weatherOverviewPanel.style.display = 'flex';
             if (ui.weatherOverviewLegend) ui.weatherOverviewLegend.style.display = 'flex';
           }
-          try {
-            applyWeatherOverlayProfile(true);
-          } catch (_) {}
+          finishTabSwitch('weatheroverview');
           return;
         } else {
           if (ui.weatherOverviewPanel) ui.weatherOverviewPanel.style.display = 'none';
@@ -10228,25 +10639,34 @@
           } else {
             cinemaEl.style.display = 'flex';
           }
-          // If cities haven't been precomputed yet (e.g. map idle hasn't fired for route tiles),
-          // trigger a fresh precompute now that the user is looking at the tab.
-          if (simulationCitiesEnabled && Array.isArray(mapCities) && mapCities.length === 0) {
-            try {
-              precomputeMapCities();
-            } catch (_) {}
+          // If POIs for the current route segment are not loaded yet, request them lazily.
+          if (simulationCitiesEnabled) {
+            if (playing) {
+              pauseCityChunkLoadsFor(1400, 'simulation-tab-switch');
+            } else {
+              try {
+                precomputeMapCities(distanceAtPlaybackTime(lastPlaybackSec || 0));
+              } catch (_) {}
+            }
           }
-          // Trigger immediate update for current playback position
-          updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
-          try {
-            applyWeatherOverlayProfile(true);
-          } catch (_) {}
+          // Defer refresh by one short frame while playing to avoid tab-switch frame spikes.
+          if (playing) {
+            scheduleWeatherCinemaRefresh(
+              cinemaEl,
+              payload,
+              lastPlaybackSec || 0,
+              playing || false,
+              true,
+              40
+            );
+          } else {
+            updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);
+          }
+          finishTabSwitch('weathergrade');
           return;
         } else {
           if (ui.canvas.parentElement) ui.canvas.parentElement.style.display = '';
           if (cinemaEl) cinemaEl.style.display = 'none';
-          try {
-            applyWeatherOverlayProfile(true);
-          } catch (_) {}
         }
 
         if (chart && chart.chartZoomState && chart.chartZoomState.originalScales) {
@@ -10258,6 +10678,7 @@
         if (typeof createChart === 'function') {
           createChart(tabType);
         }
+        finishTabSwitch('chart');
       };
       ui.switchChartTab = switchChartTab;
       root.__fgpxSwitchChartTab = switchChartTab;
@@ -11197,12 +11618,13 @@
       // during playback. queryRenderedFeatures only sees tiles currently in the viewport,
       // so this must be called repeatedly as playback progresses.
       var _placeLayers = null; // cached place-label layer ids from the current style
+      var _placeLayersResolved = false;
       /**
        * Returns an array of place/label layer IDs from the current map style.
-       * @returns {Array|null} Array of layer IDs or null.
+       * @returns {Array} Array of layer IDs (can be empty when style has no place layers).
        */
       function _getPlaceLayers() {
-        if (_placeLayers) return _placeLayers;
+        if (_placeLayersResolved) return _placeLayers;
         try {
           var style = map.getStyle();
           var layers = style && Array.isArray(style.layers) ? style.layers : [];
@@ -11220,131 +11642,24 @@
               found.push(l.id);
             }
           }
-          _placeLayers = found.length > 0 ? found : null;
+          _placeLayers = found;
+          _placeLayersResolved = true;
           DBG.log('City place layers detected', { layers: found });
         } catch (_) {
-          _placeLayers = null;
+          _placeLayers = [];
+          _placeLayersResolved = true;
         }
         return _placeLayers;
       }
 
       /**
-       * Precomputes city features from the current map viewport and caches them for simulation.
+       * Backward-compatible wrapper for chunk-based POI loading.
+       * @param {number} distanceMeters
        */
-      function precomputeMapCities() {
+      function precomputeMapCities(distanceMeters) {
         if (!simulationCitiesEnabled || !map || !coords || coords.length === 0) return;
-        try {
-          // Query rendered features in the current viewport (tiles already loaded by the map)
-          var layerFilter = _getPlaceLayers();
-          var queryOpts = layerFilter ? { layers: layerFilter } : undefined;
-          var features = queryOpts
-            ? map.queryRenderedFeatures(undefined, queryOpts)
-            : map.queryRenderedFeatures();
-          if (!Array.isArray(features)) return;
-
-          var added = 0;
-          var skippedNoName = 0;
-          var skippedType = 0;
-          var skippedDuplicate = 0;
-
-          for (var fi = 0; fi < features.length; fi++) {
-            var feat = features[fi];
-            if (!feat || !feat.geometry || feat.geometry.type !== 'Point') continue;
-            var props = feat.properties || {};
-            var rawClass = (
-              props['class'] ||
-              props['type'] ||
-              props['place'] ||
-              props['kind'] ||
-              ''
-            )
-              .toString()
-              .toLowerCase();
-            // Accept any place/settlement class, or if the source-layer is place-like
-            var sl = ((feat.layer && feat.layer['source-layer']) || '').toLowerCase();
-            var isPlaceFeature =
-              /place|settle|locality|city|town|village|hamlet|landmark/.test(rawClass) ||
-              /place|settle|locality/.test(sl);
-            if (!isPlaceFeature) {
-              skippedType++;
-              continue;
-            }
-
-            var cityName = (props.name || props.name_en || props['name:en'] || '')
-              .toString()
-              .trim();
-            if (!cityName) {
-              skippedNoName++;
-              continue;
-            }
-
-            var coords2 = feat.geometry.coordinates;
-            var featLon = Array.isArray(coords2) ? Number(coords2[0]) : NaN;
-            var featLat = Array.isArray(coords2) ? Number(coords2[1]) : NaN;
-            if (!isFinite(featLon) || !isFinite(featLat)) continue;
-
-            // Find nearest track coordinate index with a coarse+refine strategy.
-            var nearestIdx = nearestCoordIndexFast([featLon, featLat], coords);
-            var cityDistM =
-              Array.isArray(cumDist) && nearestIdx < cumDist.length
-                ? Number(cumDist[nearestIdx])
-                : NaN;
-            if (!isFinite(cityDistM)) continue;
-
-            // Skip if far from track (>2km geodesic)
-            var nearestCoord = coords[nearestIdx];
-            var trackDistanceMeters = haversineMeters(
-              [nearestCoord[0], nearestCoord[1]],
-              [featLon, featLat]
-            );
-            if (!isFinite(trackDistanceMeters) || trackDistanceMeters > 2000) {
-              skippedType++;
-              continue;
-            }
-
-            // Deduplicate: same name within 1.5km along track
-            var isDup = false;
-            for (var ei = 0; ei < mapCities.length; ei++) {
-              if (
-                mapCities[ei].name === cityName &&
-                Math.abs(Number(mapCities[ei].distanceMeters) - cityDistM) < 1500
-              ) {
-                isDup = true;
-                break;
-              }
-            }
-            if (isDup) {
-              skippedDuplicate++;
-              continue;
-            }
-
-            mapCities.push({
-              name: cityName,
-              lat: featLat,
-              lon: featLon,
-              distanceMeters: cityDistM,
-              type: rawClass || 'place',
-            });
-            added++;
-          }
-
-          if (added > 0) {
-            mapCities.sort(function (a, b) {
-              return a.distanceMeters - b.distanceMeters;
-            });
-          }
-          DBG.log('City viewport scan', {
-            featuresQueried: features.length,
-            added: added,
-            totalCached: mapCities.length,
-            skippedType: skippedType,
-            skippedNoName: skippedNoName,
-            skippedDuplicate: skippedDuplicate,
-            layersUsed: layerFilter ? layerFilter.length : 'all',
-          });
-        } catch (err) {
-          DBG.warn('precomputeMapCities error:', err && err.message);
-        }
+        if (!isFinite(Number(distanceMeters))) return;
+        ensureCityChunksForDistance(distanceMeters);
       }
 
       /**
@@ -11353,20 +11668,32 @@
        * @returns {Array} Array of city objects.
        */
       function getCinemaCitiesNear(currentDistanceMeters) {
-        if (!simulationCitiesEnabled || !Array.isArray(mapCities) || mapCities.length === 0)
-          return [];
+        if (!simulationCitiesEnabled || !isFinite(Number(currentDistanceMeters))) return [];
 
-        var citiesInWindow = [];
+        ensureCityChunksForDistance(currentDistanceMeters);
+
+        var currentChunk = getCityChunkId(currentDistanceMeters);
         var windowRadiusM = simulationCityWindowMeters;
+        var chunksToUse = [currentChunk - 1, currentChunk, currentChunk + 1];
+        var citiesInWindow = [];
 
-        for (var cIdx = 0; cIdx < mapCities.length; cIdx++) {
-          var city = mapCities[cIdx];
-          var diff = Math.abs(city.distanceMeters - currentDistanceMeters);
-          if (diff <= windowRadiusM) {
-            citiesInWindow.push(city);
+        for (var ci = 0; ci < chunksToUse.length; ci++) {
+          var chunkId = chunksToUse[ci];
+          if (chunkId < 0) continue;
+          var chunkCities = cityChunks[chunkId];
+          if (!Array.isArray(chunkCities) || chunkCities.length === 0) continue;
+          for (var cIdx = 0; cIdx < chunkCities.length; cIdx++) {
+            var city = chunkCities[cIdx];
+            if (!city) continue;
+            if (Math.abs(city.distanceMeters - currentDistanceMeters) <= windowRadiusM) {
+              citiesInWindow.push(city);
+            }
           }
         }
 
+        citiesInWindow.sort(function (a, b) {
+          return a.distanceMeters - b.distanceMeters;
+        });
         return citiesInWindow;
       }
 
@@ -11768,18 +12095,16 @@
         var lastUpdate = Number(cinemaEl._lastUpdate || 0);
         if (!forceUpdate && now - lastUpdate < 100) return;
         cinemaEl._lastUpdate = now;
-
-        // Accumulate city data from the current map viewport as playback moves.
-        // Throttled to once per 3 seconds to avoid per-frame overhead.
-        if (simulationCitiesEnabled && map) {
-          var lastCityScan = Number(cinemaEl._lastCityScan || 0);
-          if (now - lastCityScan > 3000) {
-            cinemaEl._lastCityScan = now;
-            try {
-              precomputeMapCities();
-            } catch (_) {}
-          }
-        }
+        var perfStart =
+          typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        var perfPoiMs = 0;
+        var perfCityMs = 0;
+        var perfPoiRendered = -1;
+        var perfCityRendered = -1;
+        var perfPoiWindow = -1;
+        var perfCityWindow = -1;
 
         var els = cinemaEl._els || {};
 
@@ -11951,7 +12276,7 @@
           conditionIcons = cinemaEl.querySelector('.fgpx-weather-conditions-icons');
           els.conditionIcons = conditionIcons;
         }
-        setTextIfChanged(conditionIcons, activeIcons.join(' '));
+        setTextIfChanged(conditionIcons, activeIcons.length > 0 ? activeIcons.join(' ') : '\u2600\uFE0F');
         var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';
         var conditionTooltip =
           activeConditionLabels.length > 0
@@ -12193,6 +12518,18 @@
             distanceNowMeters = d0 + (d1 - d0) * tt;
           }
         }
+
+        // Accumulate city data for the current route segment in a low-frequency background task.
+        if (simulationCitiesEnabled && map) {
+          var lastCityScan = Number(cinemaEl._lastCityScan || 0);
+          if (now - lastCityScan > 3000) {
+            cinemaEl._lastCityScan = now;
+            try {
+              precomputeMapCities(distanceNowMeters);
+            } catch (_) {}
+          }
+        }
+
         var elapsedNowSec = isFinite(Number(currentTimeSec))
           ? Number(currentTimeSec)
           : progress * (isFinite(totalDuration) ? totalDuration : 0);
@@ -12304,6 +12641,22 @@
               poiContainerEl.removeChild(poiContainerEl.firstChild);
             }
           } else {
+            var lastPoiRenderTs = Number(cinemaEl._lastPoiRenderTs || 0);
+            var lastPoiRenderDistance = Number(cinemaEl._lastPoiRenderDistance);
+            var shouldRenderPois =
+              forceUpdate ||
+              !isFinite(lastPoiRenderDistance) ||
+              Math.abs(distanceNowMeters - lastPoiRenderDistance) >= 45 ||
+              now - lastPoiRenderTs >= 350;
+            if (!shouldRenderPois) {
+              // Keep existing marker DOM until next render slot.
+            } else {
+              var poiPerfStart =
+                typeof performance !== 'undefined' && typeof performance.now === 'function'
+                  ? performance.now()
+                  : Date.now();
+              cinemaEl._lastPoiRenderTs = now;
+              cinemaEl._lastPoiRenderDistance = distanceNowMeters;
             var poisInWindow = getCinemaWaypointsNear(distanceNowMeters);
             var poiTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
             var renderedPoiCount = 0;
@@ -12380,6 +12733,13 @@
                 trackWidthPx: poiTrackWidth,
               });
             }
+            perfPoiRendered = renderedPoiCount;
+            perfPoiWindow = Array.isArray(poisInWindow) ? poisInWindow.length : 0;
+            perfPoiMs =
+              (typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now()
+                : Date.now()) - poiPerfStart;
+            }
           }
         }
 
@@ -12395,6 +12755,22 @@
               citiesContainerEl.removeChild(citiesContainerEl.firstChild);
             }
           } else {
+            var lastCityRenderTs = Number(cinemaEl._lastCityRenderTs || 0);
+            var lastCityRenderDistance = Number(cinemaEl._lastCityRenderDistance);
+            var shouldRenderCities =
+              forceUpdate ||
+              !isFinite(lastCityRenderDistance) ||
+              Math.abs(distanceNowMeters - lastCityRenderDistance) >= 80 ||
+              now - lastCityRenderTs >= 500;
+            if (!shouldRenderCities) {
+              // Keep existing marker DOM until next render slot.
+            } else {
+              var cityPerfStart =
+                typeof performance !== 'undefined' && typeof performance.now === 'function'
+                  ? performance.now()
+                  : Date.now();
+              cinemaEl._lastCityRenderTs = now;
+              cinemaEl._lastCityRenderDistance = distanceNowMeters;
             var citiesInWindow = getCinemaCitiesNear(distanceNowMeters);
             var cityTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
             var renderedCityCount = 0;
@@ -12439,13 +12815,20 @@
             }
             if (dbgAllow('city-render-loop', 2000)) {
               DBG.log('City render state', {
-                totalCities: Array.isArray(mapCities) ? mapCities.length : 0,
+                totalCities: getLoadedCityCount(),
                 inWindow: Array.isArray(citiesInWindow) ? citiesInWindow.length : 0,
                 rendered: renderedCityCount,
                 windowKm: simulationCityWindowMeters / 1000,
                 currentDistanceMeters: Number(distanceNowMeters) || 0,
                 trackWidthPx: cityTrackWidth,
               });
+            }
+            perfCityRendered = renderedCityCount;
+            perfCityWindow = Array.isArray(citiesInWindow) ? citiesInWindow.length : 0;
+            perfCityMs =
+              (typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now()
+                : Date.now()) - cityPerfStart;
             }
           }
         }
@@ -12565,6 +12948,32 @@
             legendEls.conditions,
             condParts.length ? condParts.join('  ') : '\u2600 Clear'
           );
+        }
+
+        var perfTotal =
+          (typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now()) - perfStart;
+        if (perfTotal >= 35) {
+          DBG.warn('Weather cinema update slow', {
+            ms: Math.round(perfTotal),
+            poiMs: Math.round(perfPoiMs),
+            cityMs: Math.round(perfCityMs),
+            poiRendered: perfPoiRendered,
+            cityRendered: perfCityRendered,
+            poiWindow: perfPoiWindow,
+            cityWindow: perfCityWindow,
+            distanceNowMeters: Math.round(Number(distanceNowMeters) || 0),
+            forceUpdate: !!forceUpdate,
+            playing: !!isCurrentlyPlaying,
+          });
+        } else if (dbgAllow('weather-cinema-perf', 2000)) {
+          DBG.log('Weather cinema perf', {
+            ms: Math.round(perfTotal),
+            poiMs: Math.round(perfPoiMs),
+            cityMs: Math.round(perfCityMs),
+            distanceNowMeters: Math.round(Number(distanceNowMeters) || 0),
+          });
         }
       }
 
@@ -14841,6 +15250,7 @@
       var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
       var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
       var startupSuppressProgressLine = false; // suppress route line during warm-up phase
+      var playbackStartedAtMs = 0; // wall clock ms when playback starts
 
       // Idle sway: gentle organic bearing oscillation when paused or during countdown
       var swayRafId = null;
@@ -15388,9 +15798,14 @@
         try {
           applyWeatherOverlayProfile(false);
         } catch (_) {}
+        if (!playing) {
+          pauseCityChunkLoadsFor(0, 'playback-stopped');
+        }
         // Update button states (includes recording state)
         updateButtonStates();
         if (playing) {
+          playbackStartedAtMs = Date.now();
+          prefetchBackoffUntilMs = 0;
           // Reset frame timer so dt doesn't include paused duration
           lastFrame = null;
           if (zoomOverlayTimer) {
@@ -15715,7 +16130,12 @@
        * @returns {Object} Cadence parameters.
        */
       function getPlaybackCadence(speedMul, terrainOn, tabName) {
-        var tier = speedMul >= 80 ? 2 : speedMul >= 40 ? 1 : 0;
+        var tier =
+          speedMul >= VERY_HIGH_SPEED_CADENCE_MULTIPLIER
+            ? 2
+            : speedMul >= HIGH_SPEED_CADENCE_MULTIPLIER
+              ? 1
+              : 0;
         var progressIntervals = terrainOn ? [0.12, 0.14, 0.16] : [0.08, 0.09, 0.11];
         var progressDistances = terrainOn ? [9, 11, 14] : [6, 7, 9];
         var markerPxThresholds = terrainOn ? [0.3, 0.36, 0.42] : [0.24, 0.3, 0.36];
@@ -15730,12 +16150,26 @@
         var cameraIntervals = terrainOn ? [0.045, 0.055, 0.065] : [0.02, 0.025, 0.03];
 
         var chartInterval = chartIntervals[tier];
+        var progressInterval = progressIntervals[tier];
+        var cameraMoveThreshold = cameraMoveThresholds[tier];
+        var cameraRotateThreshold = cameraRotateThresholds[tier];
+        var cameraInterval = cameraIntervals[tier];
+
         if (tabName === 'media' || tabName === 'weatheroverview') {
           chartInterval = Math.max(chartInterval, 0.24);
         }
 
+        // In Simulation at high speed, reduce map write pressure (jumpTo + setData frequency).
+        if (tabName === 'weathergrade' && speedMul >= HIGH_SPEED_CADENCE_MULTIPLIER) {
+          progressInterval = Math.max(progressInterval, terrainOn ? 0.2 : 0.16);
+          cameraInterval = Math.max(cameraInterval, terrainOn ? 0.14 : 0.1);
+          cameraMoveThreshold *= terrainOn ? 2.2 : 1.8;
+          cameraRotateThreshold *= terrainOn ? 2.0 : 1.6;
+          chartInterval = Math.max(chartInterval, 0.22);
+        }
+
         return {
-          progressInterval: progressIntervals[tier],
+          progressInterval: progressInterval,
           progressDistance: progressDistances[tier],
           markerPxThreshold: markerPxThresholds[tier],
           markerMaxInterval: markerMaxIntervals[tier],
@@ -15744,9 +16178,9 @@
           chartInterval: chartInterval,
           hudInterval: hudIntervals[tier],
           photoScanInterval: photoIntervals[tier],
-          cameraMoveThreshold: cameraMoveThresholds[tier],
-          cameraRotateThreshold: cameraRotateThresholds[tier],
-          cameraInterval: cameraIntervals[tier],
+          cameraMoveThreshold: cameraMoveThreshold,
+          cameraRotateThreshold: cameraRotateThreshold,
+          cameraInterval: cameraInterval,
         };
       }
 
@@ -15961,7 +16395,7 @@
           var progressInterval = cadence.progressInterval;
           var needUpdate =
             progressNeedLineInit ||
-            progressLineCooldown >= 0.083 ||
+            progressLineCooldown >= progressInterval ||
             Math.abs(d - progressLastDistance) >= progressDistThreshold;
           if (needUpdate) {
             var lo = 0,
@@ -16274,6 +16708,12 @@
             dbgCameraJumpCount++;
             // Dynamic edge prefetch at ~5–10 Hz; widen margin/zoom during larger rotations
             if (prefetchEnabled) {
+              var nowPrefetchMs = Date.now();
+              var inPlaybackWarmup =
+                playbackStartedAtMs > 0 && nowPrefetchMs - playbackStartedAtMs < 8000;
+              if (prefetchBackoffUntilMs > nowPrefetchMs || inPlaybackWarmup) {
+                // Skip expensive prefetch during initial playback warmup or temporary backoff.
+              } else {
               vpLastPrefetch += lastFrameDt || 0.016;
               var extra = bearingDeltaAbs > 1.0;
               var terrainPrefetchInterval = extra ? 0.24 : 0.34;
@@ -16321,6 +16761,7 @@
               }
               if (typeof map.setPrefetchZoomDelta === 'function') {
                 map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : hasTerrain ? 4 : 4);
+              }
               }
             }
           }
@@ -16498,6 +16939,30 @@
         var dt = (ts - lastFrame) / 1000; // seconds
         lastFrame = ts;
         lastFrameDt = dt;
+        if (dt >= 0.45) {
+          prefetchBackoffUntilMs = Date.now() + 6000;
+          if (vpInflightKeys && typeof vpInflightKeys.clear === 'function') vpInflightKeys.clear();
+          if (forwardPrefetchInflight && typeof forwardPrefetchInflight.clear === 'function') {
+            forwardPrefetchInflight.clear();
+          }
+          if (dbgAllow('prefetch-backoff', 800)) {
+            DBG.warn('Prefetch backoff activated', {
+              dtMs: Math.round(dt * 1000),
+              backoffMs: 6000,
+              tab: currentChartTab,
+            });
+          }
+        }
+        if (dt >= 0.12 && dbgAllow('raf-gap', 400)) {
+          DBG.warn('RAF frame gap detected', {
+            dtMs: Math.round(dt * 1000),
+            tab: currentChartTab,
+            speed: Number(speed) || 0,
+            playing: !!playing,
+            cityChunksLoading: Object.keys(cityChunkLoading || {}).length,
+            cityTotalCached: getLoadedCityCount(),
+          });
+        }
         chartCooldown += dt;
         hudCooldown += dt;
         photoScanCooldown += dt;
@@ -16790,7 +17255,7 @@
           }
           // At end handoff, prefetch once and briefly settle terrain before zoom-out transition.
           try {
-            if (prefetchEnabled) {
+            if (prefetchEnabled && Date.now() >= prefetchBackoffUntilMs) {
               prefetchViewportTiles(hasTerrain ? 0.22 : 0.3, !hasTerrain, bearing);
             }
           } catch (_) {}
@@ -18054,6 +18519,9 @@
        * @param {number} frac - Fraction (0..1) of the track.
        */
       function seekToFraction(frac) {
+        if (playing) {
+          pauseCityChunkLoadsFor(500, 'seek');
+        }
         var f = Math.max(0, Math.min(1, frac));
         // Map to privacy window
         if (privacyEnabled) {
@@ -18242,12 +18710,13 @@
             var seekCinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');
             if (seekCinemaEl && seekCinemaEl.style.display !== 'none') {
               seekCinemaEl._lastUpdate = 0;
-              updateWeatherCinema(
+              scheduleWeatherCinemaRefresh(
                 seekCinemaEl,
                 payload,
                 lastPlaybackSec || 0,
                 playing || false,
-                true
+                true,
+                0
               );
             }
           }

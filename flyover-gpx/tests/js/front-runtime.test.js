@@ -632,11 +632,13 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC.includes("else cinemaEl.classList.add('is-paused');")).toBe(true);
   });
 
-  test('weathergrade seek and tab switch force immediate cinema refresh', () => {
+  test('weathergrade seek and playing tab switch schedule forced cinema refresh', () => {
     expect(FRONT_SRC.includes('function updateWeatherCinema(cinemaEl, payloadData, currentTimeSec, isCurrentlyPlaying, forceUpdate)')).toBe(true);
     expect(FRONT_SRC.includes('if (!forceUpdate && now - lastUpdate < 100) return;')).toBe(true);
+    expect(FRONT_SRC.includes('function scheduleWeatherCinemaRefresh(')).toBe(true);
     expect(FRONT_SRC.includes("updateWeatherCinema(cinemaEl, payload, lastPlaybackSec || 0, playing || false, true);")).toBe(true);
-    expect(FRONT_SRC.includes("updateWeatherCinema(seekCinemaEl, payload, lastPlaybackSec || 0, playing || false, true);")).toBe(true);
+    expect(FRONT_SRC.includes('scheduleWeatherCinemaRefresh(')).toBe(true);
+    expect(FRONT_SRC.includes('seekCinemaEl._lastUpdate = 0;')).toBe(true);
   });
 
   test('weather cinema caches day/night ordering and memoizes expensive updates', () => {
@@ -662,9 +664,10 @@ describe('front.js runtime minimal regressions', () => {
     expect(rafCalls).toBe(1); // only inside scheduleRaf itself
   });
 
-  test('progressive route geometry updates are throttled to ~12fps', () => {
+  test('progressive route geometry updates use cadence-driven throttling', () => {
     expect(FRONT_SRC.includes('var progressLineCooldown = 0;')).toBe(true);
-    expect(FRONT_SRC.includes('progressLineCooldown >= 0.083')).toBe(true);
+    expect(FRONT_SRC.includes('var progressInterval = cadence.progressInterval;')).toBe(true);
+    expect(FRONT_SRC.includes('progressLineCooldown >= progressInterval')).toBe(true);
     expect(FRONT_SRC.includes('window.__fgpxLineCooldown >= 0.025')).toBe(false);
   });
 
