@@ -69,7 +69,8 @@ describe('VideoRecorder.js', () => {
     // Mock MapLibre map with canvas support
     mockTrack = {
       stop: jest.fn(),
-      readyState: 'live'
+      readyState: 'live',
+      requestFrame: jest.fn(),
     };
 
     mockMap = {
@@ -77,10 +78,11 @@ describe('VideoRecorder.js', () => {
         const canvas = document.createElement('canvas');
         canvas.width = 800;
         canvas.height = 600;
-        canvas.captureStream = jest.fn(() => {
-          // Mock MediaStream
+        canvas.captureStream = jest.fn((fps) => {
+          // Return same mock regardless of fps arg (0 = manual, N = automatic)
           return {
-            getTracks: jest.fn(() => [mockTrack])
+            getTracks: jest.fn(() => [mockTrack]),
+            getVideoTracks: jest.fn(() => [mockTrack]),
           };
         });
         return canvas;
@@ -452,6 +454,53 @@ describe('VideoRecorder.js', () => {
     expect(trackStopSpy).toHaveBeenCalled();
     expect(recorder.stream).toBeNull();
   });
+
+  test('captureFrame() calls requestFrame() on the video track when recording', async () => {
+    loadVR();
+
+    const recorder = new window.VideoRecorder(mockMap);
+    await recorder.initPromise;
+    await recorder.start();
+
+    // Should detect manualFrameCapture since mockTrack has requestFrame
+    expect(recorder.manualFrameCapture).toBe(true);
+
+    const requestFrameSpy = jest.spyOn(mockTrack, 'requestFrame');
+
+    // First call - should capture (lastFrameTime is 0)
+    recorder.captureFrame(1000);
+    expect(requestFrameSpy).toHaveBeenCalledTimes(1);
+
+    // Immediate second call - throttled, should not capture again
+    recorder.captureFrame(1001);
+    expect(requestFrameSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('captureFrame() is no-op when not recording', async () => {
+    loadVR();
+
+    const recorder = new window.VideoRecorder(mockMap);
+    await recorder.initPromise;
+
+    const requestFrameSpy = jest.spyOn(mockTrack, 'requestFrame');
+
+    recorder.captureFrame(1000);
+    expect(requestFrameSpy).not.toHaveBeenCalled();
+  });
+
+  test('captureFrame() falls back gracefully when requestFrame is not supported', async () => {
+    loadVR();
+
+    // Remove requestFrame to simulate Safari-like browser
+    delete mockTrack.requestFrame;
+    const recorder = new window.VideoRecorder(mockMap);
+    await recorder.initPromise;
+    await recorder.start();
+
+    expect(recorder.manualFrameCapture).toBe(false);
+    // Should not throw
+    expect(() => recorder.captureFrame(1000)).not.toThrow();
+  });
 });
 
 /**
@@ -470,8 +519,10 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
         const canvas = document.createElement('canvas');
         canvas.width = 800;
         canvas.height = 600;
+        const track = { stop: jest.fn(), readyState: 'live', requestFrame: jest.fn() };
         canvas.captureStream = jest.fn(() => ({
-          getTracks: jest.fn(() => [{ stop: jest.fn() }])
+          getTracks: jest.fn(() => [track]),
+          getVideoTracks: jest.fn(() => [track]),
         }));
         return canvas;
       }),
@@ -719,6 +770,49 @@ describe('VideoRecorder Regression Tests - Critical Fixes', () => {
     expectSourceContains(code, 'clipboard');
     expectSourceContains(code, 'writeText');
     expectSourceContains(code, 'Copied!');
+  });
+
+  test('REGRESSION: raf loop must call captureFrame(), not dead shouldCaptureFrame block', () => {
+    // BUG FIX: The animation loop had a dead shouldCaptureFrame() block that did nothing.
+    // FIXED: raf() now calls videoRecorder.captureFrame(ts) to explicitly push frames,
+    //        preventing stutter caused by rAF throttling in background tabs.
+    expectSourceContains(FRONT_SRC, 'videoRecorder.captureFrame(ts)');
+    // The old no-op comment block must be gone
+    expectSourceNotContains(FRONT_SRC, 'Frame is automatically captured by MediaRecorder');
+  });
+
+  test('REGRESSION: captureFrame() must use manual requestFrame(), not automatic captureStream', () => {
+    // BUG FIX: captureStream(fps) captured stale frames when rAF was throttled.
+    // FIXED: captureStream(0) + track.requestFrame() for explicit per-frame push.
+    //        Safari fallback re-opens captureStream(targetFPS) when requestFrame is unavailable.
+    expectSourceContains(VR_SRC, 'captureStream(0)');
+    expectSourceContains(VR_SRC, 'track.requestFrame()');
+    expectSourceContains(VR_SRC, 'this.manualFrameCapture');
+    expectSourceContains(VR_SRC, 'captureStream(this.targetFPS)');
+  });
+
+  test('REGRESSION: recording must capture during map render lifecycle, not only playback RAF', () => {
+    // Ensures start zoom-in / end zoom-out / seek camera transitions are recorded.
+    expectSourceContains(FRONT_SRC, 'function onRecordingMapRender()');
+    expectSourceContains(FRONT_SRC, "map.on('render', onRecordingMapRender)");
+    expectSourceContains(FRONT_SRC, 'videoRecorder.captureFrame(performance.now())');
+    expectSourceContains(FRONT_SRC, 'ensureRecordingRenderHook();');
+    expectSourceContains(FRONT_SRC, 'removeRecordingRenderHook();');
+  });
+
+  test('REGRESSION: seek while recording must force one immediate frame', () => {
+    // Guarantees progress-bar/chart seek state is captured even before next render tick.
+    expectSourceContains(VR_SRC, 'captureFrameNow');
+    expectSourceContains(FRONT_SRC, 'videoRecorder.captureFrameNow()');
+  });
+
+  test('REGRESSION: photo overlay recording must sync to live camera', () => {
+    // Ensures photo overlay alignment between browser overlay and recorded video.
+    expectSourceContains(VR_SRC, 'syncPhotoOverlayToCamera');
+    expectSourceContains(VR_SRC, "getSource('photo-overlay-recording')");
+    expectSourceContains(VR_SRC, 'src.setData({');
+    expectSourceContains(VR_SRC, 'srcFallback.setCoordinates([');
+    expectSourceContains(FRONT_SRC, 'videoRecorder.syncPhotoOverlayToCamera()');
   });
 
   test('REGRESSION: Recording state must be properly reset between sessions', () => {

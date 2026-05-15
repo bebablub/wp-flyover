@@ -557,7 +557,21 @@
       }
 
       // Use direct canvas recording - this captures all map layers including photos!
-      this.stream = this.canvas.captureStream(this.targetFPS);
+      // Use manual frame capture (0) so frames are pushed explicitly from the animation
+      // loop via captureFrame(). This prevents duplicate/stale frames when requestAnimationFrame
+      // is throttled (background tab, CPU spike). Falls back to automatic mode on browsers
+      // that don't support requestFrame() (e.g. Safari).
+      this.stream = this.canvas.captureStream(0);
+      this.manualFrameCapture = !!(
+        this.stream &&
+        typeof this.stream.getVideoTracks === 'function' &&
+        this.stream.getVideoTracks().length > 0 &&
+        typeof this.stream.getVideoTracks()[0].requestFrame === 'function'
+      );
+      if (!this.manualFrameCapture) {
+        // Safari / fallback: re-capture with automatic frame rate so recording still works
+        this.stream = this.canvas.captureStream(this.targetFPS);
+      }
 
       // Configure MediaRecorder with compression
       var mimeType = this.getSupportedMimeType();
@@ -866,11 +880,24 @@
           var canvasHeight = canvas.height;
           var imageAspect = image.width / image.height;
           var canvasAspect = canvasWidth / canvasHeight;
+          var overlayRect = null;
+          var imgRect = null;
+          try {
+            overlayRect = overlay && typeof overlay.getBoundingClientRect === 'function'
+              ? overlay.getBoundingClientRect()
+              : null;
+            imgRect = img && typeof img.getBoundingClientRect === 'function'
+              ? img.getBoundingClientRect()
+              : null;
+          } catch (_) {}
 
           // Browser overlay uses max height with black borders on sides
           // So we need to calculate the size that maintains aspect ratio within canvas height
           var iconSize;
-          if (imageAspect > canvasAspect) {
+          // Prefer actual rendered DOM size to match browser overlay 1:1.
+          if (imgRect && isFinite(imgRect.width) && isFinite(imgRect.height) && imgRect.width > 0 && imgRect.height > 0) {
+            iconSize = Math.min(imgRect.width / image.width, imgRect.height / image.height);
+          } else if (imageAspect > canvasAspect) {
             // Image is wider than canvas - limit by canvas width (like browser does with height)
             iconSize = canvasWidth / image.width;
           } else {
@@ -879,7 +906,12 @@
           }
 
           // Scale down a bit to match browser overlay padding/margins
-          iconSize *= 0.9;
+          if (!(imgRect && imgRect.width > 0 && imgRect.height > 0)) {
+            iconSize *= 0.9;
+          }
+          if (!isFinite(iconSize) || iconSize <= 0) {
+            iconSize = 0.9 * Math.min(canvasWidth / image.width, canvasHeight / image.height);
+          }
 
           // Add image to map sprite
           if (!self.map.hasImage('photo-overlay-icon')) {
@@ -929,6 +961,8 @@
             center: center,
             imageSize: { width: image.width, height: image.height },
             canvasSize: { width: canvasWidth, height: canvasHeight },
+            overlaySize: overlayRect ? { width: overlayRect.width, height: overlayRect.height } : null,
+            overlayImageSize: imgRect ? { width: imgRect.width, height: imgRect.height } : null,
             calculatedIconSize: iconSize,
             imageAspect: imageAspect,
             canvasAspect: canvasAspect,
@@ -977,6 +1011,55 @@
     } catch (error) {
       DBG.warn('Raster fallback also failed', error);
     }
+  };
+
+  /**
+   * Keep recording photo overlay aligned with the live camera view.
+   * This is called on map render frames while recording is active.
+   */
+  VideoRecorder.prototype.syncPhotoOverlayToCamera = function () {
+    try {
+      if (!this.map) return;
+      if (!this.map.getSource || !this.map.getLayer) return;
+      if (!this.map.getSource('photo-overlay-recording')) return;
+
+      // Symbol-path: keep source centered on current camera center so screen-space overlay stays fixed.
+      if (this.map.getLayer('photo-overlay-recording-layer')) {
+        try {
+          var center = this.map.getCenter();
+          var src = this.map.getSource('photo-overlay-recording');
+          if (src && typeof src.setData === 'function' && center) {
+            src.setData({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [center.lng, center.lat],
+              },
+            });
+          }
+        } catch (_) {}
+      }
+
+      // Raster fallback path: refresh image coordinates to current bounds.
+      try {
+        var rasterLayer = this.map.getLayer('photo-overlay-recording-layer');
+        var srcFallback = this.map.getSource('photo-overlay-recording');
+        if (
+          rasterLayer &&
+          rasterLayer.type === 'raster' &&
+          srcFallback &&
+          typeof srcFallback.setCoordinates === 'function'
+        ) {
+          var b = this.map.getBounds();
+          srcFallback.setCoordinates([
+            [b.getWest(), b.getNorth()],
+            [b.getEast(), b.getNorth()],
+            [b.getEast(), b.getSouth()],
+            [b.getWest(), b.getSouth()],
+          ]);
+        }
+      } catch (_) {}
+    } catch (_) {}
   };
 
   /**
@@ -2463,6 +2546,45 @@
     return false;
   };
 
+  /**
+   * Push one frame immediately, bypassing FPS throttling.
+   * Use this for edge-cases where state changed abruptly (seek, end-stop)
+   * and we must guarantee at least one up-to-date frame in the recording.
+   */
+  VideoRecorder.prototype.captureFrameNow = function () {
+    if (!this.isRecording || !this.manualFrameCapture) return;
+    try {
+      var now = performance.now();
+      var track = this.stream && typeof this.stream.getVideoTracks === 'function'
+        ? this.stream.getVideoTracks()[0]
+        : null;
+      if (track && track.readyState === 'live' && typeof track.requestFrame === 'function') {
+        track.requestFrame();
+        this.lastFrameTime = now;
+        this.frameCount++;
+      }
+    } catch (_) {}
+  };
+
   window.VideoRecorder = VideoRecorder;
+
+    /**
+     * Explicitly push one video frame to the MediaRecorder stream.
+     * Called from the animation loop on every rendered frame.
+     * Throttled to targetFPS via shouldCaptureFrame().
+     * No-op when manualFrameCapture is not supported (Safari fallback).
+     * @param {number} [currentTime] - Timestamp in ms (defaults to performance.now()).
+     */
+    VideoRecorder.prototype.captureFrame = function (currentTime) {
+      if (!this.isRecording || !this.manualFrameCapture) return;
+      var now = currentTime !== undefined ? currentTime : performance.now();
+      if (!this.shouldCaptureFrame(now)) return;
+      try {
+        var track = this.stream.getVideoTracks()[0];
+        if (track && track.readyState === 'live') {
+          track.requestFrame();
+        }
+      } catch (_) {}
+    };
   window.VideoRecorder.PRESETS = VIDEO_QUALITY_PRESETS;
 })();

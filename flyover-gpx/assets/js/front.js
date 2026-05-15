@@ -6044,6 +6044,36 @@
       var videoRecorder = null;
       var isRecording = false;
       var selectedQualityPreset = 'medium';
+      var recordingRenderHookAttached = false;
+
+      function ensureRecordingRenderHook() {
+        if (recordingRenderHookAttached) return;
+        if (!map || typeof map.on !== 'function') return;
+        map.on('render', onRecordingMapRender);
+        recordingRenderHookAttached = true;
+      }
+
+      function removeRecordingRenderHook() {
+        if (!recordingRenderHookAttached) return;
+        try {
+          if (map && typeof map.off === 'function') {
+            map.off('render', onRecordingMapRender);
+          }
+        } catch (_) {}
+        recordingRenderHookAttached = false;
+      }
+
+      function onRecordingMapRender() {
+        if (!isRecording || !videoRecorder || !videoRecorder.isRecording) return;
+        try {
+          // Keep recording photo overlay aligned with the live map camera.
+          if (typeof videoRecorder.syncPhotoOverlayToCamera === 'function') {
+            videoRecorder.syncPhotoOverlayToCamera();
+          }
+          // Push frame for manual capture mode (no-op on fallback browsers).
+          videoRecorder.captureFrame(performance.now());
+        } catch (_) {}
+      }
 
 
       // Dynamic viewport edge prefetcher (5–10 Hz), rotation-aware
@@ -12446,6 +12476,7 @@
       }
 
       registerTeardown(function () {
+        removeRecordingRenderHook();
         stopIdleSway();
       });
 
@@ -14088,9 +14119,10 @@
         progressLineCooldown += dt;
 
         // Handle video recording frame capture
-        if (videoRecorder && videoRecorder.shouldCaptureFrame(ts)) {
-          // Frame is automatically captured by MediaRecorder from canvas stream
-          // No additional action needed here
+        // Push one frame to the MediaRecorder stream on every animation tick.
+        // captureFrame() is a no-op when not recording or on Safari (auto-capture fallback).
+        if (videoRecorder) {
+          videoRecorder.captureFrame(ts);
         }
 
         // Overlay rendering is now handled by map 'render' event
@@ -14383,14 +14415,24 @@
           function stopRecordingAfterEndZoom(durationMs) {
             if (!shouldStopRecordingAfterEndZoom) return;
             var finished = false;
+
+            function stopWithFinalFrame() {
+              if (!isRecording || !videoRecorder) return;
+              try {
+                // Ensure the final overview frame is emitted before stopping.
+                if (typeof videoRecorder.captureFrame === 'function') {
+                  videoRecorder.captureFrame(performance.now());
+                }
+              } catch (_) {}
+              stopRecording();
+            }
+
             var stopDelay = Math.max(0, Number(durationMs) || 0) + 150;
             var fallbackTimer = setTimeout(function () {
               if (finished) return;
               finished = true;
               console.log('[FGPX end-zoom] stopRecording fallback timer fired');
-              if (isRecording && videoRecorder) {
-                stopRecording();
-              }
+              stopWithFinalFrame();
             }, stopDelay);
             map.once('moveend', function () {
               if (finished) return;
@@ -14399,8 +14441,13 @@
                 clearTimeout(fallbackTimer);
               } catch (_) {}
               console.log('[FGPX end-zoom] stopRecording on moveend');
-              if (isRecording && videoRecorder) {
-                stopRecording();
+              // Prefer the next render tick to include the settled camera frame.
+              try {
+                map.once('render', function () {
+                  stopWithFinalFrame();
+                });
+              } catch (_) {
+                stopWithFinalFrame();
               }
             });
           }
@@ -14555,6 +14602,7 @@
                     .start()
                     .then(function () {
                       isRecording = true;
+                      ensureRecordingRenderHook();
 
                       if (firstPlayZoomPending) {
                         // Start recording before zoom animation
@@ -14576,10 +14624,12 @@
                   .start()
                   .then(function () {
                     isRecording = true;
+                    ensureRecordingRenderHook();
                   })
                   .catch(function (error) {
                     DBG.warn('Failed to start recording', error);
                     isRecording = false;
+                    removeRecordingRenderHook();
                     updateButtonStates();
                   });
               }
@@ -14595,6 +14645,7 @@
             } catch (error) {
               DBG.warn('Failed to start recording', error);
               isRecording = false;
+              removeRecordingRenderHook();
               updateButtonStates();
             }
           })
@@ -14610,6 +14661,7 @@
         if (!isRecording || !videoRecorder) return;
 
         try {
+          removeRecordingRenderHook();
           // Stop recording
           videoRecorder.stop();
           isRecording = false;
@@ -14632,6 +14684,7 @@
         } catch (error) {
           DBG.warn('Failed to stop recording', error);
           isRecording = false;
+          removeRecordingRenderHook();
           preloadingInProgress = false;
           updateButtonStates();
         }
@@ -15934,6 +15987,20 @@
         } catch (_) {}
         // Never interrupt active recording when seeking on the progress bar.
         if (isRecording) {
+          try {
+            if (videoRecorder) {
+              // Keep overlay/photo layer aligned before forcing a capture.
+              if (typeof videoRecorder.syncPhotoOverlayToCamera === 'function') {
+                videoRecorder.syncPhotoOverlayToCamera();
+              }
+              // Guarantee at least one post-seek frame even before next render tick.
+              if (typeof videoRecorder.captureFrameNow === 'function') {
+                videoRecorder.captureFrameNow();
+              } else if (typeof videoRecorder.captureFrame === 'function') {
+                videoRecorder.captureFrame(performance.now());
+              }
+            }
+          } catch (_) {}
           if (!playing) setPlaying(true);
           scheduleRaf();
           return;
