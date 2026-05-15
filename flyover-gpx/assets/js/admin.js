@@ -9,8 +9,17 @@
     Number(previewCfg.bulkMaxTracks) > 0 ? Number(previewCfg.bulkMaxTracks) : 25;
   const BULK_PAUSE_MS = Number(previewCfg.bulkPauseMs) >= 0 ? Number(previewCfg.bulkPauseMs) : 200;
 
+  /**
+   * Document ready handler for Flyover GPX admin UI
+   */
   $(document).ready(function () {
     // File size validation and preview
+    /**
+     * Validate file size and show preview info for selected file input
+     * @param {jQuery} $input
+     * @param {number} [maxSizeMB=20]
+     * @returns {boolean}
+     */
     function validateAndPreviewFile($input, maxSizeMB = 20) {
       const file = $input[0].files[0];
       if (!file) return true;
@@ -987,12 +996,24 @@
     });
   });
 
+  /**
+   * Sleep for a given number of milliseconds
+   * @param {number} ms
+   * @returns {Promise<void>}
+   */
   function sleep(ms) {
     return new Promise(function (resolve) {
       setTimeout(resolve, ms);
     });
   }
 
+  /**
+   * Generate preview image for a track (AJAX)
+   * @param {number} postId
+   * @param {string} nonce
+   * @param {string} trackTitle
+   * @returns {Promise<any>}
+   */
   async function generatePreviewForTrack(postId, nonce, trackTitle) {
     const payload = await buildPreviewImagePayload(postId, trackTitle);
 
@@ -1013,6 +1034,12 @@
     });
   }
 
+  /**
+   * Build preview image payload for a track
+   * @param {number} postId
+   * @param {string} trackTitle
+   * @returns {Promise<{imageData: string, source: string}>}
+   */
   async function buildPreviewImagePayload(postId, trackTitle) {
     const inlineMapSnapshot = getMapSnapshotDataUrl();
     if (inlineMapSnapshot) {
@@ -1030,6 +1057,10 @@
     };
   }
 
+  /**
+   * Get map snapshot as data URL from visible canvas
+   * @returns {string}
+   */
   function getMapSnapshotDataUrl() {
     const canvas =
       document.querySelector('#fgpx_preview .maplibregl-canvas') ||
@@ -1045,6 +1076,11 @@
     }
   }
 
+  /**
+   * Generate offscreen map snapshot as data URL for a track
+   * @param {number} postId
+   * @returns {Promise<string>}
+   */
   async function generateOffscreenMapSnapshotDataUrl(postId) {
     if (!window.maplibregl || typeof window.maplibregl.Map !== 'function') {
       return '';
@@ -1138,6 +1174,11 @@
     }
   }
 
+  /**
+   * Fetch track data for a given post ID
+   * @param {number} postId
+   * @returns {Promise<any>}
+   */
   async function fetchTrackData(postId) {
     const cfg = window.FGPXAdminPreview || {};
     const restBase = String(cfg.restBase || '').replace(/\/$/, '');
@@ -1171,6 +1212,11 @@
     return null;
   }
 
+  /**
+   * Extract coordinates array from track data
+   * @param {any} trackData
+   * @returns {Array<[number, number]>}
+   */
   function extractTrackCoordinates(trackData) {
     const coordinates =
       trackData && trackData.geojson && Array.isArray(trackData.geojson.coordinates)
@@ -1194,6 +1240,11 @@
       });
   }
 
+  /**
+   * Get map style object or URL for snapshot
+   * @param {object} cfg
+   * @returns {object|string}
+   */
   function getSnapshotStyle(cfg) {
     const useVector = String(cfg.defaultStyle || '') === 'vector';
     const styleUrl = String(cfg.defaultStyleUrl || '');
@@ -1221,6 +1272,12 @@
     };
   }
 
+  /**
+   * Wait for MapLibre map to load or timeout
+   * @param {object} map
+   * @param {number} timeoutMs
+   * @returns {Promise<void>}
+   */
   function waitForMapLoad(map, timeoutMs) {
     return new Promise(function (resolve, reject) {
       let timeout = null;
@@ -1249,6 +1306,12 @@
     });
   }
 
+  /**
+   * Create fallback preview card as data URL
+   * @param {string} title
+   * @param {number} postId
+   * @returns {string}
+   */
   function createFallbackCardDataUrl(title, postId) {
     const canvas = document.createElement('canvas');
     canvas.width = 1200;
@@ -1290,6 +1353,10 @@
     return canvas.toDataURL('image/png');
   }
 
+  /**
+   * Insert or update preview image in the admin UI
+   * @param {string} previewUrl
+   */
   function upsertPreviewImage(previewUrl) {
     const holder = document.querySelector('#fgpx_preview');
     if (!holder) {
@@ -1321,6 +1388,9 @@
     image.src = previewUrl;
   }
 
+  /**
+   * Remove preview image from the admin UI
+   */
   function removePreviewImage() {
     const holder = document.querySelector('#fgpx_preview');
     if (!holder) {
@@ -1342,6 +1412,11 @@
 
   /**
    * Show admin notice dynamically
+   */
+  /**
+   * Show a dynamic admin notice in the UI
+   * @param {string} message
+   * @param {string} [type]
    */
   function showAdminNotice(message, type) {
     type = type || 'info';
@@ -1385,6 +1460,9 @@
   // ============================================================================
   // TAB SWITCHING FOR SETTINGS PAGE
   // ============================================================================
+  /**
+   * Initialize settings page tab switching
+   */
   function initSettingsTabs() {
     const STORAGE_KEY = 'fgpx_settings_active_tab';
     const $tabButtons = $('.fgpx-settings-tabs button');
@@ -1452,6 +1530,10 @@
       }
     });
 
+    /**
+     * Show a specific settings tab by name
+     * @param {string} tabName
+     */
     function showTab(tabName) {
       // Deactivate all tabs and contents
       $tabButtons.removeClass('active').attr({

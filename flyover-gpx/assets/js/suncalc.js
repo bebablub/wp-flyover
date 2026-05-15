@@ -26,12 +26,27 @@
     J1970 = 2440588,
     J2000 = 2451545;
 
+  /**
+   * Converts a Date to Julian date.
+   * @param {Date} date
+   * @returns {number}
+   */
   function toJulian(date) {
     return date.valueOf() / dayMs - 0.5 + J1970;
   }
+  /**
+   * Converts a Julian date to Date.
+   * @param {number} j
+   * @returns {Date}
+   */
   function fromJulian(j) {
     return new Date((j + 0.5 - J1970) * dayMs);
   }
+  /**
+   * Converts a Date to number of days since J2000.
+   * @param {Date} date
+   * @returns {number}
+   */
   function toDays(date) {
     return toJulian(date) - J2000;
   }
@@ -40,24 +55,61 @@
 
   var e = rad * 23.4397; // obliquity of the Earth
 
+  /**
+   * Calculates right ascension.
+   * @param {number} l
+   * @param {number} b
+   * @returns {number}
+   */
   function rightAscension(l, b) {
     return atan(sin(l) * cos(e) - tan(b) * sin(e), cos(l));
   }
+  /**
+   * Calculates declination.
+   * @param {number} l
+   * @param {number} b
+   * @returns {number}
+   */
   function declination(l, b) {
     return asin(sin(b) * cos(e) + cos(b) * sin(e) * sin(l));
   }
 
+  /**
+   * Calculates azimuth.
+   * @param {number} H
+   * @param {number} phi
+   * @param {number} dec
+   * @returns {number}
+   */
   function azimuth(H, phi, dec) {
     return atan(sin(H), cos(H) * sin(phi) - tan(dec) * cos(phi));
   }
+  /**
+   * Calculates altitude.
+   * @param {number} H
+   * @param {number} phi
+   * @param {number} dec
+   * @returns {number}
+   */
   function altitude(H, phi, dec) {
     return asin(sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(H));
   }
 
+  /**
+   * Calculates sidereal time.
+   * @param {number} d
+   * @param {number} lw
+   * @returns {number}
+   */
   function siderealTime(d, lw) {
     return rad * (280.16 + 360.9856235 * d) - lw;
   }
 
+  /**
+   * Calculates atmospheric refraction correction.
+   * @param {number} h
+   * @returns {number}
+   */
   function astroRefraction(h) {
     if (h < 0)
       // the following formula works for positive altitudes only.
@@ -70,10 +122,20 @@
 
   // general sun calculations
 
+  /**
+   * Calculates solar mean anomaly.
+   * @param {number} d
+   * @returns {number}
+   */
   function solarMeanAnomaly(d) {
     return rad * (357.5291 + 0.98560028 * d);
   }
 
+  /**
+   * Calculates ecliptic longitude.
+   * @param {number} M
+   * @returns {number}
+   */
   function eclipticLongitude(M) {
     var C = rad * (1.9148 * sin(M) + 0.02 * sin(2 * M) + 0.0003 * sin(3 * M)), // equation of center
       P = rad * 102.9372; // perihelion of the Earth
@@ -81,6 +143,11 @@
     return M + C + P + PI;
   }
 
+  /**
+   * Calculates sun coordinates (declination and right ascension).
+   * @param {number} d
+   * @returns {{dec: number, ra: number}}
+   */
   function sunCoords(d) {
     var M = solarMeanAnomaly(d),
       L = eclipticLongitude(M);
@@ -95,6 +162,13 @@
 
   // calculates sun position for a given date and latitude/longitude
 
+  /**
+   * Calculates sun position for a given date and latitude/longitude.
+   * @param {Date} date
+   * @param {number} lat
+   * @param {number} lng
+   * @returns {{azimuth: number, altitude: number}}
+   */
   SunCalc.getPosition = function (date, lat, lng) {
     var lw = rad * -lng,
       phi = rad * lat,
@@ -121,6 +195,12 @@
 
   // adds a custom time to the times config
 
+  /**
+   * Adds a custom sun time to the times config.
+   * @param {number} angle
+   * @param {string} riseName
+   * @param {string} setName
+   */
   SunCalc.addTime = function (angle, riseName, setName) {
     times.push([angle, riseName, setName]);
   };
@@ -129,22 +209,60 @@
 
   var J0 = 0.0009;
 
+  /**
+   * Calculates the Julian cycle.
+   * @param {number} d
+   * @param {number} lw
+   * @returns {number}
+   */
   function julianCycle(d, lw) {
     return Math.round(d - J0 - lw / (2 * PI));
   }
 
+  /**
+   * Calculates approximate solar transit.
+   * @param {number} Ht
+   * @param {number} lw
+   * @param {number} n
+   * @returns {number}
+   */
   function approxTransit(Ht, lw, n) {
     return J0 + (Ht + lw) / (2 * PI) + n;
   }
+  /**
+   * Calculates solar transit in Julian days.
+   * @param {number} ds
+   * @param {number} M
+   * @param {number} L
+   * @returns {number}
+   */
   function solarTransitJ(ds, M, L) {
     return J2000 + ds + 0.0053 * sin(M) - 0.0069 * sin(2 * L);
   }
 
+  /**
+   * Calculates hour angle.
+   * @param {number} h
+   * @param {number} phi
+   * @param {number} d
+   * @returns {number}
+   */
   function hourAngle(h, phi, d) {
     return acos((sin(h) - sin(phi) * sin(d)) / (cos(phi) * cos(d)));
   }
 
   // returns set time for the given sun altitude
+  /**
+   * Returns set time for the given sun altitude.
+   * @param {number} h
+   * @param {number} lw
+   * @param {number} phi
+   * @param {number} dec
+   * @param {number} n
+   * @param {number} M
+   * @param {number} L
+   * @returns {number}
+   */
   function getSetJ(h, lw, phi, dec, n, M, L) {
     var w = hourAngle(h, phi, dec),
       a = approxTransit(w, lw, n);
@@ -153,6 +271,13 @@
 
   // calculates sun times for a given date and latitude/longitude
 
+  /**
+   * Calculates sun times for a given date and latitude/longitude.
+   * @param {Date} date
+   * @param {number} lat
+   * @param {number} lng
+   * @returns {Object}
+   */
   SunCalc.getTimes = function (date, lat, lng) {
     var lw = rad * -lng,
       phi = rad * lat,
@@ -189,6 +314,11 @@
 
   // moon calculations, based on http://aa.quae.nl/en/reken/hemelpositie.html formulas
 
+  /**
+   * Calculates moon coordinates (right ascension, declination, distance).
+   * @param {number} d
+   * @returns {{ra: number, dec: number, dist: number}}
+   */
   function moonCoords(d) {
     var L = rad * (218.316 + 13.176396 * d),
       M = rad * (134.963 + 13.064993 * d),
@@ -199,6 +329,13 @@
     return { ra: rightAscension(l, b), dec: declination(l, b), dist: dt };
   }
 
+  /**
+   * Calculates moon position for a given date and latitude/longitude.
+   * @param {Date} date
+   * @param {number} lat
+   * @param {number} lng
+   * @returns {{azimuth: number, altitude: number, distance: number, parallacticAngle: number}}
+   */
   SunCalc.getMoonPosition = function (date, lat, lng) {
     var lw = rad * -lng,
       phi = rad * lat,

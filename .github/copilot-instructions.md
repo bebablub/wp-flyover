@@ -7,6 +7,7 @@ These instructions apply to the whole repository. The WordPress plugin code live
 - Entry point: `flyover-gpx/flyover-gpx.php`.
 - PHP classes are in `flyover-gpx/includes/` under namespace `FGpx`.
 - Frontend player is a large IIFE in `flyover-gpx/assets/js/front.js`.
+- Frontend player utilities and helpers are in `flyover-gpx/assets/js/*.js`.
 - Lazy bootstrap is in `flyover-gpx/assets/js/fgpx-lazy.js`.
 - REST data endpoint is provided by `FGpx\Rest` at `GET /wp-json/fgpx/v1/track/{id}`.
 - Simulation tab behavior lives in `flyover-gpx/assets/js/front.js` + `flyover-gpx/assets/css/front.css`; keep headwind/tailwind/sidewind mapping and smooth weather fades consistent.

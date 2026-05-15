@@ -69,6 +69,11 @@
 
   /* Fragment shader: 2D FBM for soft puffy edges.
    * Compiled with #define OCTAVES so the quality preset controls the loop count. */
+  /**
+   * Build fragment shader source code with given FBM octaves
+   * @param {number} octaves
+   * @returns {string}
+   */
   function buildFragShader(octaves) {
     return [
       '#define OCTAVES ' + octaves,
@@ -155,6 +160,11 @@
   /* Random helpers (deterministic seed)                                  */
   /* ------------------------------------------------------------------ */
 
+  /**
+   * Deterministic seeded random number generator
+   * @param {number} seed
+   * @returns {number}
+   */
   function seededRand(seed) {
     var x = Math.sin(seed + 1) * 43758.5453123;
     return x - Math.floor(x);
@@ -236,6 +246,10 @@
     /* ---------------------------------------------------------------- */
     var offsetArr, scaleArr, opacityArr;
 
+    /**
+     * Build per-instance cloud positions, scales, and opacities
+     * @param {object} MercatorCoordinate
+     */
     function buildInstances(MercatorCoordinate) {
       var N = preset.instances;
       offsetArr = new Float32Array(N * 3);

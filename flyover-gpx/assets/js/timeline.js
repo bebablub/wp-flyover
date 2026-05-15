@@ -8,10 +8,17 @@
 (function () {
   'use strict';
 
+  /**
+   * Checks if timeline debug logging is enabled.
+   * @returns {boolean}
+   */
   function isTimelineDebugEnabled() {
     return !!(window.FGPX && window.FGPX.debugLogging);
   }
 
+  /**
+   * Timeline debug logger. Uses window.DBG if available, otherwise console.log.
+   */
   function DBG() {
     if (typeof window.DBG === 'function') {
       window.DBG.apply(window, arguments);
@@ -27,6 +34,11 @@
 
   // ---- Asset loading (same pattern as gallery.js) ----
 
+  /**
+   * Dynamically load CSS stylesheets.
+   * @param {string[]} urls
+   * @returns {Promise<void[]>}
+   */
   function loadStyles(urls) {
     return Promise.all(
       (urls || []).map(function (u) {
@@ -52,6 +64,11 @@
     );
   }
 
+  /**
+   * Dynamically load JS scripts sequentially.
+   * @param {string[]} urls
+   * @returns {Promise<void>}
+   */
   function loadScriptsSequential(urls) {
     return (urls || []).reduce(function (promise, url) {
       return promise.then(function () {
@@ -83,6 +100,11 @@
     }, Promise.resolve());
   }
 
+  /**
+   * Ensure player assets (styles/scripts) are loaded before player boot.
+   * @param {Object} cfg
+   * @returns {Promise<void>}
+   */
   function ensurePlayerAssets(cfg) {
     applyPlayerConfig(cfg);
     if (window.FGPX && typeof window.FGPX.initContainer === 'function') {
@@ -109,6 +131,10 @@
     });
   }
 
+  /**
+   * Apply player config to global FGPX object.
+   * @param {Object} cfg
+   */
   function applyPlayerConfig(cfg) {
     var playerConfig = (cfg && cfg.playerConfig) || {};
     var forceOverrideKeys = {
@@ -160,6 +186,11 @@
     }
   }
 
+  /**
+   * Apply timeline CSS variables for card sizing.
+   * @param {HTMLElement} container
+   * @param {Object} config
+   */
   function applyTimelineCssVariables(container, config) {
     if (!container || !config) {
       return;
@@ -441,6 +472,12 @@
     });
   }
 
+  /**
+   * Render all tracks in a flat (ungrouped) list.
+   * @param {Object} state
+   * @param {HTMLElement} contentWrapper
+   * @param {Array} months
+   */
   function renderFlatTracks(state, contentWrapper, months) {
     var section = document.createElement('div');
     section.className = 'timeline-month-section timeline-month-section-ungrouped';
@@ -460,6 +497,13 @@
     contentWrapper.appendChild(section);
   }
 
+  /**
+   * Build a timeline track list item (li) with event handlers.
+   * @param {Object} track
+   * @param {Object} state
+   * @param {number} index
+   * @returns {HTMLLIElement}
+   */
   function buildTrackItem(track, state, index) {
     var li = document.createElement('li');
     li.className = 'timeline-track-item';

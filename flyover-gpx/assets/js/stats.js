@@ -1,10 +1,23 @@
 (function () {
   'use strict';
 
+  /**
+   * Query a selector within a root element.
+   * @param {string} selector
+   * @param {Element|Document} [root]
+   * @returns {Element|null}
+   */
   function q(selector, root) {
     return (root || document).querySelector(selector);
   }
 
+  /**
+   * Create a DOM element with optional class and text.
+   * @param {string} tag
+   * @param {string} [className]
+   * @param {string} [text]
+   * @returns {Element}
+   */
   function createEl(tag, className, text) {
     var el = document.createElement(tag);
     if (className) el.className = className;
@@ -12,24 +25,51 @@
     return el;
   }
 
+  /**
+   * Format meters as kilometers string.
+   * @param {number|string} meters
+   * @returns {string}
+   */
   function formatKm(meters) {
     return (Number(meters || 0) / 1000).toFixed(2) + ' km';
   }
 
+  /**
+   * Format meters as meters string.
+   * @param {number|string} meters
+   * @returns {string}
+   */
   function formatMeters(meters) {
     return Math.round(Number(meters || 0)).toString() + ' m';
   }
 
+  /**
+   * Format speed as km/h string.
+   * @param {number|string} kmh
+   * @returns {string}
+   */
   function formatSpeed(kmh) {
     return Number(kmh || 0).toFixed(2) + ' km/h';
   }
 
+  /**
+   * Get a CSS variable value from styles, with fallback.
+   * @param {CSSStyleDeclaration|null} styles
+   * @param {string} name
+   * @param {string} fallback
+   * @returns {string}
+   */
   function getCssVar(styles, name, fallback) {
     if (!styles || typeof styles.getPropertyValue !== 'function') return fallback;
     var value = String(styles.getPropertyValue(name) || '').trim();
     return value || fallback;
   }
 
+  /**
+   * Get chart theme colors from CSS variables.
+   * @param {Element} root
+   * @returns {Object}
+   */
   function getChartTheme(root) {
     var styles = null;
     if (root && typeof window.getComputedStyle === 'function') {
@@ -48,6 +88,10 @@
     };
   }
 
+  /**
+   * Get the default MapLibre heatmap style object.
+   * @returns {Object}
+   */
   function getDefaultHeatmapStyle() {
     return {
       version: 8,
@@ -69,6 +113,11 @@
     };
   }
 
+  /**
+   * Fetch statistics data from REST or AJAX endpoint.
+   * @param {Object} config
+   * @returns {Promise<Object>}
+   */
   function fetchStats(config) {
     var maxPoints = Math.max(1000, Math.min(50000, Number(config.maxPoints || 15000)));
     var includeHeatmap = config.showHeatmap !== false ? '1' : '0';
@@ -102,6 +151,12 @@
       });
   }
 
+  /**
+   * Build and append KPI cards to root.
+   * @param {Element} root
+   * @param {Object} summary
+   * @param {Object} strings
+   */
   function buildKpis(root, summary, strings) {
     var kpiWrap = createEl('div', 'fgpx-stats-kpis');
     var items = [
@@ -140,6 +195,12 @@
     yearly: 'tracks_by_year',
   };
 
+  /**
+   * Create a chart card with canvas and title.
+   * @param {Element} wrap
+   * @param {string} title
+   * @returns {HTMLCanvasElement}
+   */
   function makeChartCanvas(wrap, title) {
     var canvas = createEl('canvas', 'fgpx-stats-chart-canvas');
     canvas.width = 400;
@@ -153,6 +214,12 @@
     return canvas;
   }
 
+  /**
+   * Get chart data rows for a given key from payload.
+   * @param {Object} payload
+   * @param {string} key
+   * @returns {Array}
+   */
   function getChartRows(payload, key) {
     if (payload && payload.charts && Array.isArray(payload.charts[key])) {
       return payload.charts[key];
@@ -213,6 +280,14 @@
     return [];
   }
 
+  /**
+   * Render a bar chart using Chart.js.
+   * @param {HTMLCanvasElement} canvas
+   * @param {Array<string>} labels
+   * @param {string} label
+   * @param {Array<number>} data
+   * @param {string} [color]
+   */
   function renderBarChart(canvas, labels, label, data, color) {
     new window.Chart(canvas.getContext('2d'), {
       type: 'bar',
@@ -233,6 +308,15 @@
     });
   }
 
+  /**
+   * Render a line chart using Chart.js.
+   * @param {HTMLCanvasElement} canvas
+   * @param {Array<string>} labels
+   * @param {string} label
+   * @param {Array<number>} data
+   * @param {string} [color]
+   * @param {string} [fillColor]
+   */
   function renderLineChart(canvas, labels, label, data, color, fillColor) {
     new window.Chart(canvas.getContext('2d'), {
       type: 'line',
@@ -523,6 +607,12 @@
     },
   };
 
+  /**
+   * Build and append enabled charts to root.
+   * @param {Element} root
+   * @param {Object} config
+   * @param {Object} payload
+   */
   function buildCharts(root, config, payload) {
     if (typeof window.Chart !== 'function') return;
 
@@ -562,6 +652,12 @@
     root.appendChild(wrap);
   }
 
+  /**
+   * Build and append a heatmap to root using MapLibre.
+   * @param {Element} root
+   * @param {Object} config
+   * @param {Object} payload
+   */
   function buildHeatmap(root, config, payload) {
     if (!window.maplibregl || typeof window.maplibregl.Map !== 'function') return;
 
@@ -673,6 +769,12 @@
     });
   }
 
+  /**
+   * Render the stats root element with KPIs, charts, and heatmap.
+   * @param {Element} root
+   * @param {Object} config
+   * @param {Object} payload
+   */
   function renderRoot(root, config, payload) {
     var strings = config.strings || {};
     root.innerHTML = '';
@@ -698,6 +800,11 @@
     }
   }
 
+  /**
+   * Initialize stats for a single root element.
+   * @param {Element} root
+   * @param {Object} config
+   */
   function initOne(root, config) {
     if (!root || root.dataset.fgpxStatsInit === '1') return;
     root.dataset.fgpxStatsInit = '1';
@@ -718,6 +825,9 @@
       });
   }
 
+  /**
+   * Initialize all stats instances on the page.
+   */
   function initAll() {
     var instances = window.FGPXStatsInstances || {};
     Object.keys(instances).forEach(function (id) {

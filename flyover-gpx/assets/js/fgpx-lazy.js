@@ -6,6 +6,11 @@
     console.debug('[FGPX] Lazy loader script started');
   }
 
+  /**
+   * Dynamically load an array of CSS stylesheets
+   * @param {string[]} urls
+   * @returns {Promise<void[]>}
+   */
   function loadStyles(urls) {
     return Promise.all(
       (urls || []).map(function (u) {
@@ -31,6 +36,11 @@
       })
     );
   }
+  /**
+   * Load an array of JS scripts sequentially (in order)
+   * @param {string[]} urls
+   * @returns {Promise<void>}
+   */
   function loadScriptsSequential(urls) {
     return urls.reduce(function (p, u) {
       return p.then(function () {
@@ -64,6 +74,9 @@
     }, Promise.resolve());
   }
 
+  /**
+   * Main lazy loader bootstrap logic for FGPX
+   */
   function bootstrap() {
     if (!window.FGPX) {
       return;
@@ -117,6 +130,9 @@
       });
   }
 
+  /**
+   * Run immediate (non-lazy) bootstrap
+   */
   function immediate() {
     if (window.FGPX && window.FGPX.debugLogging) {
       console.debug('[FGPX] Running immediate bootstrap (no lazy loading)');

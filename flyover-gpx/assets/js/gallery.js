@@ -1,6 +1,11 @@
 (function () {
   'use strict';
 
+  /**
+   * Dynamically load an array of CSS stylesheets
+   * @param {string[]} urls
+   * @returns {Promise<void[]>}
+   */
   function loadStyles(urls) {
     return Promise.all(
       (urls || []).map(function (u) {
@@ -23,6 +28,11 @@
     );
   }
 
+  /**
+   * Load an array of JS scripts sequentially (in order)
+   * @param {string[]} urls
+   * @returns {Promise<void>}
+   */
   function loadScriptsSequential(urls) {
     return (urls || []).reduce(function (promise, url) {
       return promise.then(function () {
@@ -51,6 +61,10 @@
     }, Promise.resolve());
   }
 
+  /**
+   * Apply player config overrides to window.FGPX
+   * @param {object} cfg
+   */
   function applyPlayerConfig(cfg) {
     var playerConfig = cfg.playerConfig || {};
     if (window.FGPX && window.FGPX.debugEnabled) {
@@ -92,6 +106,11 @@
     }
   }
 
+  /**
+   * Ensure player assets (styles/scripts) are loaded and config applied
+   * @param {object} cfg
+   * @returns {Promise<void>}
+   */
   function ensurePlayerAssets(cfg) {
     applyPlayerConfig(cfg);
     if (window.FGPX && typeof window.FGPX.initContainer === 'function') {
@@ -119,6 +138,11 @@
     });
   }
 
+  /**
+   * Fallback copy-to-clipboard using textarea
+   * @param {string} text
+   * @returns {boolean}
+   */
   function fallbackCopyText(text) {
     var textarea = document.createElement('textarea');
     textarea.value = text;
@@ -140,6 +164,12 @@
     return copied;
   }
 
+  /**
+   * Set copy button label and reset after delay
+   * @param {HTMLElement} copyBtn
+   * @param {string} label
+   * @param {string} resetLabel
+   */
   function setCopyButtonState(copyBtn, label, resetLabel) {
     copyBtn.textContent = label;
     setTimeout(function () {
@@ -147,6 +177,12 @@
     }, 1400);
   }
 
+  /**
+   * Copy shortcode/link to clipboard and update button state
+   * @param {HTMLElement} copyBtn
+   * @param {string} shortcode
+   * @param {object} strings
+   */
   function copyShortcode(copyBtn, shortcode, strings) {
     var resetLabel = strings.copyShortcode || 'Copy Link';
     var successLabel = strings.copied || 'Copied';
@@ -176,6 +212,13 @@
     setCopyButtonState(copyBtn, failedLabel, resetLabel);
   }
 
+  /**
+   * Render player error message in gallery UI
+   * @param {HTMLElement} panel
+   * @param {HTMLElement} mount
+   * @param {HTMLElement} title
+   * @param {object} strings
+   */
   function renderPlayerError(panel, mount, title, strings) {
     if (mount) {
       mount.innerHTML =
@@ -195,6 +238,11 @@
     }
   }
 
+  /**
+   * Apply gallery theme (light/dark/auto) to root element
+   * @param {HTMLElement} root
+   * @param {object} cfg
+   */
   function applyGalleryTheme(root, cfg) {
     if (!root) {
       return;
@@ -275,26 +323,53 @@
     root.removeAttribute('data-fgpx-theme');
   }
 
+  /**
+   * Query selector helper
+   * @param {string} selector
+   * @param {HTMLElement} [root]
+   * @returns {HTMLElement|null}
+   */
   function qs(selector, root) {
     return (root || document).querySelector(selector);
   }
 
+  /**
+   * Query selectorAll helper (returns array)
+   * @param {string} selector
+   * @param {HTMLElement} [root]
+   * @returns {HTMLElement[]}
+   */
   function qsa(selector, root) {
     return Array.prototype.slice.call((root || document).querySelectorAll(selector));
   }
 
+  /**
+   * Escape HTML for safe output
+   * @param {string} str
+   * @returns {string}
+   */
   function escHtml(str) {
     var div = document.createElement('div');
     div.textContent = str == null ? '' : String(str);
     return div.innerHTML;
   }
 
+  /**
+   * Normalize string for search (lowercase, trim)
+   * @param {string} str
+   * @returns {string}
+   */
   function normalize(str) {
     return String(str || '')
       .toLowerCase()
       .trim();
   }
 
+  /**
+   * Get or build search text for a track
+   * @param {object} track
+   * @returns {string}
+   */
   function getSearchText(track) {
     if (track._searchText) {
       return track._searchText;
@@ -321,6 +396,11 @@
     return track._searchText;
   }
 
+  /**
+   * Build shareable URL with hash for track
+   * @param {number|string} trackId
+   * @returns {string}
+   */
   function shareUrlBaseWithHash(trackId) {
     try {
       var u = new URL(window.location.href);
@@ -331,6 +411,12 @@
     }
   }
 
+  /**
+   * Find track by ID in array
+   * @param {object[]} tracks
+   * @param {number|string} id
+   * @returns {object|null}
+   */
   function findTrackById(tracks, id) {
     for (var i = 0; i < tracks.length; i++) {
       if (Number(tracks[i].id) === Number(id)) {
@@ -340,6 +426,12 @@
     return null;
   }
 
+  /**
+   * Find closest ancestor with class
+   * @param {Node} node
+   * @param {string} className
+   * @returns {Node|null}
+   */
   function closestByClass(node, className) {
     while (node && node !== document) {
       if (node.classList && node.classList.contains(className)) {
@@ -350,6 +442,12 @@
     return null;
   }
 
+  /**
+   * Sort tracks by key
+   * @param {object[]} items
+   * @param {string} sortKey
+   * @returns {object[]}
+   */
   function sortTracks(items, sortKey) {
     var out = items.slice();
     if (sortKey === 'distance') {
@@ -382,6 +480,14 @@
     return out;
   }
 
+  /**
+   * Build HTML for a gallery card
+   * @param {object} track
+   * @param {object} strings
+   * @param {boolean} listMode
+   * @param {number|string|null} activeId
+   * @returns {string}
+   */
   function buildCard(track, strings, listMode, activeId) {
     var isActive = activeId != null && Number(track.id) === Number(activeId);
     var imageUrl = String(track.previewImageUrl || '');
@@ -444,6 +550,12 @@
     );
   }
 
+  /**
+   * Build URL with query params
+   * @param {string} base
+   * @param {object} params
+   * @returns {string}
+   */
   function buildUrl(base, params) {
     if (!base) {
       return '';
@@ -476,6 +588,11 @@
     }
   }
 
+  /**
+   * Fetch JSON from URL
+   * @param {string} url
+   * @returns {Promise<any>}
+   */
   function fetchJson(url) {
     if (!url || typeof window.fetch !== 'function') {
       return Promise.reject(new Error('Fetch is unavailable.'));
@@ -489,6 +606,12 @@
     });
   }
 
+  /**
+   * Request gallery payload from REST or AJAX endpoint
+   * @param {object} cfg
+   * @param {object} params
+   * @returns {Promise<any>}
+   */
   function requestGalleryPayload(cfg, params) {
     if (window.FGPX && window.FGPX.debugEnabled) {
       console.log('[FGPX Gallery] requestGalleryPayload starting', { params: params });
@@ -546,6 +669,11 @@
     return tryUrl(0);
   }
 
+  /**
+   * Update gallery view mode button states
+   * @param {HTMLElement[]} viewButtons
+   * @param {string} viewMode
+   */
   function updateViewButtons(viewButtons, viewMode) {
     viewButtons.forEach(function (button) {
       var isActive = button.getAttribute('data-view') === viewMode;
@@ -554,6 +682,10 @@
     });
   }
 
+  /**
+   * Check if user prefers reduced motion
+   * @returns {boolean}
+   */
   function prefersReducedMotion() {
     try {
       return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -562,6 +694,11 @@
     }
   }
 
+  /**
+   * Apply reveal animation to gallery cards
+   * @param {HTMLElement} results
+   * @param {number} fromIndex
+   */
   function applyRevealAnimation(results, fromIndex) {
     if (!results || fromIndex < 0 || prefersReducedMotion()) {
       return;
@@ -588,6 +725,14 @@
     });
   }
 
+  /**
+   * Set loading state for gallery results and load more button
+   * @param {HTMLElement} results
+   * @param {HTMLElement} loadMoreBtn
+   * @param {boolean} isLoading
+   * @param {object} strings
+   * @param {boolean} resetResults
+   */
   function setLoadingState(results, loadMoreBtn, isLoading, strings, resetResults) {
     if (results) {
       results.setAttribute('aria-busy', isLoading ? 'true' : 'false');
@@ -607,6 +752,12 @@
     }
   }
 
+  /**
+   * Mount and initialize the player for a track in the gallery
+   * @param {HTMLElement} root
+   * @param {object} track
+   * @param {object} cfg
+   */
   function mountPlayer(root, track, cfg) {
     if (window.FGPX && window.FGPX.debugEnabled) {
       console.log('[FGPX Gallery] mountPlayer', { track: track, cfg: cfg });
@@ -730,6 +881,11 @@
     }
   }
 
+  /**
+   * Initialize gallery UI and logic for a root element
+   * @param {HTMLElement} root
+   * @param {object} cfg
+   */
   function initGallery(root, cfg) {
     applyGalleryTheme(root, cfg);
 
@@ -1080,6 +1236,9 @@
     maybeAutoOpenTrack();
   }
 
+  /**
+   * Boot all gallery roots on DOM ready
+   */
   function boot() {
     var roots = qsa('.fgpx-gallery');
     if (!roots.length) {
