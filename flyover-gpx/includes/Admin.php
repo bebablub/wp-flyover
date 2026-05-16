@@ -599,7 +599,7 @@ final class Admin
 		echo '<p class="description">' . \esc_html__('Initial and reset zoom (lower = wider view).', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_default_pitch">' . \esc_html__('Default pitch', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_default_pitch" name="fgpx_default_pitch" class="small-text" min="0" max="60" step="1" value="' . \esc_attr($defPitch) . '" />';
+		echo '<input type="number" id="fgpx_default_pitch" name="fgpx_default_pitch" class="small-text" min="0" max="80" step="1" value="' . \esc_attr($defPitch) . '" />';
 		echo '<p class="description">' . \esc_html__('Map viewing angle tilt in degrees. Lower = flatter (top-down).', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
@@ -2525,7 +2525,7 @@ final class Admin
 		// Use type-safe validation helpers for numeric values
 		$zoom = $this->getValidInt('fgpx_default_zoom', 11, 1, 20);
 		$speed = $this->getValidInt('fgpx_default_speed', 25, 1, 250);
-		$pitch = $this->getValidInt('fgpx_default_pitch', 60, 0, 60);
+		$pitch = $this->getValidInt('fgpx_default_pitch', 60, 0, 80);
 		
 		\update_option('fgpx_default_zoom', (string) $zoom, true);
 		\update_option('fgpx_default_speed', (string) $speed, true);

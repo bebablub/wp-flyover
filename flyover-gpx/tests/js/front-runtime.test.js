@@ -440,6 +440,20 @@ describe('front.js runtime minimal regressions', () => {
     });
   });
 
+  test('startup countdown preserves zoom target center and avoids syncing map center', () => {
+    // This test checks that the startup countdown logic preserves the zoom target center
+    // and does not call syncCameraStateFromMap() after stopIdleSway().
+    // It should be robust to whitespace and formatting changes.
+    const normalized = FRONT_SRC.replace(/\s+/g, ' ');
+    // Check that startupZoomTargetState is set with a center property from perspectiveCorrectedCenter
+    expect(/startupZoomTargetState\s*=\s*\{\s*center:\s*perspectiveCorrectedCenter\.slice\(0\)/.test(normalized)).toBe(true);
+    // Check that after stopIdleSway(), syncCameraStateFromMap() is NOT called in the next 200 chars
+    const idx = normalized.indexOf('stopIdleSway();');
+    expect(idx).toBeGreaterThan(-1);
+    const after = normalized.slice(idx, idx + 200); // look at the next ~200 chars
+    expect(after).not.toContain('syncCameraStateFromMap();');
+  });
+
   test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
