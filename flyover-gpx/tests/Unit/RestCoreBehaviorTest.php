@@ -25,8 +25,12 @@ final class RestCoreBehaviorTest extends TestCase
         $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
         $source = (string) file_get_contents($restFile);
 
-        $this->assertStringContainsString("\$id    = (int) (\$_REQUEST['id'] ?? 0);", $source);
-        $this->assertStringContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source);
+        // Should NOT use $_REQUEST anymore
+        $this->assertStringNotContainsString("\$id    = (int) (\$_REQUEST['id'] ?? 0);", $source, 'Should not use $_REQUEST for id');
+        $this->assertStringNotContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source, 'Should not use $_REQUEST for nonce');
+        // Should use $_POST
+        $this->assertStringContainsString("\$id    = (int) (\$_POST['id'] ?? 0);", $source);
+        $this->assertStringContainsString("\$nonce = (string) (\$_POST['nonce'] ?? '');", $source);
     }
 
     public function test_plugin_localizes_download_nonce_without_nonce_query_parameter(): void
