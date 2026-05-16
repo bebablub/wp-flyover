@@ -91,6 +91,7 @@ function installMapLibreMock() {
     fitBounds() { return this; }
     resize() { return this; }
     remove() { return this; }
+    off() { return this; }
     easeTo() { return this; }
     flyTo() { return this; }
     setCenter() { return this; }
@@ -612,7 +613,10 @@ describe('front.js runtime minimal regressions', () => {
   });
 
   test('weathergrade container is initialized at startPlayer scope and reused safely', () => {
-    expect(FRONT_SRC.includes("var container = root.querySelector('.fgpx-container');")).toBe(true);
+    expect(
+      FRONT_SRC.includes("var container = root.querySelector('.fgpx-container');") ||
+        FRONT_SRC.includes("var container = root.querySelector('.fgpx-container') || root;")
+    ).toBe(true);
     expect(FRONT_SRC.includes('var cinemaRoot = container || root;')).toBe(true);
     expect(FRONT_SRC.includes("var cinemaEl = cinemaRoot.querySelector('.fgpx-weather-cinema');")).toBe(true);
     expect(FRONT_SRC.includes('var _cinemaEl = cinemaRoot._cachedCinema;')).toBe(true);
@@ -1180,5 +1184,98 @@ describe('front.js runtime minimal regressions', () => {
       height: 20,
       data: expect.any(Uint8ClampedArray)
     });
+  });
+
+  test('shows user-friendly no-data message for track with empty coordinates array', async () => {
+    installMapLibreMock();
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="55"></div>';
+    window.Chart = function ChartStub() {};
+
+    const emptyPayload = {
+      id: 55,
+      name: 'Empty Track',
+      geojson: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} },
+      bounds: null,
+      stats: {},
+      photos: [],
+    };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(emptyPayload),
+      text: () => Promise.resolve(''),
+    });
+    window.fetch = global.fetch;
+
+    window.FGPX = baseFGPX();
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    const noDataMsg = document.querySelector('#fgpx-app .fgpx-no-data-message');
+    expect(noDataMsg).not.toBeNull();
+    expect(noDataMsg.textContent).toContain('No Route Data');
+  });
+
+  test('shows error state for track with single coordinate (less than 2 points)', async () => {
+    installMapLibreMock();
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="56"></div>';
+    window.Chart = function ChartStub() {};
+
+    const singlePointPayload = {
+      id: 56,
+      name: 'Single Point',
+      geojson: {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[8.0, 47.0, 500]] },
+        properties: {},
+      },
+      bounds: null,
+      stats: {},
+      photos: [],
+    };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(singlePointPayload),
+      text: () => Promise.resolve(''),
+    });
+    window.fetch = global.fetch;
+
+    window.FGPX = baseFGPX();
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    // Single-point track has < 2 coords: should show error or no-data state, not crash
+    const errEl = document.querySelector('#fgpx-app .fgpx-error');
+    const noDataEl = document.querySelector('#fgpx-app .fgpx-no-data-message');
+    expect(errEl || noDataEl).not.toBeNull();
+  });
+
+  test('deployRuntime teardown guard prevents double-destroy', () => {
+    expect(FRONT_SRC.includes('if (runtimeDestroyed) return;')).toBe(true);
+    expect(FRONT_SRC.includes('runtimeDestroyed = true;')).toBe(true);
+  });
+
+  test('map remove() is registered in teardown callbacks for cleanup', () => {
+    expect(FRONT_SRC.includes("if (map && typeof map.remove === 'function') map.remove();")).toBe(true);
+  });
+
+  test('AbortController fallback uses Promise.race for timeout on unsupported browsers', () => {
+    expect(FRONT_SRC.includes('Promise.race([fetchChain, raceTimeout])')).toBe(true);
+  });
+
+  test('fullscreen control is only added when browser supports Fullscreen API', () => {
+    expect(FRONT_SRC.includes('document.fullscreenEnabled')).toBe(true);
+    expect(FRONT_SRC.includes('FullscreenControl')).toBe(true);
+  });
+
+  test('createChart bails early when runtime is already destroyed', () => {
+    expect(FRONT_SRC.includes('createChart = function (tabType) {\n        if (runtimeDestroyed) return;')).toBe(true);
   });
 });

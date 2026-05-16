@@ -1124,6 +1124,8 @@
         visibleCount = resolvedPerPage || 16;
         if (serverMode) {
           clearTimeout(searchDebounceId);
+          // Show loading state during debounce to give immediate feedback
+          setLoadingState(results, loadMoreBtn, true, cfg.strings || {}, true);
           searchDebounceId = setTimeout(function () {
             loadTracks(true);
           }, 180);

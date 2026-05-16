@@ -1306,8 +1306,8 @@ final class Rest
      */
     public function ajax_download_gpx(): void
     {
-        $id    = (int) ($_REQUEST['id'] ?? 0);
-        $nonce = (string) ($_REQUEST['nonce'] ?? '');
+        $id    = (int) ($_POST['id'] ?? 0);
+        $nonce = (string) ($_POST['nonce'] ?? '');
 
         if ($id <= 0 || !\wp_verify_nonce($nonce, 'fgpx_download_gpx_' . $id)) {
             \wp_die('Invalid request', '', ['response' => 403]);

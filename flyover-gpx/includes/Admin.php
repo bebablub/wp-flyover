@@ -2419,6 +2419,11 @@ final class Admin
 		$this->validateSecurity('fgpx_save_settings', 'manage_options');
 		$css = isset($_POST['fgpx_custom_css']) ? (string) $_POST['fgpx_custom_css'] : '';
 		$css = str_replace(["\r\n", "\r"], "\n", $css);
+		// Strip dangerous CSS patterns to prevent stored XSS
+		$css = (string) \preg_replace('/expression\s*\(/i', '', $css);
+		$css = (string) \preg_replace('/url\s*\(\s*["\']?\s*javascript:/i', 'url(#', $css);
+		$css = (string) \preg_replace('/@import\b/i', '/* @import removed */', $css);
+		$css = \str_replace("\0", '', $css);
 		\update_option('fgpx_custom_css', $css, true);
 		if (isset($_POST['fgpx_default_style'])) {
 			$rawStyle = \sanitize_text_field((string) $_POST['fgpx_default_style']);
@@ -2440,8 +2445,14 @@ final class Admin
 		if (isset($_POST['fgpx_default_style_json'])) {
 			$rawJson = (string) wp_unslash($_POST['fgpx_default_style_json']);
 			$trimmed = \trim($rawJson);
-			if ($trimmed === '' || (\json_decode($trimmed) !== null && \json_last_error() === JSON_ERROR_NONE)) {
+			if ($trimmed === '') {
 				\update_option('fgpx_default_style_json', $trimmed, true);
+			} else {
+				$decoded = \json_decode($trimmed, true);
+				// Must be a valid MapLibre style object with a numeric version key
+				if (\is_array($decoded) && isset($decoded['version']) && \is_numeric($decoded['version'])) {
+					\update_option('fgpx_default_style_json', $trimmed, true);
+				}
 			}
 		}
 		$mapSelectorDefaultRaw = isset($_POST['fgpx_map_selector_default']) ? (string) $_POST['fgpx_map_selector_default'] : 'satellite';
@@ -4662,7 +4673,7 @@ final class Admin
 		}
 
 		if ($doaction === 'fgpx_sync_gmedia_captions') {
-			$overwrite = !isset($_REQUEST['fgpx_sync_overwrite']) || (string) $_REQUEST['fgpx_sync_overwrite'] !== '0';
+			$overwrite = !isset($_POST['fgpx_sync_overwrite']) || (string) $_POST['fgpx_sync_overwrite'] !== '0';
 			try {
 				$sync = GMediaCaptionSync::syncCaptions($overwrite);
 			} catch (\Throwable $e) {

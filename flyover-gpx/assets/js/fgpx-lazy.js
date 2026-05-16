@@ -119,7 +119,7 @@
             if (window.FGPX && typeof window.FGPX.boot === 'function') {
               clearInterval(id);
               window.FGPX.boot();
-            } else if (tries > 20) {
+            } else if (tries > 50) {
               clearInterval(id);
               if (window.FGPX && window.FGPX.debugLogging) {
                 console.warn('[FGPX] front.js boot function not found');

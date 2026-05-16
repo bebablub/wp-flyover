@@ -1037,14 +1037,25 @@
         });
       } catch (e) {
         DBG.warn('Cache write error:', e);
-        // Clear some old cache entries if storage is full
+        // Clear old fgpx cache entries until enough space is freed (LRU eviction)
         if (e.name === 'QuotaExceededError') {
           try {
+            var keysToRemove = [];
             for (var i = 0; i < localStorage.length; i++) {
               var key = localStorage.key(i);
               if (key && key.startsWith('fgpx_cache_')) {
-                localStorage.removeItem(key);
-                break;
+                keysToRemove.push(key);
+              }
+            }
+            for (var ri = 0; ri < keysToRemove.length; ri++) {
+              localStorage.removeItem(keysToRemove[ri]);
+              try {
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                break; // Success — stop removing
+              } catch (retryErr) {
+                if (ri === keysToRemove.length - 1) {
+                  DBG.warn('Cache still full after eviction:', retryErr);
+                }
               }
             }
           } catch (clearError) {
@@ -1075,7 +1086,10 @@
         return payload;
       }
 
-      var compressed = JSON.parse(JSON.stringify(payload)); // Deep clone
+      var compressed =
+        typeof structuredClone !== 'undefined'
+          ? structuredClone(payload)
+          : JSON.parse(JSON.stringify(payload)); // Deep clone
 
       // Reduce coordinate precision for storage (visual quality preserved)
       if (compressed.geojson.coordinates) {
@@ -1150,7 +1164,7 @@
         }, fetchTimeoutMs);
       }
 
-      return fetch(url, reqOptions)
+      var fetchChain = fetch(url, reqOptions)
         .then(function (r) {
           if (!r.ok) {
             return r.text().then(function (raw) {
@@ -1182,6 +1196,23 @@
             clearTimeout(timeoutId);
           }
         });
+
+      // For browsers without AbortController, use Promise.race as a timeout fallback
+      if (!controller) {
+        var raceTimeout = new Promise(function (_, reject) {
+          timeoutId = setTimeout(function () {
+            reject(
+              new Error(
+                (label || 'Request') + ' timeout after ' + Math.round(fetchTimeoutMs / 1000) + 's'
+              )
+            );
+          }, fetchTimeoutMs);
+        });
+        return Promise.race([fetchChain, raceTimeout]).finally(function () {
+          clearTimeout(timeoutId);
+        });
+      }
+      return fetchChain;
     }
 
     // Try cache first, then fetch from server
@@ -1298,7 +1329,7 @@
       payload && payload.geojson && payload.geojson.coordinates ? payload.geojson.coordinates : [];
     var props =
       payload && payload.geojson && payload.geojson.properties ? payload.geojson.properties : {};
-    var container = root.querySelector('.fgpx-container');
+    var container = root.querySelector('.fgpx-container') || root;
 
     // Check if we have valid route data
     if (!coords || coords.length === 0) {
@@ -1784,7 +1815,15 @@
       transformRequest: transformRequest,
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
-    map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
+    // Only add fullscreen control on browsers that support the Fullscreen API
+    if (
+      document.fullscreenEnabled ||
+      document.webkitFullscreenEnabled ||
+      document.mozFullScreenEnabled ||
+      document.msFullscreenEnabled
+    ) {
+      map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
+    }
 
     var contourSourceId = 'fgpx-contours-' + (root.id || 'fgpx');
     var contourLayerId = contourSourceId + '-line';
@@ -2089,6 +2128,12 @@
         clearUserInteractingSoon();
       });
     } catch (_) {}
+    // Ensure map resources (WebGL context, event listeners, DOM) are cleaned up on runtime destroy
+    registerTeardown(function () {
+      try {
+        if (map && typeof map.remove === 'function') map.remove();
+      } catch (_) {}
+    });
 
     // URL style: constructor already applied styleUrl via initialStyle;
     // check once for buildings layer to adjust pitch
@@ -2128,11 +2173,45 @@
     };
 
     // Add error handling for tile loading failures
+    var _tileErrCount = 0;
+    var _tileErrResetTimer = null;
+    var _tileErrBannerShown = false;
     map.on('error', function (e) {
       if (e && e.error && e.error.status >= 500) {
         DBG.warn('Map tile server error (will retry automatically):', e.error.status, e.error.url);
       } else {
         DBG.warn('Map error:', e);
+      }
+      // Track repeated tile HTTP failures and show a user-facing banner after 5 errors
+      if (!_tileErrBannerShown && e && e.error && e.error.status) {
+        _tileErrCount++;
+        if (!_tileErrResetTimer) {
+          _tileErrResetTimer = setTimeout(function () {
+            _tileErrCount = 0;
+            _tileErrResetTimer = null;
+          }, 30000);
+        }
+        if (_tileErrCount >= 5) {
+          _tileErrBannerShown = true;
+          clearTimeout(_tileErrResetTimer);
+          try {
+            var banner = document.createElement('div');
+            banner.className = 'fgpx-tile-error-banner';
+            banner.setAttribute('role', 'alert');
+            var bannerMsg = document.createElement('span');
+            bannerMsg.textContent = '⚠ Map tiles unavailable. Check your internet connection.';
+            var bannerClose = document.createElement('button');
+            bannerClose.type = 'button';
+            bannerClose.setAttribute('aria-label', 'Dismiss');
+            bannerClose.textContent = '×';
+            bannerClose.addEventListener('click', function () {
+              if (banner.parentNode) banner.parentNode.removeChild(banner);
+            });
+            banner.appendChild(bannerMsg);
+            banner.appendChild(bannerClose);
+            ui.mapEl.appendChild(banner);
+          } catch (_) {}
+        }
       }
     });
 
@@ -2781,6 +2860,18 @@
       var weatherOpacity =
         window.FGPX && isFinite(Number(FGPX.weatherOpacity)) ? Number(FGPX.weatherOpacity) : 0.7;
       var weatherData = payload && payload.weather ? payload.weather : null;
+      // In debug weather simulation mode, clone to prevent mutating the shared payload object
+      // across multiple instances that reference the same track data.
+      if (debugWeatherDataEnabled && weatherData) {
+        try {
+          weatherData =
+            typeof structuredClone !== 'undefined'
+              ? structuredClone(weatherData)
+              : JSON.parse(JSON.stringify(weatherData));
+        } catch (_) {
+          /* use original reference if clone fails */
+        }
+      }
       var weatherGradeAvailable = false;
       var weatherVisible = toBoolOption(window.FGPX && FGPX.weatherVisibleByDefault, false);
       var windCircleLayerIds = [];
@@ -3474,6 +3565,7 @@
               moonAlts = [];
             if (
               typeof window.SunCalc !== 'undefined' &&
+              typeof window.SunCalc.getPosition === 'function' &&
               typeof window.SunCalc.getMoonPosition === 'function' &&
               Array.isArray(timestamps) &&
               timestamps.length === coords.length
@@ -4165,6 +4257,7 @@
           try {
             if (
               typeof window.SunCalc !== 'undefined' &&
+              typeof window.SunCalc.getPosition === 'function' &&
               Array.isArray(timestamps) &&
               timestamps.length > 0 &&
               Array.isArray(coords) &&
@@ -5394,6 +5487,13 @@
             el.addEventListener('mouseleave', function () {
               inner.style.transform = 'scale(1)';
             });
+            // Mirror hover scale for touch devices
+            el.addEventListener('touchstart', function () {
+              inner.style.transform = 'scale(1.8)';
+            }, { passive: true });
+            el.addEventListener('touchend', function () {
+              inner.style.transform = 'scale(1)';
+            }, { passive: true });
             el.addEventListener('click', function (e) {
               e.preventDefault();
               e.stopPropagation();
@@ -6027,7 +6127,9 @@
               demTpls.forEach(function (tpl) {
                 var opt = { mode: 'cors', cache: 'force-cache' };
                 if (demController) opt.signal = demController.signal;
-                reqs.push(fetch(tileUrlFromTemplate(tpl, zt, xt, yt), opt).catch(function () {}));
+                reqs.push(fetch(tileUrlFromTemplate(tpl, zt, xt, yt), opt).catch(function (err) {
+                  DBG.log('DEM prefetch tile failed (non-critical):', err && err.message);
+                }));
               });
             } catch (_) {}
           });
@@ -6130,7 +6232,9 @@
                 var z = clampPrefetchZoom(zt, meta);
                 if (z !== zt) return;
                 var url = tileUrlFromTemplate(meta.template, zt, xt, yt);
-                fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function () {});
+                fetch(url, { mode: 'cors', cache: 'force-cache' }).catch(function (err) {
+                  DBG.log('Tile prefetch failed (non-critical):', err && err.message);
+                });
               } catch (_) {}
             });
             // Limit set growth — clear once it gets large
@@ -7132,9 +7236,15 @@
           setPreloadOverlayText('Preparing playback…');
           var mapIdleWait = new Promise(function (resolve) {
             var settled = false;
+            // Safety timeout: if map never reaches idle (e.g., offline), proceed after 8s
+            var idleWaitTimer = setTimeout(function () {
+              DBG.warn('Map idle wait timed out — proceeding with available state');
+              done();
+            }, 8000);
             function done() {
               if (settled) return;
               settled = true;
+              clearTimeout(idleWaitTimer);
               resolve();
             }
             try {
@@ -7166,6 +7276,10 @@
             }
           });
           mapIdleWait.then(function () {
+            if (!isContainerActive()) {
+              destroyRuntime();
+              return;
+            }
             if (playStartTrace && playStartTrace.startedAt) {
               DBG.log('play-start stage', {
                 stage: 'map-idle-ready',
@@ -10130,6 +10244,7 @@
        * @param {string} tabType - The chart tab type to render.
        */
       createChart = function (tabType) {
+        if (runtimeDestroyed) return;
         // ========== LAZY LOADING: LOAD DATA ON DEMAND ==========
         var startTime = performance.now();
         var chartData = getDataPointsForChart(tabType);
@@ -11926,6 +12041,11 @@
               chart.update('none'); // Redraw without animation
             });
 
+            // Detect touch-primary devices; skip click-to-seek to avoid accidental scrubs
+            var _coarsePointer =
+              typeof window.matchMedia === 'function' &&
+              window.matchMedia('(pointer: coarse)').matches;
+
             canvas.addEventListener('mouseup', function (e) {
               if (!isMouseDown || !state.isSelecting) return;
 
@@ -11942,8 +12062,8 @@
               // Check if selection is meaningful (minimum 10 pixels)
               if (Math.abs(endX - startX) > 10) {
                 applyChartZoom(chart, Math.min(startX, endX), Math.max(startX, endX));
-              } else {
-                // Single click — seek playback to clicked position
+              } else if (!_coarsePointer) {
+                // Single click — seek playback to clicked position (disabled on touch-primary devices)
                 var xScale = chart.scales.x;
                 if (xScale) {
                   var xValue = xScale.getValueForPixel(endX);
@@ -11963,11 +12083,16 @@
             });
 
             // Show pointer cursor when hovering the chart area (indicates click-to-seek)
+            var _cursorLastX = -1, _cursorLastY = -1;
             canvas.addEventListener('mousemove', function (e) {
               if (state.isSelecting) return; // crosshair already set during drag
               var rect = canvas.getBoundingClientRect();
               var x = e.clientX - rect.left;
               var y = e.clientY - rect.top;
+              // Skip if position hasn't changed meaningfully (throttle by proximity)
+              if (Math.abs(x - _cursorLastX) < 4 && Math.abs(y - _cursorLastY) < 4) return;
+              _cursorLastX = x;
+              _cursorLastY = y;
               var chartArea = chart.chartArea;
               if (
                 chartArea &&
