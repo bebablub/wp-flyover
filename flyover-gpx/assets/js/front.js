@@ -7342,13 +7342,13 @@
               pitch: 0,   // end animation always targets flat top-down view
               bearing: 0,
             };
-            console.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
+            DBG.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
           } else {
-            console.log('[FGPX end-zoom] cameraForBounds returned invalid result', _ovCam);
+            DBG.log('[FGPX end-zoom] cameraForBounds returned invalid result', _ovCam);
           }
         }
       } catch (_e) {
-        console.log('[FGPX end-zoom] overviewCameraState capture threw', _e);
+        DBG.warn('[FGPX end-zoom] overviewCameraState capture threw', _e);
       }
 
       // Stats panel
@@ -12579,7 +12579,7 @@
           }
           try {
             if (!userInteracting && map && typeof map.flyTo === 'function') {
-              map.flyTo({ bearing: swayLastBearing });
+              map.flyTo({ bearing: swayLastBearing, essential: true });
             }
           } catch (_) {}
           swayRafId = requestAnimationFrame(swayFrame);
@@ -13019,6 +13019,10 @@
                 // BEFORE waiting for idle, so MapLibre processes them and settles.
                 applyPlaybackLayerOptimizations();
 
+                // Start sway now so bearing oscillates during idle-wait and the full countdown,
+                // not just the instant before beginPlayback(). setPlaying(true) stops it cleanly.
+                startIdleSway(intendedFinalBearing);
+
                 function beginPlayback() {
                   try {
                     var _dStart = Math.max(0, Math.min(1, progress)) * totalDistance;
@@ -13073,15 +13077,15 @@
                         }
                         startupSpeedRampDuration = 3.5;
                         startupSpeedRampRemaining = startupSpeedRampDuration;
-                        startIdleSway(intendedFinalBearing);
+                        // sway already running since moveend — if (swayActive) return guards re-entry
                         beginPlayback();
                       })
                       .catch(function () {
-                        startIdleSway(intendedFinalBearing);
+                        // sway already running since moveend
                         beginPlayback();
                       });
                   } else {
-                    startIdleSway(intendedFinalBearing);
+                    // sway already running since moveend
                     beginPlayback();
                   }
                 }
@@ -14016,6 +14020,12 @@
           var pitchFactor = 1 - Math.min(1, pitchNow / 60) * 0.35; // up to -35%
           var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.2; // up to -20%
           var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
+          // During startup ramp, damp turn-rate so sharp initial GPS turns don't whip the camera.
+          if (startupSpeedRampRemaining > 0 && startupSpeedRampDuration > 0) {
+            var startupProgress = 1 - startupSpeedRampRemaining / startupSpeedRampDuration;
+            var startupTurnFactor = 0.3 + 0.7 * Math.max(0, Math.min(1, startupProgress));
+            maxTurnRate *= startupTurnFactor;
+          }
           var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
           var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
           // Always apply the rate-limited step — the step itself is already bounded by
