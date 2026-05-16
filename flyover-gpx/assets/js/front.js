@@ -7199,6 +7199,15 @@
       }
       function startPlaybackWithPreload() {
         if (playing || preloadingInProgress) return;
+        // Resume path: skip startup preload/idle gate after first playback has already started.
+        if (!firstPlayZoomPending) {
+          hidePreloadOverlay();
+          syncCameraStateFromMap();
+          setPlaying(true);
+          scheduleRaf();
+          recordPlaybackStart();
+          return;
+        }
         hideSplash();
         playStartTrace = { startedAt: performance.now() };
         showPreloadOverlay('Preparing playback…');
@@ -14088,8 +14097,8 @@
             cameraCenter[1] = nextCenterLat;
             var camOpts = { center: cameraCenter, bearing: bearing };
             if (nextPitch != null) camOpts.pitch = nextPitch;
-            if (map && typeof map.jumpTo === 'function') {
-              map.jumpTo(camOpts);
+            if (map && typeof map.flyTo === 'function') {
+              map.flyTo(camOpts);
             } else if (map && typeof map.setCenter === 'function') {
               map.setCenter(cameraCenter);
               if (typeof map.setBearing === 'function' && isFinite(bearing))
