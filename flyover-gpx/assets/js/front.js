@@ -12522,7 +12522,6 @@
       var STARTUP_COUNTDOWN_SECONDS = 3;
       var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
       var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
-      var startupSuppressProgressLine = false; // suppress route line during warm-up phase
       var playbackStartedAtMs = 0; // wall clock ms when playback starts
 
       // Idle sway: gentle organic bearing oscillation when paused or during countdown
@@ -13026,10 +13025,19 @@
                     if (hasTimestamps && Array.isArray(timeOffsets)) {
                       tOffset = timeOffsetAtDistance(_dStart);
                     }
-                    // Use the stored intended bearing — never re-read from map here.
-                    // Sway leaves the map at a slightly different bearing each stop;
-                    // reading it back would cause a one-frame snap.
-                    bearing = normalizeAngle(intendedFinalBearing);
+                    // Start bearing from wherever sway left the map (live value) so the
+                    // playback rate-limiter can blend smoothly toward travel direction.
+                    // Using intendedFinalBearing here would accumulate a delta against the
+                    // map's actual bearing and trigger a jumpTo snap on frame 4 once
+                    // suppressCameraUpdateFrames expires.
+                    var _liveBearing = intendedFinalBearing;
+                    try {
+                      if (typeof map.getBearing === 'function') {
+                        var _b = Number(map.getBearing());
+                        if (isFinite(_b)) _liveBearing = _b;
+                      }
+                    } catch (_) {}
+                    bearing = normalizeAngle(_liveBearing);
                     appliedBearing = bearing;
                     targetBearingSmooth = bearing;
                     forceCameraUpdate = false;
@@ -13063,23 +13071,17 @@
                           cameraCenter[1] = startupZoomTargetState.center[1];
                           startupZoomTargetState = null;
                         }
-                        startupSpeedRampDuration = 1.5;
+                        startupSpeedRampDuration = 3.5;
                         startupSpeedRampRemaining = startupSpeedRampDuration;
-                        setTimeout(function () {
-                          startIdleSway(intendedFinalBearing);
-                        }, 2000);
+                        startIdleSway(intendedFinalBearing);
                         beginPlayback();
                       })
                       .catch(function () {
-                        setTimeout(function () {
-                          startIdleSway(intendedFinalBearing);
-                        }, 2000);
+                        startIdleSway(intendedFinalBearing);
                         beginPlayback();
                       });
                   } else {
-                    setTimeout(function () {
-                      startIdleSway(intendedFinalBearing);
-                    }, 2000);
+                    startIdleSway(intendedFinalBearing);
                     beginPlayback();
                   }
                 }
@@ -13274,7 +13276,6 @@
         progressLineVisible = null;
         startupSpeedRampRemaining = 0;
         startupSpeedRampDuration = 0;
-        startupSuppressProgressLine = false;
         markerLayerVisible = null;
         lastMarkerPx = null;
         lastMarkerDistance = null;
@@ -13765,7 +13766,7 @@
 
         // update progressive route up to current position
         var routeProgSrc = map.getSource('fgpx-route-progress');
-        if (routeProgSrc && !startupSuppressProgressLine) {
+        if (routeProgSrc) {
           // Keep progress cadence synchronized with camera/marker cadence.
           var progressDistThreshold = cadence.progressDistance;
           if (hasTerrain && speed >= 80) {
@@ -14363,16 +14364,17 @@
 
         // Overlay rendering is now handled by map 'render' event
 
-        // Speed ramp: smooth easeInOutCubic from 25x to user-chosen speed over ramp duration.
-        // This ensures the initial motion always looks the same regardless of user speed setting.
+        // Speed ramp: smooth easeInOutCubic from 1x to user-chosen speed over ramp duration.
+        // Always accelerates — prevents the jarring motion that a 25x fixed start caused
+        // when user speed was set below 25x (which previously produced a deceleration).
         var effectiveSpeed = speed;
         if (startupSpeedRampRemaining > 0) {
           startupSpeedRampRemaining = Math.max(0, startupSpeedRampRemaining - dt);
           var rampProgress =
             1 - startupSpeedRampRemaining / Math.max(0.001, startupSpeedRampDuration);
           var rampT = easeInOutCubic(rampProgress);
-          // Blend from fixed 25x to user speed
-          effectiveSpeed = 25 + (speed - 25) * rampT;
+          // Blend from 1x to user speed — always ramps up
+          effectiveSpeed = 1 + (speed - 1) * rampT;
           if (startupSpeedRampRemaining <= 0) {
             startupSpeedRampRemaining = 0;
             startupSpeedRampDuration = 0;
