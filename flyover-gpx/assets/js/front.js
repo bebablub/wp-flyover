@@ -1220,7 +1220,7 @@
     if (cachedData) {
       if (!isContainerActive()) return;
       ui.spinner.style.display = 'none';
-      startPlayer(el, ui, cachedData, style, styleUrl, FGPX);
+      startPlayer(el, ui, cachedData, style, styleUrl, FGPX, isContainerActive);
     } else {
       var primaryFetch = preferAjaxFirst ? fetchAjax() : fetchRest();
       primaryFetch
@@ -1255,7 +1255,7 @@
           ui.spinner.style.display = 'none';
           // Cache the data for future use
           setCachedData(json);
-          startPlayer(el, ui, json, style, styleUrl, FGPX);
+          startPlayer(el, ui, json, style, styleUrl, FGPX, isContainerActive);
         })
         .catch(function (err) {
           if (!isContainerActive()) return;
@@ -1271,7 +1271,7 @@
     }
   }
 
-  function startPlayer(root, ui, payload, style, styleUrl, FGPX) {
+  function startPlayer(root, ui, payload, style, styleUrl, FGPX, isContainerActive) {
     FGPX = FGPX || root.__fgpxConfig || window.FGPX || {};
     if (DBG.isEnabled()) {
       console.log('[FGPX] startPlayer starting', {
@@ -12517,6 +12517,7 @@
       var dbgCameraJumpCount = 0;
       var currentPosLngLat = null; // last computed marker lng/lat for snap-to-center on seek
       var firstPlayZoomPending = true; // animate zoom-in on first play after stop
+      var startupZoomTargetState = null; // preserves the final zoom-in camera center for countdown handoff
       var suppressCameraUpdateFrames = 0; // startup handoff guard to prevent first-frame snap after countdown
       var STARTUP_COUNTDOWN_SECONDS = 3;
       var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
@@ -12534,21 +12535,23 @@
       /**
        * Starts the idle sway animation for the camera bearing when paused.
        */
-      function startIdleSway() {
+      function startIdleSway(fromBearing) {
         if (swayActive) return;
         swayActive = true;
         swayStartTime = null;
         swayLastBearing = null;
+        // Prefer an explicitly passed bearing (e.g. intendedFinalBearing from the
+        // zoom-in animation) so we never snap on the first sway frame.
         try {
-          if (typeof map.getBearing === 'function') {
+          if (isFinite(Number(fromBearing))) {
+            swayBaseBearing = normalizeAngle(Number(fromBearing));
+          } else if (isFinite(Number(bearing))) {
+            swayBaseBearing = normalizeAngle(bearing);
+          } else if (typeof map.getBearing === 'function') {
             var liveBearing = Number(map.getBearing());
-            if (isFinite(liveBearing)) {
-              swayBaseBearing = normalizeAngle(liveBearing);
-            } else {
-              swayBaseBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
-            }
+            swayBaseBearing = isFinite(liveBearing) ? normalizeAngle(liveBearing) : 0;
           } else {
-            swayBaseBearing = isFinite(Number(bearing)) ? normalizeAngle(bearing) : 0;
+            swayBaseBearing = 0;
           }
         } catch (_) {
           swayBaseBearing = 0;
@@ -12626,9 +12629,9 @@
       /**
        * Synchronizes the camera state from the current map view.
        */
-      function syncCameraStateFromMap() {
+      function syncCameraStateFromMap(ignoreCenter) {
         try {
-          if (typeof map.getCenter === 'function') {
+          if (!ignoreCenter && typeof map.getCenter === 'function') {
             var c = map.getCenter();
             if (c && isFinite(c.lng) && isFinite(c.lat)) {
               cameraCenter[0] = c.lng;
@@ -12824,6 +12827,68 @@
       }
 
       /**
+       * Computes a perspective-corrected zoom target so the marker appears at screen center.
+       * With pitch > 0, screen center is not at map center. This function offsets the target
+       * center backwards (opposite bearing) to compensate for perspective distortion.
+       * @param {Array} markerPos - [lng, lat] of the current marker position
+       * @param {number} bearing - Bearing in degrees toward the direction of travel
+       * @param {number} pitchDeg - Pitch angle in degrees (e.g., 30–65)
+       * @param {number} zoomLevel - Map zoom level
+       * @returns {Array} Perspective-corrected [lng, lat] center for zoom animation
+       */
+      function computePerspectiveCorrectedZoomTarget(markerPos, bearing, pitchDeg, zoomLevel) {
+        try {
+          var p = Math.max(0, Math.min(85, Number(pitchDeg) || 0));
+          if (p < 5) return markerPos.slice(0, 2);
+          var pitchRad = (p * Math.PI) / 180;
+          var viewportHeightPx = ui && ui.mapEl && ui.mapEl.clientHeight ? ui.mapEl.clientHeight : 720;
+          var offsetPx = viewportHeightPx / 2;
+          var offsetMeters = offsetPx / Math.tan(pitchRad);
+          var markerLat = markerPos[1] || 0;
+          var latRad = (markerLat * Math.PI) / 180;
+          var cosLat = Math.cos(latRad);
+          var metersPerPixel = (40075000 / Math.pow(2, zoomLevel + 8)) / Math.max(0.1, cosLat);
+          var offsetDistanceMeters = offsetMeters * metersPerPixel;
+          var backwardBearing = normalizeAngle(Number(bearing) + 180);
+          var correctedPos = offsetPositionByBearing(markerPos, backwardBearing, offsetDistanceMeters);
+          return correctedPos.slice(0, 2);
+        } catch (_) {
+          return markerPos.slice(0, 2);
+        }
+      }
+
+      /**
+       * Offsets a position along a bearing by a given distance (in meters).
+       * @param {Array} pos - [lng, lat]
+       * @param {number} bearingDeg - Bearing in degrees
+       * @param {number} distMeters - Distance in meters
+       * @returns {Array} New [lng, lat] position
+       */
+      function offsetPositionByBearing(pos, bearingDeg, distMeters) {
+        try {
+          var lng = Number(pos[0]) || 0;
+          var lat = Number(pos[1]) || 0;
+          var R = 6371000;
+          var d = distMeters / R;
+          var bearing = (Number(bearingDeg) * Math.PI) / 180;
+          var lat1 = (lat * Math.PI) / 180;
+          var lng1 = (lng * Math.PI) / 180;
+          var lat2 = Math.asin(
+            Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(bearing)
+          );
+          var lng2 =
+            lng1 +
+            Math.atan2(
+              Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
+              Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+            );
+          return [(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI];
+        } catch (_) {
+          return pos.slice(0, 2);
+        }
+      }
+
+      /**
        * Animates zoom-in and starts playback, prefetching tiles and handling countdown.
        */
       function zoomInThenStartPlayback() {
@@ -12851,10 +12916,19 @@
             } catch (_) {}
           }
           var dNow = Math.max(0, Math.min(1, progress)) * totalDistance;
+          var markerPos = positionAtDistance(dNow);
           var targetCenter = cameraTargetAtDistance(dNow, 0.4);
           var startBearing = targetBearingAtDistance(dNow);
-          // Sync camera state so the first playback frame starts from exactly this position
-          syncCameraState(targetCenter, startBearing);
+          var targetPitch = window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
+          var perspectiveCorrectedCenter = computePerspectiveCorrectedZoomTarget(
+            markerPos,
+            startBearing,
+            targetPitch,
+            defaultZoom
+          );
+          var intendedFinalBearing = startBearing;
+          syncCameraState(perspectiveCorrectedCenter, startBearing);
+          startupZoomTargetState = { center: perspectiveCorrectedCenter.slice(0) };
 
           // STRATEGY: Prefetch tiles at target zoom for the viewport only (HTTP cache),
           // wait for fetches to complete, then start zoom animation.
@@ -12896,9 +12970,10 @@
 
               // Animate to target — tiles are already in browser HTTP cache
               map.easeTo({
-                center: targetCenter,
+                center: perspectiveCorrectedCenter,
                 zoom: defaultZoom,
                 bearing: startBearing,
+                pitch: targetPitch,
                 duration: 3500,
                 easing: easeInOutCubic,
               });
@@ -12922,11 +12997,23 @@
                 });
                 hidePreloadOverlay();
                 try {
-                  // Sync camera from where the zoom-in animation actually landed
-                  syncCameraStateFromMap();
-                  markerDataCooldown = 999;
-                  progressNeedLineInit = true;
-                  progressLineCooldown = 999;
+                  // Use the stored intended bearing rather than re-reading map.getBearing().
+                  // map.getBearing() after easeTo can differ by a small floating-point amount
+                  // from the target, causing a snap when startIdleSway() applies
+                  // shortestAngleDelta on its very first RAF frame.
+                  bearing = normalizeAngle(intendedFinalBearing);
+                  appliedBearing = bearing;
+                  targetBearingSmooth = bearing;
+                  cameraCenter[0] = perspectiveCorrectedCenter[0];
+                  cameraCenter[1] = perspectiveCorrectedCenter[1];
+                  forceCameraUpdate = false;
+                  cameraCooldown = 0;
+                  cameraJumpedLastFrame = false;
+                  cameraJumpStreak = 0;
+                  // markerDataCooldown, progressNeedLineInit, progressLineCooldown
+                  // are intentionally deferred to beginPlayback() so they do not
+                  // trigger setData() repaints during the idle-wait / countdown
+                  // phase, which causes MapLibre label reflow and a visible jump.
                 } catch (_) {}
 
                 // Apply playback rendering optimizations (label overlap, fade suppression)
@@ -12939,8 +13026,21 @@
                     if (hasTimestamps && Array.isArray(timeOffsets)) {
                       tOffset = timeOffsetAtDistance(_dStart);
                     }
-                    syncCameraStateFromMap();
+                    // Use the stored intended bearing — never re-read from map here.
+                    // Sway leaves the map at a slightly different bearing each stop;
+                    // reading it back would cause a one-frame snap.
+                    bearing = normalizeAngle(intendedFinalBearing);
+                    appliedBearing = bearing;
+                    targetBearingSmooth = bearing;
+                    forceCameraUpdate = false;
                   } catch (_) {}
+                  // These resets are deferred from the moveend handler to here so
+                  // setData() repaints happen only when playback is actually starting,
+                  // not during idle-wait or countdown, where they cause label reflow
+                  // and a visible jump.
+                  markerDataCooldown = 999;
+                  progressNeedLineInit = true;
+                  progressLineCooldown = 999;
                   // Suppress camera jumpTo for the first few frames so playback
                   // starts from exactly where countdown/sway left the camera, with no snap.
                   suppressCameraUpdateFrames = 3;
@@ -12955,11 +13055,15 @@
                 function onMapSettled() {
                   if (shouldRunStartupCountdown()) {
                     var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
-                    startIdleSway();
+                    startIdleSway(intendedFinalBearing);
                     runStartupCountdown(countdownSeconds)
                       .then(function () {
                         stopIdleSway();
-                        syncCameraStateFromMap();
+                        if (startupZoomTargetState && Array.isArray(startupZoomTargetState.center)) {
+                          cameraCenter[0] = startupZoomTargetState.center[0];
+                          cameraCenter[1] = startupZoomTargetState.center[1];
+                          startupZoomTargetState = null;
+                        }
                         startupSpeedRampDuration = 1.5;
                         startupSpeedRampRemaining = 1.5;
                         beginPlayback();

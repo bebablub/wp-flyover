@@ -440,6 +440,15 @@ describe('front.js runtime minimal regressions', () => {
     });
   });
 
+  test('startup countdown preserves zoom target center and avoids syncing map center', () => {
+    var normalized = FRONT_SRC.replace(/\s+/g, ' ');
+    expect(normalized).toContain('startupZoomTargetState = { center: perspectiveCorrectedCenter.slice(0) };');
+    expect(normalized).toContain(
+      'stopIdleSway(); if (startupZoomTargetState && Array.isArray(startupZoomTargetState.center)) {'
+    );
+    expect(normalized).not.toContain('stopIdleSway(); syncCameraStateFromMap();');
+  });
+
   test('latest_embed strategy bypasses local cache and fetches fresh payload', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
