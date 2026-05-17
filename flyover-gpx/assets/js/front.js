@@ -7199,6 +7199,15 @@
       }
       function startPlaybackWithPreload() {
         if (playing || preloadingInProgress) return;
+        // Resume path: skip startup preload/idle gate after first playback has already started.
+        if (!firstPlayZoomPending) {
+          hidePreloadOverlay();
+          syncCameraStateFromMap();
+          setPlaying(true);
+          scheduleRaf();
+          recordPlaybackStart();
+          return;
+        }
         hideSplash();
         playStartTrace = { startedAt: performance.now() };
         showPreloadOverlay('Preparing playback…');
@@ -7342,13 +7351,13 @@
               pitch: 0,   // end animation always targets flat top-down view
               bearing: 0,
             };
-            console.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
+            DBG.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
           } else {
-            console.log('[FGPX end-zoom] cameraForBounds returned invalid result', _ovCam);
+            DBG.log('[FGPX end-zoom] cameraForBounds returned invalid result', _ovCam);
           }
         }
       } catch (_e) {
-        console.log('[FGPX end-zoom] overviewCameraState capture threw', _e);
+        DBG.warn('[FGPX end-zoom] overviewCameraState capture threw', _e);
       }
 
       // Stats panel
@@ -12522,7 +12531,6 @@
       var STARTUP_COUNTDOWN_SECONDS = 3;
       var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
       var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
-      var startupSuppressProgressLine = false; // suppress route line during warm-up phase
       var playbackStartedAtMs = 0; // wall clock ms when playback starts
 
       // Idle sway: gentle organic bearing oscillation when paused or during countdown
@@ -12562,9 +12570,9 @@
           var elapsed = ts - swayStartTime;
           // Layered sine waves at different frequencies for organic, non-mechanical feel
           var t = elapsed / 1000; // seconds
-          var primary = Math.sin(t * 0.55) * 1.6; // slow primary wave ~11.4s period
-          var secondary = Math.sin(t * 1.1) * 0.5; // faster secondary harmonic
-          var tertiary = Math.sin(t * 0.23) * 0.7; // very slow drift
+          var primary = Math.sin(t * 0.55) * 12;
+          var secondary = Math.sin(t * 1.1) * 5;
+          var tertiary = Math.sin(t * 0.23) * 6;
           var swayAngle = primary + secondary + tertiary;
           // Smooth fade-in over 2 seconds to avoid any abrupt start
           var fadeIn = Math.min(1, elapsed / 2000);
@@ -12579,8 +12587,8 @@
             swayLastBearing = normalizeAngle(swayLastBearing + delta * 0.08);
           }
           try {
-            if (!userInteracting && map && typeof map.jumpTo === 'function') {
-              map.jumpTo({ bearing: swayLastBearing });
+            if (!userInteracting && map && typeof map.flyTo === 'function') {
+              map.flyTo({ bearing: swayLastBearing, essential: true });
             }
           } catch (_) {}
           swayRafId = requestAnimationFrame(swayFrame);
@@ -12842,15 +12850,15 @@
           if (p < 5) return markerPos.slice(0, 2);
           var pitchRad = (p * Math.PI) / 180;
           var viewportHeightPx = ui && ui.mapEl && ui.mapEl.clientHeight ? ui.mapEl.clientHeight : 720;
-          var offsetPx = viewportHeightPx / 2;
+          var offsetPx = viewportHeightPx * 0.055;
           var offsetMeters = offsetPx / Math.tan(pitchRad);
           var markerLat = markerPos[1] || 0;
           var latRad = (markerLat * Math.PI) / 180;
           var cosLat = Math.cos(latRad);
           var metersPerPixel = (40075000 / Math.pow(2, zoomLevel + 8)) / Math.max(0.1, cosLat);
           var offsetDistanceMeters = offsetMeters * metersPerPixel;
-          var backwardBearing = normalizeAngle(Number(bearing) + 180);
-          var correctedPos = offsetPositionByBearing(markerPos, backwardBearing, offsetDistanceMeters);
+          var forwardBearing = normalizeAngle(Number(bearing));
+          var correctedPos = offsetPositionByBearing(markerPos, forwardBearing, offsetDistanceMeters);
           return correctedPos.slice(0, 2);
         } catch (_) {
           return markerPos.slice(0, 2);
@@ -13020,16 +13028,29 @@
                 // BEFORE waiting for idle, so MapLibre processes them and settles.
                 applyPlaybackLayerOptimizations();
 
+                // Start sway now so bearing oscillates during idle-wait and the full countdown,
+                // not just the instant before beginPlayback(). setPlaying(true) stops it cleanly.
+                startIdleSway(intendedFinalBearing);
+
                 function beginPlayback() {
                   try {
                     var _dStart = Math.max(0, Math.min(1, progress)) * totalDistance;
                     if (hasTimestamps && Array.isArray(timeOffsets)) {
                       tOffset = timeOffsetAtDistance(_dStart);
                     }
-                    // Use the stored intended bearing — never re-read from map here.
-                    // Sway leaves the map at a slightly different bearing each stop;
-                    // reading it back would cause a one-frame snap.
-                    bearing = normalizeAngle(intendedFinalBearing);
+                    // Start bearing from wherever sway left the map (live value) so the
+                    // playback rate-limiter can blend smoothly toward travel direction.
+                    // Using intendedFinalBearing here would accumulate a delta against the
+                    // map's actual bearing and trigger a jumpTo snap on frame 4 once
+                    // suppressCameraUpdateFrames expires.
+                    var _liveBearing = intendedFinalBearing;
+                    try {
+                      if (typeof map.getBearing === 'function') {
+                        var _b = Number(map.getBearing());
+                        if (isFinite(_b)) _liveBearing = _b;
+                      }
+                    } catch (_) {}
+                    bearing = normalizeAngle(_liveBearing);
                     appliedBearing = bearing;
                     targetBearingSmooth = bearing;
                     forceCameraUpdate = false;
@@ -13055,24 +13076,25 @@
                 function onMapSettled() {
                   if (shouldRunStartupCountdown()) {
                     var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
-                    startIdleSway(intendedFinalBearing);
+                    
                     runStartupCountdown(countdownSeconds)
                       .then(function () {
-                        stopIdleSway();
                         if (startupZoomTargetState && Array.isArray(startupZoomTargetState.center)) {
                           cameraCenter[0] = startupZoomTargetState.center[0];
                           cameraCenter[1] = startupZoomTargetState.center[1];
                           startupZoomTargetState = null;
                         }
-                        startupSpeedRampDuration = 1.5;
-                        startupSpeedRampRemaining = 1.5;
+                        startupSpeedRampDuration = 3.5;
+                        startupSpeedRampRemaining = startupSpeedRampDuration;
+                        // sway already running since moveend — if (swayActive) return guards re-entry
                         beginPlayback();
                       })
                       .catch(function () {
-                        stopIdleSway();
+                        // sway already running since moveend
                         beginPlayback();
                       });
                   } else {
+                    // sway already running since moveend
                     beginPlayback();
                   }
                 }
@@ -13267,7 +13289,6 @@
         progressLineVisible = null;
         startupSpeedRampRemaining = 0;
         startupSpeedRampDuration = 0;
-        startupSuppressProgressLine = false;
         markerLayerVisible = null;
         lastMarkerPx = null;
         lastMarkerDistance = null;
@@ -13758,7 +13779,7 @@
 
         // update progressive route up to current position
         var routeProgSrc = map.getSource('fgpx-route-progress');
-        if (routeProgSrc && !startupSuppressProgressLine) {
+        if (routeProgSrc) {
           // Keep progress cadence synchronized with camera/marker cadence.
           var progressDistThreshold = cadence.progressDistance;
           if (hasTerrain && speed >= 80) {
@@ -14008,6 +14029,12 @@
           var pitchFactor = 1 - Math.min(1, pitchNow / 60) * 0.35; // up to -35%
           var zoomFactor = 1 - Math.min(1, Math.max(0, (zoomNow - 10) / 8)) * 0.2; // up to -20%
           var maxTurnRate = (hasTerrain ? 7 : 9) * pitchFactor * zoomFactor;
+          // During startup ramp, damp turn-rate so sharp initial GPS turns don't whip the camera.
+          if (startupSpeedRampRemaining > 0 && startupSpeedRampDuration > 0) {
+            var startupProgress = 1 - startupSpeedRampRemaining / startupSpeedRampDuration;
+            var startupTurnFactor = 0.3 + 0.7 * Math.max(0, Math.min(1, startupProgress));
+            maxTurnRate *= startupTurnFactor;
+          }
           var stepLimit = maxTurnRate * Math.max(0.01, Math.min(0.06, lastFrameDt || 0.016));
           var step = Math.max(-stepLimit, Math.min(stepLimit, delta));
           // Always apply the rate-limited step — the step itself is already bounded by
@@ -14070,8 +14097,8 @@
             cameraCenter[1] = nextCenterLat;
             var camOpts = { center: cameraCenter, bearing: bearing };
             if (nextPitch != null) camOpts.pitch = nextPitch;
-            if (map && typeof map.jumpTo === 'function') {
-              map.jumpTo(camOpts);
+            if (map && typeof map.flyTo === 'function') {
+              map.flyTo(camOpts);
             } else if (map && typeof map.setCenter === 'function') {
               map.setCenter(cameraCenter);
               if (typeof map.setBearing === 'function' && isFinite(bearing))
@@ -14356,16 +14383,17 @@
 
         // Overlay rendering is now handled by map 'render' event
 
-        // Speed ramp: smooth easeInOutCubic from 25x to user-chosen speed over ramp duration.
-        // This ensures the initial motion always looks the same regardless of user speed setting.
+        // Speed ramp: smooth easeInOutCubic from 1x to user-chosen speed over ramp duration.
+        // Always accelerates — prevents the jarring motion that a 25x fixed start caused
+        // when user speed was set below 25x (which previously produced a deceleration).
         var effectiveSpeed = speed;
         if (startupSpeedRampRemaining > 0) {
           startupSpeedRampRemaining = Math.max(0, startupSpeedRampRemaining - dt);
           var rampProgress =
             1 - startupSpeedRampRemaining / Math.max(0.001, startupSpeedRampDuration);
           var rampT = easeInOutCubic(rampProgress);
-          // Blend from fixed 25x to user speed
-          effectiveSpeed = 25 + (speed - 25) * rampT;
+          // Blend from 1x to user speed — always ramps up
+          effectiveSpeed = 1 + (speed - 1) * rampT;
           if (startupSpeedRampRemaining <= 0) {
             startupSpeedRampRemaining = 0;
             startupSpeedRampDuration = 0;
