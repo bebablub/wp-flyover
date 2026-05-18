@@ -118,6 +118,14 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+# Threading imports
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+try:
+    from tqdm import tqdm
+except ImportError:
+    print("Error: tqdm is not installed.\n  Run:  pip install -r requirements_gpx_import.txt", file=sys.stderr)
+    sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # Dependency checks (before any other imports from third-party packages)
@@ -744,6 +752,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory containing .gpx files (default: <script_dir>/gpx/)",
     )
 
+    parser.add_argument(
+        "--parse-threads", type=_positive_int, metavar="N", default=4,
+        help="Number of threads for GPX parsing (default: 4)",
+    )
+    parser.add_argument(
+        "--import-threads", type=_positive_int, metavar="N", default=4,
+        help="Number of threads for GPX import/append (default: 4)",
+    )
+
     # --- Date filters -------------------------------------------------------
     date_g = parser.add_argument_group(
         "explicit date range  (ISO 8601 dates, both optional)"
@@ -860,26 +877,36 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         print("\n  Non-interactive mode enabled.")
         print(f"  Already-imported action: {duplicate_action}")
 
+
     # =========================================================================
-    # PHASE 1 — Filter GPX files
+    # PHASE 1 — Filter GPX files (Parallel Parsing)
     # =========================================================================
     _section("PHASE 1 — Filter GPX files")
     print(f"  GPX directory : {gpx_dir}")
     print(f"  Template file : {template_path}")
     print(f"  WordPress     : {WP_PATH}")
+    print(f"  Parse threads : {args.parse_threads}")
 
     gpx_files = sorted(gpx_dir.glob("*.gpx"))
     if not gpx_files:
         print(f"\nNo .gpx files found in {gpx_dir}. Exiting.")
         sys.exit(0)
 
-    print(f"\nFound {len(gpx_files)} .gpx file(s). Parsing…\n")
+    print(f"\nFound {len(gpx_files)} .gpx file(s). Parsing in parallel…\n")
 
     all_tracks: List[dict] = []
-    for f in gpx_files:
+    all_tracks_lock = threading.Lock()
+
+    def parse_and_collect(f):
         meta = parse_gpx_metadata(f)
         if meta is not None:
-            all_tracks.append(meta)
+            with all_tracks_lock:
+                all_tracks.append(meta)
+
+    with ThreadPoolExecutor(max_workers=args.parse_threads) as executor:
+        futures = {executor.submit(parse_and_collect, f): f for f in gpx_files}
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Parsing GPX files"):
+            pass
 
     # Always sort by start_time (tracks without timestamps go to end)
     all_tracks.sort(key=lambda t: t["start_time"] if t["start_time"] is not NO_TIMESTAMP else datetime.max)
@@ -1015,6 +1042,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         _load_fgpx_track_paths(WP_PATH)
         print()
 
+
     skip_all_already_imported = False
     imported_ids_by_filename: Dict[str, int] = {}
 
@@ -1025,41 +1053,31 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         mapping_by_filename.setdefault(entry["filename"], []).append(entry)
 
     stats = {"imported": 0, "skipped": 0, "appended": 0, "errors": 0}
+    stats_lock = threading.Lock()
 
-    for gpx_name, entries in mapping_by_filename.items():
+
+    def import_and_append_worker(gpx_name, entries, interactive=False):
+        nonlocal skip_all_already_imported
         first_entry = entries[0]
         gpx_path = first_entry["filepath"]
 
-        print(f"\n  {'─'*60}")
-        print(f"  GPX  :  {gpx_name}")
-        print(f"  Posts:  {len(entries)} match(es)")
-
-        # ── Already-imported check ──────────────────────────────────────────
+        # Already-imported check
         existing_id: Optional[int] = find_imported_track(gpx_name, WP_PATH) if not dry_run else None
-
+        action = None
         if existing_id is not None:
             if skip_all_already_imported:
-                print(
-                    f"  Already imported as fgpx_track #{existing_id} "
-                    "— skipping (skip-all active)."
-                )
-                stats["skipped"] += 1
-                continue
+                with stats_lock:
+                    stats["skipped"] += 1
+                return
             if duplicate_action is not None:
                 action = duplicate_action
-                print(
-                    f"  Track already imported as fgpx_track #{existing_id}. "
-                    f"Using configured action: {action}."
-                )
-            else:
-                print(
-                    f"\n  Track '{gpx_name}' is already imported as fgpx_track #{existing_id}.\n"
-                    "  What would you like to do?\n"
-                    "    [s] Skip this track\n"
-                    "    [a] Skip all already-imported tracks\n"
-                    "    [r] Re-import anyway (creates a new duplicate fgpx_track)\n"
-                    "    [q] Quit the script"
-                )
+            elif interactive:
+                print(f"\n  Track '{gpx_name}' is already imported as fgpx_track #{existing_id}.\n"
+                      "  What would you like to do?\n"
+                      "    [s] Skip this track\n"
+                      "    [a] Skip all already-imported tracks\n"
+                      "    [r] Re-import anyway (creates a new duplicate fgpx_track)\n"
+                      "    [q] Quit the script")
                 while True:
                     try:
                         choice = input("  Choice [s/a/r/q]: ").strip().lower()
@@ -1069,7 +1087,6 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
                     if choice in ("s", "a", "r", "q"):
                         break
                     print("  Please enter s, a, r, or q.")
-
                 action_map = {
                     "s": "skip",
                     "a": "skip-all",
@@ -1077,56 +1094,72 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
                     "q": "quit",
                 }
                 action = action_map[choice]
+            else:
+                # Non-interactive, no action specified: skip
+                with stats_lock:
+                    stats["skipped"] += 1
+                return
 
             if action == "quit":
                 print("  Quitting.")
-                break
+                os._exit(0)
             elif action == "skip":
-                stats["skipped"] += 1
-                continue
+                with stats_lock:
+                    stats["skipped"] += 1
+                return
             elif action == "skip-all":
                 skip_all_already_imported = True
-                stats["skipped"] += 1
-                continue
+                with stats_lock:
+                    stats["skipped"] += 1
+                return
             # action == "reimport": fall through to import
 
-        # ── Import ───────────────────────────────────────────────────────────
+        # Import
         if gpx_name in imported_ids_by_filename:
             track_id = imported_ids_by_filename[gpx_name]
-            print(f"  Reusing already-imported track id for this run: {track_id}")
         else:
-            print("  Importing GPX…")
             track_id = import_gpx(gpx_path, WP_PATH, IMPORT_SETTINGS, dry_run=dry_run)
-
             if track_id is None:
-                print("  Error: import failed — skipping append for all matched posts.")
-                stats["errors"] += len(entries)
-                continue
-
+                with stats_lock:
+                    stats["errors"] += len(entries)
+                return
             imported_ids_by_filename[gpx_name] = track_id
 
-        if dry_run:
-            shortcode = '[flyover_gpx id="<NEW_TRACK_ID>"]'
-            print(f"  [DRY-RUN] Shortcode would be: {shortcode}")
-        else:
-            shortcode = f'[flyover_gpx id="{track_id}"]'
-            print(f"  Imported as fgpx_track #{track_id}  →  shortcode: {shortcode}")
+        with stats_lock:
+            stats["imported"] += 1
 
-        stats["imported"] += 1
-
-        # ── Append template ──────────────────────────────────────────────────
+        # Append template
         for entry in entries:
             post_id = entry["post_id"]
-            print(f"  Appending template to post #{post_id}…")
-            ok = append_to_post(post_id, shortcode, template_content, WP_PATH, dry_run=dry_run)
-
+            ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]' if not dry_run else '[flyover_gpx id="<NEW_TRACK_ID>"]', template_content, WP_PATH, dry_run=dry_run)
             if ok:
-                if not dry_run:
-                    print("  ✓ Template appended successfully.")
-                stats["appended"] += 1
+                with stats_lock:
+                    stats["appended"] += 1
             else:
-                print(f"  ✗ Failed to append to post #{post_id}.")
-                stats["errors"] += 1
+                with stats_lock:
+                    stats["errors"] += 1
+
+    # Separate interactive duplicate-prompt jobs from parallelizable jobs
+    interactive_jobs = []
+    parallel_jobs = []
+    for gpx_name, entries in mapping_by_filename.items():
+        existing_id = find_imported_track(gpx_name, WP_PATH) if not dry_run else None
+        if existing_id is not None and duplicate_action is None and not args.non_interactive:
+            interactive_jobs.append((gpx_name, entries))
+        else:
+            parallel_jobs.append((gpx_name, entries))
+
+    print(f"\n  Import threads : {args.import_threads}\n")
+
+    # Run parallelizable jobs with progress bar
+    with ThreadPoolExecutor(max_workers=args.import_threads) as executor:
+        futures = [executor.submit(import_and_append_worker, g, e, False) for g, e in parallel_jobs]
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Importing/Appending"):
+            pass
+
+    # Run interactive jobs sequentially with progress bar
+    for g, e in tqdm(interactive_jobs, desc="Interactive duplicates"):
+        import_and_append_worker(g, e, True)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     _section("SUMMARY")
