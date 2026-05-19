@@ -129,6 +129,33 @@ except ImportError:
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
+# Logging helper (thread-safe, enabled by default)
+# ---------------------------------------------------------------------------
+_log_file_path = None
+_log_file_lock = threading.Lock()
+_logging_enabled = True
+
+def set_log_file(path):
+    global _log_file_path
+    _log_file_path = path
+
+def enable_logging(enabled: bool):
+    global _logging_enabled
+    _logging_enabled = enabled
+
+def log(msg: str):
+    if not _logging_enabled or not _log_file_path:
+        return
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%fZ")
+    line = f"[{ts}] {msg}\n"
+    with _log_file_lock:
+        try:
+            with open(_log_file_path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as exc:
+            print(f"Warning: Could not write to log file '{_log_file_path}': {exc}", file=sys.stderr)
+
+# ---------------------------------------------------------------------------
 # Status file constants and helpers
 # ---------------------------------------------------------------------------
 PHASE1_FILE = "gpx_import_phase1.json"
@@ -796,6 +823,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--log-file", metavar="PATH", default=None,
+        help="Path to log file (default: gpx_filter_import.log in script dir)."
+    )
+    parser.add_argument(
+        "--no-log", action="store_true",
+        help="Disable logging to file."
+    )
+
+    parser.add_argument(
         "--gpx-dir", metavar="PATH",
         help="Directory containing .gpx files (default: <script_dir>/gpx/)",
     )
@@ -893,13 +929,24 @@ def _build_parser() -> argparse.ArgumentParser:
 # =============================================================================
 
 def main() -> None:  # noqa: C901  (complexity is inherent in the interactive flow)
+
     parser = _build_parser()
     args   = parser.parse_args()
     auto_yes = bool(args.yes or args.non_interactive)
 
+    # --- Logging setup ---
+    log_path = args.log_file or str((Path(__file__).parent / "gpx_filter_import.log").resolve())
+    if args.no_log:
+        enable_logging(False)
+    else:
+        set_log_file(log_path)
+        enable_logging(True)
+        log(f"Script started. Args: {sys.argv}")
+
     duplicate_action = args.already_imported_action
     if args.non_interactive and duplicate_action is None:
         duplicate_action = "skip-all"
+    log(f"Duplicate action: {duplicate_action}")
 
     # ── Resolve paths ────────────────────────────────────────────────────────
     gpx_dir = (
@@ -910,15 +957,18 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
 
     # ── Validate ─────────────────────────────────────────────────────────────
     if not gpx_dir.is_dir():
+        log(f"Error: GPX directory not found: {gpx_dir}")
         print(f"Error: GPX directory not found: {gpx_dir}", file=sys.stderr)
         sys.exit(1)
 
     if not template_path.is_file():
+        log(f"Error: template file not found: {template_path}")
         print(f"Error: template file not found: {template_path}", file=sys.stderr)
         sys.exit(1)
 
     template_content = template_path.read_text(encoding="utf-8")
     if "{{fgpx_shortcode}}" not in template_content:
+        log(f"Error: template '{template_path}' does not contain '{{fgpx_shortcode}}'.")
         print(
             f"Error: template '{template_path}' does not contain {{{{fgpx_shortcode}}}}.",
             file=sys.stderr,
@@ -928,6 +978,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
     dry_run = args.dry_run
 
     if not check_wp_command_available():
+        log("Error: `wp` command is not available in PATH.")
         print(
             "Error: `wp` command is not available in PATH.\n"
             "  Install WP-CLI and/or adjust PATH before running.",
@@ -936,10 +987,12 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         sys.exit(1)
 
     if dry_run:
+        log("DRY-RUN MODE enabled.")
         print("\n  ╔══════════════════════════════════════════════╗")
         print("  ║  DRY-RUN MODE — no changes will be written  ║")
         print("  ╚══════════════════════════════════════════════╝")
     if args.non_interactive:
+        log("Non-interactive mode enabled.")
         print("\n  Non-interactive mode enabled.")
         print(f"  Already-imported action: {duplicate_action}")
 
@@ -958,9 +1011,11 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             phase1_data = load_json_status(PHASE1_FILE)
             filtered = phase1_data["filtered"]
             all_tracks = phase1_data["all_tracks"]
+            log(f"Resumed {len(filtered)} filtered tracks from {PHASE1_FILE}.")
             print(f"Resumed {len(filtered)} filtered tracks from {PHASE1_FILE}.")
             phase1_resume = False
     if phase1_resume:
+        log("PHASE 1 — Filter GPX files")
         _section("PHASE 1 — Filter GPX files")
         print(f"  GPX directory : {gpx_dir}")
         print(f"  Template file : {template_path}")
@@ -972,6 +1027,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             print(f"\nNo .gpx files found in {gpx_dir}. Exiting.")
             sys.exit(0)
 
+        log(f"Found {len(gpx_files)} .gpx file(s) in {gpx_dir}")
         print(f"\nFound {len(gpx_files)} .gpx file(s). Parsing in parallel…\n")
 
         all_tracks = []
@@ -985,6 +1041,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             futures = {executor.submit(parse_and_collect, f): f for f in gpx_files}
             for _ in tqdm(as_completed(futures), total=len(futures), desc="Parsing GPX files"):
                 pass
+        log(f"Parsed {len(all_tracks)} tracks.")
         all_tracks.sort(key=lambda t: t["start_time"] if t["start_time"] is not NO_TIMESTAMP else datetime.max)
         start_dt, end_dt = resolve_date_filters(args)
         if start_dt and end_dt and start_dt > end_dt:
@@ -1011,12 +1068,15 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         print()
         print_tracks_table(filtered)
         print(f"\nMatched {len(filtered)} / {len(all_tracks)} tracks.")
+        log(f"Matched {len(filtered)} / {len(all_tracks)} tracks after filtering.")
         save_json_status(PHASE1_FILE, {"filtered": filtered, "all_tracks": all_tracks})
-        print(f"Saved phase 1 results to {PHASE1_FILE}.")
+        log(f"Saved phase 1 results to {PHASE1_FILE}.")
         if not filtered:
+            log("No tracks match the current filters. Exiting.")
             print("No tracks match the current filters. Exiting.")
             sys.exit(0)
         if not confirm("Proceed to Phase 2 — search WordPress posts?", auto_yes=auto_yes):
+            log("Aborted after phase 1.")
             print("Aborted.")
             sys.exit(0)
 
@@ -1035,9 +1095,11 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             phase2_data = load_json_status(PHASE2_FILE)
             mapping = phase2_data["mapping"]
             no_match = phase2_data["no_match"]
+            log(f"Resumed {len(mapping)} mappings from {PHASE2_FILE}.")
             print(f"Resumed {len(mapping)} mappings from {PHASE2_FILE}.")
             phase2_resume = False
     if phase2_resume:
+        log("PHASE 2 — Match WordPress posts")
         _section("PHASE 2 — Match WordPress posts")
         if not dry_run:
             print("  Checking WordPress connection…")
@@ -1051,11 +1113,13 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
                 sys.exit(1)
             print("  Connection OK.\n")
         print("  Loading posts once for in-memory filename matching…")
+        log("Loading posts for filename matching.")
         searchable_posts = load_searchable_posts(WP_PATH)
         if not searchable_posts:
             print("\nError: no searchable posts loaded. Aborting.", file=sys.stderr)
             sys.exit(1)
         print(f"  Loaded {len(searchable_posts)} candidate post(s).\n")
+        log(f"Loaded {len(searchable_posts)} candidate posts.")
         mapping = []
         no_match = []
         mapping_lock = threading.Lock()
@@ -1087,22 +1151,27 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
                             "post_status": p["post_status"],
                         })
         print("  Matching posts in parallel…")
+        log("Matching posts in parallel.")
         with ThreadPoolExecutor(max_workers=args.parse_threads) as executor:
             list(tqdm(executor.map(match_posts, filtered), total=len(filtered), desc="Matching posts"))
         print()
         print("Mapping summary:")
+        log(f"Phase 2: {len(mapping)} mappings, {len(no_match)} no-match.")
         print_mapping_table(mapping + no_match)
         save_json_status(PHASE2_FILE, {"mapping": mapping, "no_match": no_match})
-        print(f"Saved phase 2 results to {PHASE2_FILE}.")
+        log(f"Saved phase 2 results to {PHASE2_FILE}.")
         if no_match:
+            log(f"{len(no_match)} GPX file(s) had no matching post and will be skipped in Phase 3.")
             print(
                 f"\n  ⚠  {len(no_match)} GPX file(s) had no matching post "
                 "and will be skipped in Phase 3."
             )
         if not mapping:
+            log("No GPX files could be matched to any WordPress post. Exiting.")
             print("\nNo GPX files could be matched to any WordPress post. Exiting.")
             sys.exit(0)
         if not confirm("Proceed to Phase 3 — import and append?", auto_yes=auto_yes):
+            log("Aborted after phase 2.")
             print("Aborted.")
             sys.exit(0)
 
@@ -1110,6 +1179,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
     # =========================================================================
     # PHASE 3 — Import GPX files & append template to posts
     # =========================================================================
+    log("PHASE 3 — Import & Append" + (" [DRY-RUN]" if dry_run else ""))
     _section(
         "PHASE 3 — Import & Append"
         + ("  [DRY-RUN]" if dry_run else "")
@@ -1118,6 +1188,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
     # Pre-load the existing fgpx_track file-path cache (one DB query)
     if not dry_run:
         print("  Loading existing fgpx_track records for duplicate detection…")
+        log("Loading existing fgpx_track records for duplicate detection.")
         _load_fgpx_track_paths(WP_PATH)
         print()
 
@@ -1260,6 +1331,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             parallel_jobs.append((gpx_name, entries))
 
     print(f"\n  Import threads : {args.import_threads}\n")
+    log(f"Import threads: {args.import_threads}")
 
     # Run parallelizable jobs with progress bar
     with ThreadPoolExecutor(max_workers=args.import_threads) as executor:
@@ -1273,12 +1345,14 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
 
     # ── Final summary ─────────────────────────────────────────────────────────
     _section("SUMMARY")
+    log(f"SUMMARY: Imported={stats['imported']} Skipped={stats['skipped']} Appended={stats['appended']} Errors={stats['errors']}")
     print(f"  Imported  (new fgpx_track posts) : {stats['imported']}")
     print(f"  Skipped   (already imported)      : {stats['skipped']}")
     print(f"  Appended  (posts updated)         : {stats['appended']}")
     print(f"  Errors                            : {stats['errors']}")
 
     if dry_run:
+        log("*** DRY-RUN complete — no changes were written to WordPress. ***")
         print("\n  *** DRY-RUN complete — no changes were written to WordPress. ***")
     print()
 

@@ -2,6 +2,13 @@
 
 This script (`gpx_filter_import.py`) batch-imports GPX files into WordPress using WP-CLI and the Flyover GPX plugin. It is designed for robust, resumable, and parallelized import workflows, with safety checks and status file persistence.
 
+## Logging
+
+- **Logging is enabled by default.** All actions, errors, and user choices are logged to `gpx_filter_import.log` in the script directory.
+- Use `--log-file PATH` to specify a custom log file location.
+- Use `--no-log` to disable logging entirely.
+- The log file records timestamps and is thread-safe. All major phases, errors, and user prompts are logged for audit/history.
+
 ## Features
 
 - **Three-phase workflow:**
