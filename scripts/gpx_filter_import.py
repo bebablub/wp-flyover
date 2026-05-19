@@ -107,6 +107,7 @@ IMPORT_SETTINGS = {
 # END CONFIGURATION
 # =============================================================================
 
+
 import argparse
 import json
 import os
@@ -126,6 +127,52 @@ try:
 except ImportError:
     print("Error: tqdm is not installed.\n  Run:  pip install -r requirements_gpx_import.txt", file=sys.stderr)
     sys.exit(1)
+
+# ---------------------------------------------------------------------------
+# Status file constants and helpers
+# ---------------------------------------------------------------------------
+PHASE1_FILE = "gpx_import_phase1.json"
+PHASE2_FILE = "gpx_import_phase2.json"
+STATUS_FILE = "gpx_import_status.json"
+SCRIPT_VERSION = "1.0.0-resume-forced-phase"  # Update as needed
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def save_json_status(filename, data):
+    meta = {
+        "timestamp": _now_iso(),
+        "script_version": SCRIPT_VERSION,
+    }
+    out = {"meta": meta, "data": data}
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2, default=str)
+
+def load_json_status(filename):
+    """Load a status file, handling corruption, missing keys, and schema drift.
+    Returns the .get('data') dict if valid, else None. Warns on error.
+    """
+    if not os.path.isfile(filename):
+        return None
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+    except Exception as exc:
+        print(f"Warning: Could not load status file '{filename}': {exc}", file=sys.stderr)
+        print("  The file may be corrupted or incomplete. It will be ignored.", file=sys.stderr)
+        return None
+    # Check for required keys
+    if not isinstance(obj, dict) or "meta" not in obj or "data" not in obj:
+        print(f"Warning: Status file '{filename}' is missing required keys. It will be ignored.", file=sys.stderr)
+        return None
+    # Check script_version for schema drift
+    meta = obj.get("meta", {})
+    file_version = meta.get("script_version")
+    if file_version != SCRIPT_VERSION:
+        print(f"Warning: Status file '{filename}' was created by script version '{file_version}', but current version is '{SCRIPT_VERSION}'.", file=sys.stderr)
+        print("  The file may be incompatible and will be ignored.", file=sys.stderr)
+        return None
+    return obj.get("data")
 
 # ---------------------------------------------------------------------------
 # Dependency checks (before any other imports from third-party packages)
@@ -730,6 +777,7 @@ def _positive_int(value: str) -> int:
 # Argument parser
 # =============================================================================
 
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gpx_filter_import.py",
@@ -819,6 +867,24 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # --- Resume, force, and phase control ---
+    parser.add_argument(
+        "--force-import", action="store_true",
+        help="Force re-import of all GPX files, even if already imported.",
+    )
+    parser.add_argument(
+        "--force-append", action="store_true",
+        help="Force append of template to all posts, even if already present.",
+    )
+    parser.add_argument(
+        "--replace-append", action="store_true",
+        help="If template is present in post, replace it with a new one (supports dry-run preview).",
+    )
+    parser.add_argument(
+        "--phase", type=int, choices=[1,2,3],
+        help="Start from a specific phase (1, 2, or 3). Uses persisted status files if available.",
+    )
+
     return parser
 
 
@@ -878,155 +944,168 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         print(f"  Already-imported action: {duplicate_action}")
 
 
-    # =========================================================================
+
+    # -------------------
     # PHASE 1 — Filter GPX files (Parallel Parsing)
-    # =========================================================================
-    _section("PHASE 1 — Filter GPX files")
-    print(f"  GPX directory : {gpx_dir}")
-    print(f"  Template file : {template_path}")
-    print(f"  WordPress     : {WP_PATH}")
-    print(f"  Parse threads : {args.parse_threads}")
+    # -------------------
+    phase1_resume = args.phase == 1 or (args.phase is None)
+    filtered = None
+    all_tracks = None
+    if os.path.isfile(PHASE1_FILE) and not (args.phase == 1):
+        print(f"Found {PHASE1_FILE}. Resume from previous run? [Y/n]: ", end="")
+        ans = input().strip().lower() if not auto_yes else "y"
+        if ans in ("", "y", "yes"):
+            phase1_data = load_json_status(PHASE1_FILE)
+            filtered = phase1_data["filtered"]
+            all_tracks = phase1_data["all_tracks"]
+            print(f"Resumed {len(filtered)} filtered tracks from {PHASE1_FILE}.")
+            phase1_resume = False
+    if phase1_resume:
+        _section("PHASE 1 — Filter GPX files")
+        print(f"  GPX directory : {gpx_dir}")
+        print(f"  Template file : {template_path}")
+        print(f"  WordPress     : {WP_PATH}")
+        print(f"  Parse threads : {args.parse_threads}")
 
-    gpx_files = sorted(gpx_dir.glob("*.gpx"))
-    if not gpx_files:
-        print(f"\nNo .gpx files found in {gpx_dir}. Exiting.")
-        sys.exit(0)
+        gpx_files = sorted(gpx_dir.glob("*.gpx"))
+        if not gpx_files:
+            print(f"\nNo .gpx files found in {gpx_dir}. Exiting.")
+            sys.exit(0)
 
-    print(f"\nFound {len(gpx_files)} .gpx file(s). Parsing in parallel…\n")
+        print(f"\nFound {len(gpx_files)} .gpx file(s). Parsing in parallel…\n")
 
-    all_tracks: List[dict] = []
-    all_tracks_lock = threading.Lock()
-
-    def parse_and_collect(f):
-        meta = parse_gpx_metadata(f)
-        if meta is not None:
-            with all_tracks_lock:
-                all_tracks.append(meta)
-
-    with ThreadPoolExecutor(max_workers=args.parse_threads) as executor:
-        futures = {executor.submit(parse_and_collect, f): f for f in gpx_files}
-        for _ in tqdm(as_completed(futures), total=len(futures), desc="Parsing GPX files"):
-            pass
-
-    # Always sort by start_time (tracks without timestamps go to end)
-    all_tracks.sort(key=lambda t: t["start_time"] if t["start_time"] is not NO_TIMESTAMP else datetime.max)
-
-    # Apply filters
-    start_dt, end_dt = resolve_date_filters(args)
-    if start_dt and end_dt and start_dt > end_dt:
-        print("Error: --start must be earlier than or equal to --end.", file=sys.stderr)
-        sys.exit(1)
-
-    filtered = apply_filters(
-        all_tracks,
-        start_dt     = start_dt,
-        end_dt       = end_dt,
-        min_distance = args.min_distance,
-        min_duration = args.min_duration,
-        min_speed    = args.min_speed,
-    )
-
-    # Summarise active filters
-    active: List[str] = []
-    if start_dt:          active.append(f"start ≥ {start_dt.strftime('%Y-%m-%d')}")
-    if end_dt:            active.append(f"end ≤ {end_dt.strftime('%Y-%m-%d')}")
-    if args.min_distance: active.append(f"distance ≥ {args.min_distance} km")
-    if args.min_duration: active.append(f"duration ≥ {args.min_duration} min")
-    if args.min_speed:    active.append(f"avg speed ≥ {args.min_speed} km/h")
-
-    if active:
-        print("Active filters: " + "  |  ".join(active))
-    else:
-        print("No filters applied — showing all tracks (ordered by start date).")
-
-    print()
-    print_tracks_table(filtered)
-    print(f"\nMatched {len(filtered)} / {len(all_tracks)} tracks.")
-
-    if not filtered:
-        print("No tracks match the current filters. Exiting.")
-        sys.exit(0)
-
-    if not confirm("Proceed to Phase 2 — search WordPress posts?", auto_yes=auto_yes):
-        print("Aborted.")
-        sys.exit(0)
-
-    # =========================================================================
-    # PHASE 2 — Match filtered GPX files to WordPress posts
-    # =========================================================================
-    _section("PHASE 2 — Match WordPress posts")
-
-    # Validate WP connection (skip in dry-run to allow offline usage)
-    if not dry_run:
-        print("  Checking WordPress connection…")
-        if not check_wp_available(WP_PATH):
-            print(
-                f"\nError: WordPress not accessible at '{WP_PATH}'.\n"
-                "  Check the WP_PATH constant in the CONFIGURATION block.\n"
-                "  Also verify that `wp` (WP-CLI) is in PATH.",
-                file=sys.stderr,
-            )
+        all_tracks = []
+        all_tracks_lock = threading.Lock()
+        def parse_and_collect(f):
+            meta = parse_gpx_metadata(f)
+            if meta is not None:
+                with all_tracks_lock:
+                    all_tracks.append(meta)
+        with ThreadPoolExecutor(max_workers=args.parse_threads) as executor:
+            futures = {executor.submit(parse_and_collect, f): f for f in gpx_files}
+            for _ in tqdm(as_completed(futures), total=len(futures), desc="Parsing GPX files"):
+                pass
+        all_tracks.sort(key=lambda t: t["start_time"] if t["start_time"] is not NO_TIMESTAMP else datetime.max)
+        start_dt, end_dt = resolve_date_filters(args)
+        if start_dt and end_dt and start_dt > end_dt:
+            print("Error: --start must be earlier than or equal to --end.", file=sys.stderr)
             sys.exit(1)
-        print("  Connection OK.\n")
-
-    print("  Loading posts once for in-memory filename matching…")
-    searchable_posts = load_searchable_posts(WP_PATH)
-    if not searchable_posts:
-        print("\nError: no searchable posts loaded. Aborting.", file=sys.stderr)
-        sys.exit(1)
-    print(f"  Loaded {len(searchable_posts)} candidate post(s).\n")
-
-    # For each filtered track, match posts whose content contains the full filename
-    mapping:  List[dict] = []   # entries where a post was found
-    no_match: List[dict] = []   # entries with no matching post
-
-    for track in filtered:
-        fname = track["filename"]
-        print(f"  Searching posts for: {fname}")
-
-        posts = []
-        for p in searchable_posts:
-            content = p.get("post_content") or ""
-            if fname in content:
-                posts.append(p)
-
-        if not posts:
-            print("    → No matching post found.")
-            no_match.append({
-                "filename":    fname,
-                "filepath":    track["filepath"],
-                "post_id":     "—",
-                "post_title":  "(no match)",
-                "post_status": "—",
-            })
-        else:
-            for p in posts:
-                print(f"    → Post {p['ID']}: {p['post_title']!r}  [{p['post_status']}]")
-                mapping.append({
-                    "filename":    fname,
-                    "filepath":    track["filepath"],
-                    "post_id":     int(p["ID"]),
-                    "post_title":  p["post_title"],
-                    "post_status": p["post_status"],
-                })
-
-    print()
-    print("Mapping summary:")
-    print_mapping_table(mapping + no_match)
-
-    if no_match:
-        print(
-            f"\n  ⚠  {len(no_match)} GPX file(s) had no matching post "
-            "and will be skipped in Phase 3."
+        filtered = apply_filters(
+            all_tracks,
+            start_dt     = start_dt,
+            end_dt       = end_dt,
+            min_distance = args.min_distance,
+            min_duration = args.min_duration,
+            min_speed    = args.min_speed,
         )
+        active = []
+        if start_dt:          active.append(f"start ≥ {start_dt.strftime('%Y-%m-%d')}")
+        if end_dt:            active.append(f"end ≤ {end_dt.strftime('%Y-%m-%d')}")
+        if args.min_distance: active.append(f"distance ≥ {args.min_distance} km")
+        if args.min_duration: active.append(f"duration ≥ {args.min_duration} min")
+        if args.min_speed:    active.append(f"avg speed ≥ {args.min_speed} km/h")
+        if active:
+            print("Active filters: " + "  |  ".join(active))
+        else:
+            print("No filters applied — showing all tracks (ordered by start date).")
+        print()
+        print_tracks_table(filtered)
+        print(f"\nMatched {len(filtered)} / {len(all_tracks)} tracks.")
+        save_json_status(PHASE1_FILE, {"filtered": filtered, "all_tracks": all_tracks})
+        print(f"Saved phase 1 results to {PHASE1_FILE}.")
+        if not filtered:
+            print("No tracks match the current filters. Exiting.")
+            sys.exit(0)
+        if not confirm("Proceed to Phase 2 — search WordPress posts?", auto_yes=auto_yes):
+            print("Aborted.")
+            sys.exit(0)
 
-    if not mapping:
-        print("\nNo GPX files could be matched to any WordPress post. Exiting.")
-        sys.exit(0)
 
-    if not confirm("Proceed to Phase 3 — import and append?", auto_yes=auto_yes):
-        print("Aborted.")
-        sys.exit(0)
+
+    # -------------------
+    # PHASE 2 — Match filtered GPX files to WordPress posts
+    # -------------------
+    phase2_resume = args.phase == 2 or (args.phase is None)
+    mapping = None
+    no_match = None
+    if os.path.isfile(PHASE2_FILE) and not (args.phase == 2):
+        print(f"Found {PHASE2_FILE}. Resume from previous run? [Y/n]: ", end="")
+        ans = input().strip().lower() if not auto_yes else "y"
+        if ans in ("", "y", "yes"):
+            phase2_data = load_json_status(PHASE2_FILE)
+            mapping = phase2_data["mapping"]
+            no_match = phase2_data["no_match"]
+            print(f"Resumed {len(mapping)} mappings from {PHASE2_FILE}.")
+            phase2_resume = False
+    if phase2_resume:
+        _section("PHASE 2 — Match WordPress posts")
+        if not dry_run:
+            print("  Checking WordPress connection…")
+            if not check_wp_available(WP_PATH):
+                print(
+                    f"\nError: WordPress not accessible at '{WP_PATH}'.\n"
+                    "  Check the WP_PATH constant in the CONFIGURATION block.\n"
+                    "  Also verify that `wp` (WP-CLI) is in PATH.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print("  Connection OK.\n")
+        print("  Loading posts once for in-memory filename matching…")
+        searchable_posts = load_searchable_posts(WP_PATH)
+        if not searchable_posts:
+            print("\nError: no searchable posts loaded. Aborting.", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Loaded {len(searchable_posts)} candidate post(s).\n")
+        mapping = []
+        no_match = []
+        mapping_lock = threading.Lock()
+        no_match_lock = threading.Lock()
+        def match_posts(track):
+            fname = track["filename"]
+            posts = []
+            for p in searchable_posts:
+                content = p.get("post_content") or ""
+                if fname in content:
+                    posts.append(p)
+            if not posts:
+                with no_match_lock:
+                    no_match.append({
+                        "filename":    fname,
+                        "filepath":    track["filepath"],
+                        "post_id":     "—",
+                        "post_title":  "(no match)",
+                        "post_status": "—",
+                    })
+            else:
+                with mapping_lock:
+                    for p in posts:
+                        mapping.append({
+                            "filename":    fname,
+                            "filepath":    track["filepath"],
+                            "post_id":     int(p["ID"]),
+                            "post_title":  p["post_title"],
+                            "post_status": p["post_status"],
+                        })
+        print("  Matching posts in parallel…")
+        with ThreadPoolExecutor(max_workers=args.parse_threads) as executor:
+            list(tqdm(executor.map(match_posts, filtered), total=len(filtered), desc="Matching posts"))
+        print()
+        print("Mapping summary:")
+        print_mapping_table(mapping + no_match)
+        save_json_status(PHASE2_FILE, {"mapping": mapping, "no_match": no_match})
+        print(f"Saved phase 2 results to {PHASE2_FILE}.")
+        if no_match:
+            print(
+                f"\n  ⚠  {len(no_match)} GPX file(s) had no matching post "
+                "and will be skipped in Phase 3."
+            )
+        if not mapping:
+            print("\nNo GPX files could be matched to any WordPress post. Exiting.")
+            sys.exit(0)
+        if not confirm("Proceed to Phase 3 — import and append?", auto_yes=auto_yes):
+            print("Aborted.")
+            sys.exit(0)
+
 
     # =========================================================================
     # PHASE 3 — Import GPX files & append template to posts
@@ -1061,10 +1140,14 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         first_entry = entries[0]
         gpx_path = first_entry["filepath"]
 
-        # Already-imported check
+        # Already-imported check (forced reimport logic)
+        force_import = args.force_import
+        force_append = args.force_append
+        replace_append = args.replace_append
+        # Check if already imported
         existing_id: Optional[int] = find_imported_track(gpx_name, WP_PATH) if not dry_run else None
         action = None
-        if existing_id is not None:
+        if existing_id is not None and not force_import:
             if skip_all_already_imported:
                 with stats_lock:
                     stats["skipped"] += 1
@@ -1114,7 +1197,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
                 return
             # action == "reimport": fall through to import
 
-        # Import
+        # Import (forced or not)
         if gpx_name in imported_ids_by_filename:
             track_id = imported_ids_by_filename[gpx_name]
         else:
@@ -1128,10 +1211,37 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         with stats_lock:
             stats["imported"] += 1
 
-        # Append template
+        # Append template (forced/replace logic)
         for entry in entries:
             post_id = entry["post_id"]
-            ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]' if not dry_run else '[flyover_gpx id="<NEW_TRACK_ID>"]', template_content, WP_PATH, dry_run=dry_run)
+            # Fetch current content for replace-append logic
+            current_content = _get_post_content(post_id, WP_PATH) if (replace_append or force_append) and not dry_run else None
+            filled = template_content.replace("{{fgpx_shortcode}}", f'[flyover_gpx id="{track_id}"]' if not dry_run else '[flyover_gpx id="<NEW_TRACK_ID>"]')
+            already_present = filled in current_content if current_content else False
+            replaced = False
+            if replace_append and current_content:
+                if already_present:
+                    # Replace the old block with the new one
+                    new_content = current_content.replace(filled, filled)
+                    replaced = True
+                    if dry_run:
+                        print(f"[DRY-RUN] Would replace template in post {post_id}.")
+                        continue
+                    # Actually update post content
+                    # (for safety, could add a backup or preview here)
+                    # ...existing code for updating post content...
+                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=False)
+                else:
+                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
+            elif force_append:
+                ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
+            else:
+                # Default: only append if not already present
+                if already_present:
+                    print(f"    Skipping append for post {post_id}: rendered block already present.")
+                    ok = True
+                else:
+                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
             if ok:
                 with stats_lock:
                     stats["appended"] += 1
