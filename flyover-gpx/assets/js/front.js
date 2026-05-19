@@ -543,7 +543,10 @@
     left.appendChild(btnPlay);
     left.appendChild(btnPause);
     left.appendChild(btnRestart);
-    left.appendChild(btnRecord);
+    // Show video record button unless explicitly hidden via query param.
+    if (FGPX.videoRecordingVisible !== false) {
+      left.appendChild(btnRecord);
+    }
     // Show weather buttons for real weather or admin-enabled debug weather data.
     if (window.FGPX && (FGPX.weatherEnabled || FGPX.debugWeatherData)) {
       var isCompactViewport = window.innerWidth <= 680;
@@ -556,9 +559,14 @@
         maxTouchPoints: navigator.maxTouchPoints,
       });
       if (!isCompactViewport) {
+        // Individual buttons can be suppressed via query params (default visible).
         left.appendChild(btnWeather);
-        left.appendChild(btnTemperature);
-        left.appendChild(btnWind);
+        if (FGPX.weatherTemperatureVisible !== false) {
+          left.appendChild(btnTemperature);
+        }
+        if (FGPX.weatherWindVisible !== false) {
+          left.appendChild(btnWind);
+        }
         DBG.log('Weather buttons added to UI');
       } else {
         DBG.log('Weather buttons hidden due to compact viewport');
@@ -578,7 +586,12 @@
     }
     right.appendChild(createEl('span', 'fgpx-speed-label', I18N.speed || 'Speed'));
     right.appendChild(speedSel);
-    if (window.FGPX && FGPX.gpxDownloadUrl && FGPX.gpxDownloadNonce) {
+    if (
+      window.FGPX &&
+      FGPX.gpxDownloadUrl &&
+      FGPX.gpxDownloadNonce &&
+      FGPX.gpxDownloadVisible !== false
+    ) {
       var btnDownload = document.createElement('button');
       btnDownload.type = 'button';
       btnDownload.className = 'fgpx-btn';
@@ -754,7 +767,10 @@
     container.appendChild(error);
     container.appendChild(mapEl);
     container.appendChild(controls);
-    container.appendChild(statsChart);
+    // Charts panel hidden when chartsVisible === false (from query param).
+    if (FGPX.chartsVisible !== false) {
+      container.appendChild(statsChart);
+    }
 
     return {
       spinner: spinner,
@@ -805,6 +821,92 @@
     if (attr === 'dark') return true;
     if (attr === 'light') return false;
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  /**
+   * Parse player-control query parameters from the current URL.
+   * Supports both regular search params (?key=val) and params after a hash (#track-1?key=val).
+   * Returns only validated boolean overrides; unknown or invalid values are silently ignored.
+   * Accepted param names (case-insensitive):
+   *   fullscreen, videorecording, weather, temp, wind, daynight, charts, download
+   * Truthy values: "1", "true", "yes", "on" → true
+   * Falsy values:  "0", "false", "no",  "off" → false
+   * Anything else → skipped (no-op, preserves existing config)
+   *
+   * @returns {Object} Map of camelCase config keys to booleans.
+   */
+  function parsePlayerQueryParams() {
+    var result = {};
+    try {
+      // Collect raw query string from both ?search and any query-after-hash (#anchor?params)
+      var rawSearch = '';
+      try {
+        rawSearch = window.location.search || '';
+      } catch (_) {}
+      var rawHash = '';
+      try {
+        rawHash = window.location.hash || '';
+      } catch (_) {}
+      // Extract query portion from hash (e.g. "#track-1?weather=1")
+      var hashQuery = '';
+      var hashQ = rawHash.indexOf('?');
+      if (hashQ !== -1) {
+        hashQuery = rawHash.slice(hashQ);
+      }
+
+      // Merge params: hash-query params take precedence over search params
+      var combined = {};
+      function parseInto(qs, target) {
+        if (!qs || qs.length < 2) return;
+        try {
+          var usp = new URLSearchParams(qs);
+          usp.forEach(function (val, key) {
+            target[key.toLowerCase()] = val;
+          });
+        } catch (_) {
+          // Fallback for environments without URLSearchParams
+          var parts = qs.replace(/^\?/, '').split('&');
+          for (var i = 0; i < parts.length; i++) {
+            var pair = parts[i].split('=');
+            if (pair.length >= 1 && pair[0]) {
+              target[decodeURIComponent(pair[0]).toLowerCase()] =
+                pair.length >= 2 ? decodeURIComponent(pair[1]) : '';
+            }
+          }
+        }
+      }
+      parseInto(rawSearch, combined);
+      parseInto(hashQuery, combined); // hash params win
+
+      function parseBool(rawVal) {
+        if (typeof rawVal === 'undefined') return undefined;
+        var v = String(rawVal).toLowerCase().trim();
+        if (v === '1' || v === 'true' || v === 'yes' || v === 'on') return true;
+        if (v === '0' || v === 'false' || v === 'no' || v === 'off') return false;
+        return undefined; // unrecognised → ignore
+      }
+
+      // Map from URL param name → window.FGPX config key
+      var paramMap = {
+        fullscreen: 'requestFullscreenOnLoad',
+        videorecording: 'videoRecordingVisible',
+        weather: 'weatherEnabled',
+        temp: 'weatherTemperatureVisible',
+        wind: 'weatherWindVisible',
+        daynight: 'daynightMapEnabled',
+        charts: 'chartsVisible',
+        download: 'gpxDownloadVisible',
+      };
+
+      for (var param in paramMap) {
+        if (!Object.prototype.hasOwnProperty.call(paramMap, param)) continue;
+        var parsed = parseBool(combined[param]);
+        if (typeof parsed !== 'undefined') {
+          result[paramMap[param]] = parsed;
+        }
+      }
+    } catch (_) {}
+    return result;
   }
 
   /**
@@ -880,7 +982,13 @@
     }
     el.setAttribute('data-fgpx-initialized', '1');
     var instCfg = (window.FGPX.instances && window.FGPX.instances[el.id]) || {};
-    var FGPX = Object.assign({}, window.FGPX, instCfg);
+    // Query params have highest precedence: they override shortcode attrs and admin settings.
+    // Parsed once per boot (cached on window) so multiple containers share the same parsed result.
+    if (!window.FGPX._queryParamsParsed) {
+      window.FGPX._queryParamsParsed = true;
+      window.FGPX._queryParams = parsePlayerQueryParams();
+    }
+    var FGPX = Object.assign({}, window.FGPX, instCfg, window.FGPX._queryParams);
     el.__fgpxConfig = FGPX;
     if (DBG.isEnabled()) {
       console.log('[FGPX] initContainer', {
@@ -1823,13 +1931,117 @@
     });
     map.addControl(new window.maplibregl.NavigationControl({ showCompass: true }));
     // Only add fullscreen control on browsers that support the Fullscreen API
-    if (
+    var fullscreenApiSupported = !!(
       document.fullscreenEnabled ||
       document.webkitFullscreenEnabled ||
       document.mozFullScreenEnabled ||
       document.msFullscreenEnabled
-    ) {
+    );
+    if (fullscreenApiSupported) {
       map.addControl(new window.maplibregl.FullscreenControl({ container: root }));
+    }
+    // Auto-fullscreen: trigger on first user interaction if requested via query param.
+    // Browsers block fullscreen without a user gesture, so we wait for the first click/touch.
+    if (FGPX.requestFullscreenOnLoad) {
+      var maximizeApplied = false;
+      var fullscreenCompleted = false;
+      var fullscreenInFlight = false;
+      function applyMaximizeFallback() {
+        if (maximizeApplied) return;
+        maximizeApplied = true;
+        root.classList.add('fgpx-maximized');
+      }
+
+      function clearMaximizeFallback() {
+        maximizeApplied = false;
+        root.classList.remove('fgpx-maximized');
+      }
+
+      function onFullscreenStateChange() {
+        var fsEl =
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.mozFullScreenElement ||
+          document.msFullscreenElement ||
+          null;
+        if (fsEl) {
+          fullscreenCompleted = true;
+          clearMaximizeFallback();
+          removeFullscreenAutoHandlers();
+        }
+      }
+
+      function removeFullscreenAutoHandlers() {
+        document.removeEventListener('fullscreenchange', onFullscreenStateChange);
+        document.removeEventListener('webkitfullscreenchange', onFullscreenStateChange);
+        document.removeEventListener('mozfullscreenchange', onFullscreenStateChange);
+        document.removeEventListener('MSFullscreenChange', onFullscreenStateChange);
+        root.removeEventListener('click', onFirstGesture);
+        root.removeEventListener('touchend', onFirstGesture);
+      }
+
+      document.addEventListener('fullscreenchange', onFullscreenStateChange);
+      document.addEventListener('webkitfullscreenchange', onFullscreenStateChange);
+      document.addEventListener('mozfullscreenchange', onFullscreenStateChange);
+      document.addEventListener('MSFullscreenChange', onFullscreenStateChange);
+
+      if (!fullscreenApiSupported) {
+        // No Fullscreen API available: use CSS maximize fallback.
+        // Keeps player usable on mobile/legacy browsers with a full-viewport experience.
+        applyMaximizeFallback();
+      } else {
+        function onFirstGesture() {
+          if (fullscreenCompleted || fullscreenInFlight) return;
+          fullscreenInFlight = true;
+          try {
+            var target = root;
+            if (typeof target.requestFullscreen === 'function') {
+              target
+                .requestFullscreen()
+                .then(function () {
+                  fullscreenCompleted = true;
+                  clearMaximizeFallback();
+                  removeFullscreenAutoHandlers();
+                })
+                .catch(function () {
+                  applyMaximizeFallback();
+                })
+                .finally(function () {
+                  fullscreenInFlight = false;
+                });
+              return;
+            } else if (typeof target.webkitRequestFullscreen === 'function') {
+              try {
+                target.webkitRequestFullscreen();
+              } catch (_) {
+                applyMaximizeFallback();
+              }
+            } else if (typeof target.mozRequestFullScreen === 'function') {
+              try {
+                target.mozRequestFullScreen();
+              } catch (_) {
+                applyMaximizeFallback();
+              }
+            } else if (typeof target.msRequestFullscreen === 'function') {
+              try {
+                target.msRequestFullscreen();
+              } catch (_) {
+                applyMaximizeFallback();
+              }
+            } else {
+              applyMaximizeFallback();
+            }
+          } catch (_) {
+            applyMaximizeFallback();
+          } finally {
+            fullscreenInFlight = false;
+          }
+        }
+        root.addEventListener('click', onFirstGesture, { passive: true });
+        root.addEventListener('touchend', onFirstGesture, { passive: true });
+      }
+
+      registerTeardown(removeFullscreenAutoHandlers);
     }
 
     var contourSourceId = 'fgpx-contours-' + (root.id || 'fgpx');

@@ -397,17 +397,106 @@
   }
 
   /**
-   * Build shareable URL with hash for track
+   * Collect shareable UI state params from gallery + player config.
+   * Only includes booleans that differ from the player's configured defaults,
+   * so the URL stays short. Returns an object of param name → '1' or '0'.
+   * @param {object} cfg  Gallery instance config
+   * @param {object} [playerFGPX]  Resolved player FGPX config (optional)
+   * @returns {object}
+   */
+  function collectShareUiParams(cfg, playerFGPX) {
+    var pc = cfg && cfg.playerConfig ? cfg.playerConfig : {};
+    var merged = Object.assign({}, pc, playerFGPX || {});
+    var params = {};
+
+    // Only include a param when the feature is explicitly disabled (=0) — omit when default/true
+    // so unrelated pages aren't affected by spurious params in the URL.
+    function addIfFalse(paramName, configKey) {
+      if (merged[configKey] === false) {
+        params[paramName] = '0';
+      }
+    }
+    function addIfTrue(paramName, configKey) {
+      if (merged[configKey] === true) {
+        params[paramName] = '1';
+      }
+    }
+
+    // Fullscreen: only include when explicitly requested (unusual to share via URL)
+    addIfTrue('fullscreen', 'requestFullscreenOnLoad');
+
+    // UI toggles: include only when explicitly turned off
+    addIfFalse('videorecording', 'videoRecordingVisible');
+    addIfFalse('temp', 'weatherTemperatureVisible');
+    addIfFalse('wind', 'weatherWindVisible');
+    addIfFalse('charts', 'chartsVisible');
+    addIfFalse('download', 'gpxDownloadVisible');
+
+    // Weather / daynight: include enabled state when it deviates from admin default
+    if (merged.weatherEnabled === false) params.weather = '0';
+    if (merged.weatherEnabled === true && !pc.weatherEnabled) params.weather = '1';
+    if (merged.daynightMapEnabled === false) params.daynight = '0';
+    if (merged.daynightMapEnabled === true && !pc.daynightMapEnabled) params.daynight = '1';
+
+    return params;
+  }
+
+  /**
+   * Build shareable URL with hash for track, optionally including UI params.
    * @param {number|string} trackId
+   * @param {object} [uiParams]  Optional query params object (key → string value)
    * @returns {string}
    */
-  function shareUrlBaseWithHash(trackId) {
+  function shareUrlBaseWithHash(trackId, uiParams) {
+    var includeUiParams = !!(uiParams && typeof uiParams === 'object');
     try {
       var u = new URL(window.location.href);
+      if (includeUiParams) {
+        // Strip existing fgpx-related query params only when share UI settings are enabled.
+        var paramsToClear = [
+          'fullscreen',
+          'videorecording',
+          'weather',
+          'temp',
+          'wind',
+          'daynight',
+          'charts',
+          'download',
+        ];
+        for (var pi = 0; pi < paramsToClear.length; pi++) {
+          u.searchParams.delete(paramsToClear[pi]);
+        }
+
+        // Apply new UI params (if any)
+        var keys = Object.keys(uiParams);
+        for (var ki = 0; ki < keys.length; ki++) {
+          var k = keys[ki];
+          if (uiParams[k] !== null && typeof uiParams[k] !== 'undefined' && uiParams[k] !== '') {
+            u.searchParams.set(k, String(uiParams[k]));
+          }
+        }
+      }
       u.hash = 'track-' + String(trackId);
       return u.toString();
     } catch (_) {
-      return String(window.location.href).split('#')[0] + '#track-' + String(trackId);
+      var hrefWithoutHash = String(window.location.href).split('#')[0];
+      if (!includeUiParams) {
+        return hrefWithoutHash + '#track-' + String(trackId);
+      }
+      var base = hrefWithoutHash.split('?')[0];
+      var qs = '';
+      if (includeUiParams) {
+        var parts = [];
+        var pkeys = Object.keys(uiParams);
+        for (var pki = 0; pki < pkeys.length; pki++) {
+          var pk = pkeys[pki];
+          if (uiParams[pk] !== null && typeof uiParams[pk] !== 'undefined' && uiParams[pk] !== '') {
+            parts.push(encodeURIComponent(pk) + '=' + encodeURIComponent(String(uiParams[pk])));
+          }
+        }
+        if (parts.length) qs = '?' + parts.join('&');
+      }
+      return base + qs + '#track-' + String(trackId);
     }
   }
 
@@ -863,7 +952,8 @@
         });
     }
 
-    var pageUrl = shareUrlBaseWithHash(track.id);
+    var uiParams = cfg.galleryShareIncludeUiSettings ? collectShareUiParams(cfg) : null;
+    var pageUrl = shareUrlBaseWithHash(track.id, uiParams);
     var shareText = track.title + ' - Flyover GPX';
     var encodedUrl = encodeURIComponent(pageUrl);
     var encodedText = encodeURIComponent(shareText);

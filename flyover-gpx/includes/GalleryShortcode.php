@@ -164,11 +164,11 @@ final class GalleryShortcode
 
         return '<div id="' . \esc_attr($rootId) . '" class="fgpx-gallery" data-root-id="' . \esc_attr($rootId) . '"' . $themeAttr . '>'
             . '<div class="fgpx-gallery-toolbar">'
-                        . ($showSearch
-                                ? '<div class="fgpx-gallery-search-wrap">'
-                                        . '<input type="search" class="fgpx-gallery-search" placeholder="' . \esc_attr__('Search tracks (title, distance, duration, elevation, keywords)...', 'flyover-gpx') . '" aria-label="' . \esc_attr__('Search tracks', 'flyover-gpx') . '" />'
-                                    . '</div>'
-                                : '')
+            . ($showSearch
+                ? '<div class="fgpx-gallery-search-wrap">'
+                . '<input type="search" class="fgpx-gallery-search" placeholder="' . \esc_attr__('Search tracks (title, distance, duration, elevation, keywords)...', 'flyover-gpx') . '" aria-label="' . \esc_attr__('Search tracks', 'flyover-gpx') . '" />'
+                . '</div>'
+                : '')
             . '<div class="fgpx-gallery-controls">'
             . '<label class="fgpx-gallery-sort-label">'
             . '<span>' . \esc_html__('Sort', 'flyover-gpx') . '</span>'
@@ -182,9 +182,9 @@ final class GalleryShortcode
             . '</label>'
             . ($showViewToggle
                 ? '<div class="fgpx-gallery-view-toggle" role="group" aria-label="' . \esc_attr__('Gallery view', 'flyover-gpx') . '">'
-                    . '<button type="button" class="fgpx-gallery-view-btn is-active" data-view="grid" aria-pressed="true">' . \esc_html__('Grid', 'flyover-gpx') . '</button>'
-                    . '<button type="button" class="fgpx-gallery-view-btn" data-view="list" aria-pressed="false">' . \esc_html__('List', 'flyover-gpx') . '</button>'
-                  . '</div>'
+                . '<button type="button" class="fgpx-gallery-view-btn is-active" data-view="grid" aria-pressed="true">' . \esc_html__('Grid', 'flyover-gpx') . '</button>'
+                . '<button type="button" class="fgpx-gallery-view-btn" data-view="list" aria-pressed="false">' . \esc_html__('List', 'flyover-gpx') . '</button>'
+                . '</div>'
                 : '')
             . '</div>'
             . '</div>'
@@ -615,19 +615,19 @@ final class GalleryShortcode
             'simulationEnabled' => $options['fgpx_simulation_enabled'] === '1',
             'simulationWaypointsEnabled' => $options['fgpx_simulation_waypoints_enabled'] === '1',
             'simulationCitiesEnabled' => $options['fgpx_simulation_cities_enabled'] === '1',
-                    'failedLoad' => \esc_html__('Failed to load track:', 'flyover-gpx'),
-                    'noData' => \esc_html__('No route data available.', 'flyover-gpx'),
-                    'elevationLabel' => \esc_html__('Elevation (m)', 'flyover-gpx'),
-                    'simCelestialDayAria' => \esc_html__('Daytime indicator (sun)', 'flyover-gpx'),
-                    'simCelestialNightAria' => \esc_html__('Night indicator (moon)', 'flyover-gpx'),
-                    'simConditionIconsAria' => \esc_html__('Weather condition icons: fog, clouds, rain, snow, wind', 'flyover-gpx'),
-                    'simConditionIconsActivePrefix' => \esc_html__('Active weather icons', 'flyover-gpx'),
-                    'simConditionIconsClear' => \esc_html__('Clear conditions', 'flyover-gpx'),
-                    'simCondFog' => \esc_html__('Fog', 'flyover-gpx'),
-                    'simCondClouds' => \esc_html__('Clouds', 'flyover-gpx'),
-                    'simCondRain' => \esc_html__('Rain', 'flyover-gpx'),
-                    'simCondSnow' => \esc_html__('Snow', 'flyover-gpx'),
-                    'simCondWind' => \esc_html__('Wind', 'flyover-gpx'),
+            'failedLoad' => \esc_html__('Failed to load track:', 'flyover-gpx'),
+            'noData' => \esc_html__('No route data available.', 'flyover-gpx'),
+            'elevationLabel' => \esc_html__('Elevation (m)', 'flyover-gpx'),
+            'simCelestialDayAria' => \esc_html__('Daytime indicator (sun)', 'flyover-gpx'),
+            'simCelestialNightAria' => \esc_html__('Night indicator (moon)', 'flyover-gpx'),
+            'simConditionIconsAria' => \esc_html__('Weather condition icons: fog, clouds, rain, snow, wind', 'flyover-gpx'),
+            'simConditionIconsActivePrefix' => \esc_html__('Active weather icons', 'flyover-gpx'),
+            'simConditionIconsClear' => \esc_html__('Clear conditions', 'flyover-gpx'),
+            'simCondFog' => \esc_html__('Fog', 'flyover-gpx'),
+            'simCondClouds' => \esc_html__('Clouds', 'flyover-gpx'),
+            'simCondRain' => \esc_html__('Rain', 'flyover-gpx'),
+            'simCondSnow' => \esc_html__('Snow', 'flyover-gpx'),
+            'simCondWind' => \esc_html__('Wind', 'flyover-gpx'),
             'defaultZoom' => (int) $options['fgpx_default_zoom'],
             'defaultSpeed' => (int) $options['fgpx_default_speed'],
             'defaultPitch' => (int) $options['fgpx_default_pitch'],
@@ -700,6 +700,7 @@ final class GalleryShortcode
             'autoSpeedEnabled' => $options['fgpx_gallery_auto_speed_enabled'] === '1',
             'autoSpeedThresholdKm' => (float) $options['fgpx_gallery_auto_speed_threshold_km'],
             'autoSpeedValue' => (int) $options['fgpx_gallery_auto_speed_value'],
+            'galleryShareIncludeUiSettings' => ($options['fgpx_gallery_share_include_ui_settings'] ?? '0') === '1',
             'playerConfig' => $playerCfg,
             'playerStyles' => array_values(array_filter([
                 AssetManager::getAssetUrl('maplibre-gl-css', 'style'),

@@ -13,6 +13,16 @@
   --fgpx-color-progress: #ff5500;
   --fgpx-z-tooltip: 1050;
 }
+.fgpx.fgpx-maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  margin: 0;
+  padding: 8px;
+  background: var(--fgpx-card-bg, #fff);
+  height: 100vh;
+  width: 100vw;
+}
 .fgpx .fgpx-map {
   position: relative;
   width: 100%;
