@@ -658,10 +658,14 @@ def append_to_post(
     template_content: str,
     wp_path:          str,
     dry_run:          bool = False,
+    force:            bool = False,
 ) -> bool:
     """Append the filled template to a WordPress post.
 
     Returns True on success (or in dry-run mode), False on error.
+
+    Set force=True to bypass the idempotency guard (used by --force-append
+    and --replace-append).
 
     Post content is passed to WordPress via a temp file + wp_update_post()
     inside `wp eval-file` to avoid shell-quoting issues and argument-length
@@ -684,7 +688,7 @@ def append_to_post(
         return False
 
     # Idempotency guard: do not append the same rendered block twice.
-    if filled and filled in current:
+    if not force and filled and filled in current:
         print(f"    Skipping append for post {post_id}: rendered block already present.")
         return True
 
@@ -1009,6 +1013,9 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         ans = input().strip().lower() if not auto_yes else "y"
         if ans in ("", "y", "yes"):
             phase1_data = load_json_status(PHASE1_FILE)
+            if phase1_data is None:
+                print(f"Error: could not load '{PHASE1_FILE}'. Delete it and re-run from phase 1.", file=sys.stderr)
+                sys.exit(1)
             filtered = phase1_data["filtered"]
             all_tracks = phase1_data["all_tracks"]
             log(f"Resumed {len(filtered)} filtered tracks from {PHASE1_FILE}.")
@@ -1093,6 +1100,9 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         ans = input().strip().lower() if not auto_yes else "y"
         if ans in ("", "y", "yes"):
             phase2_data = load_json_status(PHASE2_FILE)
+            if phase2_data is None:
+                print(f"Error: could not load '{PHASE2_FILE}'. Delete it and re-run from phase 2.", file=sys.stderr)
+                sys.exit(1)
             mapping = phase2_data["mapping"]
             no_match = phase2_data["no_match"]
             log(f"Resumed {len(mapping)} mappings from {PHASE2_FILE}.")
@@ -1179,6 +1189,14 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
     # =========================================================================
     # PHASE 3 — Import GPX files & append template to posts
     # =========================================================================
+    if filtered is None or mapping is None:
+        print(
+            "Error: phase 3 requires valid phase 1 and 2 status files.\n"
+            "  Run without --phase first, or delete stale status files.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     log("PHASE 3 — Import & Append" + (" [DRY-RUN]" if dry_run else ""))
     _section(
         "PHASE 3 — Import & Append"
@@ -1193,7 +1211,8 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         print()
 
 
-    skip_all_already_imported = False
+    _skip_all_event = threading.Event()   # set when user chooses "skip-all"
+    _quit_requested = threading.Event()   # set when user chooses "quit"
     imported_ids_by_filename: Dict[str, int] = {}
 
     # Group mappings by GPX filename so each GPX is imported at most once,
@@ -1207,9 +1226,8 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
 
 
     def import_and_append_worker(gpx_name, entries, interactive=False):
-        nonlocal skip_all_already_imported
         first_entry = entries[0]
-        gpx_path = first_entry["filepath"]
+        gpx_path = Path(first_entry["filepath"])  # coerce: JSON round-trip yields str
 
         # Already-imported check (forced reimport logic)
         force_import = args.force_import
@@ -1219,7 +1237,7 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         existing_id: Optional[int] = find_imported_track(gpx_name, WP_PATH) if not dry_run else None
         action = None
         if existing_id is not None and not force_import:
-            if skip_all_already_imported:
+            if _skip_all_event.is_set():
                 with stats_lock:
                     stats["skipped"] += 1
                 return
@@ -1256,13 +1274,14 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
 
             if action == "quit":
                 print("  Quitting.")
-                os._exit(0)
+                _quit_requested.set()
+                return
             elif action == "skip":
                 with stats_lock:
                     stats["skipped"] += 1
                 return
             elif action == "skip-all":
-                skip_all_already_imported = True
+                _skip_all_event.set()
                 with stats_lock:
                     stats["skipped"] += 1
                 return
@@ -1283,36 +1302,15 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
             stats["imported"] += 1
 
         # Append template (forced/replace logic)
+        shortcode_tag = f'[flyover_gpx id="{track_id}"]' if not dry_run else '[flyover_gpx id="<NEW_TRACK_ID>"]'
         for entry in entries:
             post_id = entry["post_id"]
-            # Fetch current content for replace-append logic
-            current_content = _get_post_content(post_id, WP_PATH) if (replace_append or force_append) and not dry_run else None
-            filled = template_content.replace("{{fgpx_shortcode}}", f'[flyover_gpx id="{track_id}"]' if not dry_run else '[flyover_gpx id="<NEW_TRACK_ID>"]')
-            already_present = filled in current_content if current_content else False
-            replaced = False
-            if replace_append and current_content:
-                if already_present:
-                    # Replace the old block with the new one
-                    new_content = current_content.replace(filled, filled)
-                    replaced = True
-                    if dry_run:
-                        print(f"[DRY-RUN] Would replace template in post {post_id}.")
-                        continue
-                    # Actually update post content
-                    # (for safety, could add a backup or preview here)
-                    # ...existing code for updating post content...
-                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=False)
-                else:
-                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
-            elif force_append:
-                ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
-            else:
-                # Default: only append if not already present
-                if already_present:
-                    print(f"    Skipping append for post {post_id}: rendered block already present.")
-                    ok = True
-                else:
-                    ok = append_to_post(post_id, f'[flyover_gpx id="{track_id}"]', template_content, WP_PATH, dry_run=dry_run)
+            # force / replace-append: bypass the idempotency guard in append_to_post
+            bypass_guard = force_append or replace_append
+            ok = append_to_post(
+                post_id, shortcode_tag, template_content, WP_PATH,
+                dry_run=dry_run, force=bypass_guard,
+            )
             if ok:
                 with stats_lock:
                     stats["appended"] += 1
@@ -1325,7 +1323,12 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
     parallel_jobs = []
     for gpx_name, entries in mapping_by_filename.items():
         existing_id = find_imported_track(gpx_name, WP_PATH) if not dry_run else None
-        if existing_id is not None and duplicate_action is None and not args.non_interactive:
+        if (
+            existing_id is not None
+            and not args.force_import
+            and duplicate_action is None
+            and not args.non_interactive
+        ):
             interactive_jobs.append((gpx_name, entries))
         else:
             parallel_jobs.append((gpx_name, entries))
@@ -1339,9 +1342,14 @@ def main() -> None:  # noqa: C901  (complexity is inherent in the interactive fl
         for _ in tqdm(as_completed(futures), total=len(futures), desc="Importing/Appending"):
             pass
 
-    # Run interactive jobs sequentially with progress bar
+    if _quit_requested.is_set():
+        sys.exit(0)
+
+    # Run interactive jobs sequentially (main thread — safe to prompt)
     for g, e in tqdm(interactive_jobs, desc="Interactive duplicates"):
         import_and_append_worker(g, e, True)
+        if _quit_requested.is_set():
+            sys.exit(0)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     _section("SUMMARY")
