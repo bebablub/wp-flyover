@@ -24,7 +24,15 @@
   // Debug logger — provided by dbg.js (loaded before front.js).
   // Fallback no-op keeps front.js safe if dbg.js is missing (e.g. unit tests).
   var _noop = function () {};
-  var _noopDBG = { isEnabled: function () { return false; }, log: _noop, warn: _noop, time: _noop, timeEnd: _noop };
+  var _noopDBG = {
+    isEnabled: function () {
+      return false;
+    },
+    log: _noop,
+    warn: _noop,
+    time: _noop,
+    timeEnd: _noop,
+  };
   var DBG = window.DBG || _noopDBG;
 
   DBG.log('Front.js initialization started');
@@ -39,7 +47,6 @@
     dbgState[key] = now;
     return true;
   }
-
 
   // VideoRecorder — provided by video-recorder.js (loaded before front.js).
   // Fallback null keeps code safe if video recorder is missing.
@@ -2573,13 +2580,26 @@
       var progressiveSmoothedGradients = null;
       var progressiveBaseColor = (window.FGPX && FGPX.elevationColorFlat) || '#ff5500';
       var progressiveSteepColor = (window.FGPX && FGPX.elevationColorSteep) || '#ff0000';
-      var progressiveSegmentCounter = 0;
       var SEGMENT_POOL_SIZE = 20;
       var segmentPoolReady = false;
 
       if (elevationColoringEnabled && coords.length > 1) {
         progressiveGradients = calculateGradients(coords, cumDist);
         progressiveSmoothedGradients = smoothGradients(progressiveGradients, 5);
+        // Pre-size the segment pool for this track so steep/rolling routes do not
+        // truncate late progressive segments when gradient buckets change often.
+        try {
+          var previewCoords = coords.map(function (c) {
+            return [c[0], c[1]];
+          });
+          var previewSegments = createProgressiveSegments(previewCoords, 0);
+          if (Array.isArray(previewSegments) && previewSegments.length > 0) {
+            SEGMENT_POOL_SIZE = Math.max(
+              SEGMENT_POOL_SIZE,
+              Math.min(80, previewSegments.length + 5)
+            );
+          }
+        } catch (_) {}
       }
 
       // Pre-allocate a fixed pool of segment sources/layers at init.
@@ -4485,7 +4505,10 @@
       function getLoadedCityCount() {
         var total = 0;
         for (var key in cityChunks) {
-          if (Object.prototype.hasOwnProperty.call(cityChunks, key) && Array.isArray(cityChunks[key])) {
+          if (
+            Object.prototype.hasOwnProperty.call(cityChunks, key) &&
+            Array.isArray(cityChunks[key])
+          ) {
             total += cityChunks[key].length;
           }
         }
@@ -4572,7 +4595,10 @@
             typeof performance !== 'undefined' && typeof performance.now === 'function'
               ? performance.now()
               : Date.now();
-          if (cityChunkGeneration !== loadGeneration || cityChunkLoading[chunkId] !== loadGeneration) {
+          if (
+            cityChunkGeneration !== loadGeneration ||
+            cityChunkLoading[chunkId] !== loadGeneration
+          ) {
             return;
           }
 
@@ -4626,7 +4652,11 @@
               if (!feat || !feat.geometry || feat.geometry.type !== 'Point') continue;
               var props = feat.properties || {};
               var rawClass = (
-                props['class'] || props['type'] || props['place'] || props['kind'] || ''
+                props['class'] ||
+                props['type'] ||
+                props['place'] ||
+                props['kind'] ||
+                ''
               )
                 .toString()
                 .toLowerCase();
@@ -4650,7 +4680,10 @@
 
               // Fast guard: skip labels that are far from current camera center.
               if (mapCenter && isFinite(Number(mapCenter.lng)) && isFinite(Number(mapCenter.lat))) {
-                var distFromCenter = haversineMeters([mapCenter.lng, mapCenter.lat], [featLon, featLat]);
+                var distFromCenter = haversineMeters(
+                  [mapCenter.lng, mapCenter.lat],
+                  [featLon, featLat]
+                );
                 if (!isFinite(distFromCenter) || distFromCenter > 15000) continue;
               }
 
@@ -5488,12 +5521,20 @@
               inner.style.transform = 'scale(1)';
             });
             // Mirror hover scale for touch devices
-            el.addEventListener('touchstart', function () {
-              inner.style.transform = 'scale(1.8)';
-            }, { passive: true });
-            el.addEventListener('touchend', function () {
-              inner.style.transform = 'scale(1)';
-            }, { passive: true });
+            el.addEventListener(
+              'touchstart',
+              function () {
+                inner.style.transform = 'scale(1.8)';
+              },
+              { passive: true }
+            );
+            el.addEventListener(
+              'touchend',
+              function () {
+                inner.style.transform = 'scale(1)';
+              },
+              { passive: true }
+            );
             el.addEventListener('click', function (e) {
               e.preventDefault();
               e.stopPropagation();
@@ -6127,9 +6168,11 @@
               demTpls.forEach(function (tpl) {
                 var opt = { mode: 'cors', cache: 'force-cache' };
                 if (demController) opt.signal = demController.signal;
-                reqs.push(fetch(tileUrlFromTemplate(tpl, zt, xt, yt), opt).catch(function (err) {
-                  DBG.log('DEM prefetch tile failed (non-critical):', err && err.message);
-                }));
+                reqs.push(
+                  fetch(tileUrlFromTemplate(tpl, zt, xt, yt), opt).catch(function (err) {
+                    DBG.log('DEM prefetch tile failed (non-critical):', err && err.message);
+                  })
+                );
               });
             } catch (_) {}
           });
@@ -6176,7 +6219,6 @@
           videoRecorder.captureFrame(performance.now());
         } catch (_) {}
       }
-
 
       // Dynamic viewport edge prefetcher (5–10 Hz), rotation-aware
       var vpLastPrefetch = 0; // seconds
@@ -7342,13 +7384,14 @@
       try {
         var _ovBounds = innerBoundsRef || fullBoundsRef;
         if (typeof map.cameraForBounds === 'function' && _ovBounds) {
-          var _ovDefaultPitch = window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
+          var _ovDefaultPitch =
+            window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
           var _ovCam = map.cameraForBounds(_ovBounds, { padding: 40 });
           if (_ovCam && isFinite(Number(_ovCam.zoom))) {
             overviewCameraState = {
               center: _ovCam.center,
               zoom: Number(_ovCam.zoom),
-              pitch: 0,   // end animation always targets flat top-down view
+              pitch: 0, // end animation always targets flat top-down view
               bearing: 0,
             };
             DBG.log('[FGPX end-zoom] overviewCameraState captured', overviewCameraState);
@@ -9546,7 +9589,10 @@
           conditionIcons = cinemaEl.querySelector('.fgpx-weather-conditions-icons');
           els.conditionIcons = conditionIcons;
         }
-        setTextIfChanged(conditionIcons, activeIcons.length > 0 ? activeIcons.join(' ') : '\u2600\uFE0F');
+        setTextIfChanged(
+          conditionIcons,
+          activeIcons.length > 0 ? activeIcons.join(' ') : '\u2600\uFE0F'
+        );
         var activeIconsPrefix = simI18N.simConditionIconsActivePrefix || 'Active weather icons';
         var conditionTooltip =
           activeConditionLabels.length > 0
@@ -9927,88 +9973,90 @@
                   : Date.now();
               cinemaEl._lastPoiRenderTs = now;
               cinemaEl._lastPoiRenderDistance = distanceNowMeters;
-            var poisInWindow = getCinemaWaypointsNear(distanceNowMeters);
-            var poiTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
-            var renderedPoiCount = 0;
+              var poisInWindow = getCinemaWaypointsNear(distanceNowMeters);
+              var poiTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+              var renderedPoiCount = 0;
 
-            // Remove all existing POI markers
-            while (poiContainerEl.firstChild) {
-              poiContainerEl.removeChild(poiContainerEl.firstChild);
-            }
+              // Remove all existing POI markers
+              while (poiContainerEl.firstChild) {
+                poiContainerEl.removeChild(poiContainerEl.firstChild);
+              }
 
-            if (Array.isArray(waypoints) && waypoints.length === 0) {
-              var poiEmptyEl2 = document.createElement('div');
-              poiEmptyEl2.className = 'fgpx-weather-poi-empty';
-              poiEmptyEl2.textContent = 'No GPX waypoints in this track';
-              poiContainerEl.appendChild(poiEmptyEl2);
-            }
+              if (Array.isArray(waypoints) && waypoints.length === 0) {
+                var poiEmptyEl2 = document.createElement('div');
+                poiEmptyEl2.className = 'fgpx-weather-poi-empty';
+                poiEmptyEl2.textContent = 'No GPX waypoints in this track';
+                poiContainerEl.appendChild(poiEmptyEl2);
+              }
 
-            if (poiTrackWidth > 0 && Array.isArray(poisInWindow) && poisInWindow.length > 0) {
-              var poiVisibleKm = Math.max(2, (simulationWaypointWindowMeters / 1000) * 2);
-              var poiPxPerKm = poiTrackWidth / poiVisibleKm;
-              var rulerOffset = mileageRulerEl.offsetLeft || 0;
+              if (poiTrackWidth > 0 && Array.isArray(poisInWindow) && poisInWindow.length > 0) {
+                var poiVisibleKm = Math.max(2, (simulationWaypointWindowMeters / 1000) * 2);
+                var poiPxPerKm = poiTrackWidth / poiVisibleKm;
+                var rulerOffset = mileageRulerEl.offsetLeft || 0;
 
-              for (var poiIdx = 0; poiIdx < poisInWindow.length; poiIdx++) {
-                var poi = poisInWindow[poiIdx];
-                if (!poi || typeof poi !== 'object') continue;
-                var poiLeft =
-                  poiTrackWidth / 2 +
-                  ((poi.distanceMeters - distanceNowMeters) / 1000) * poiPxPerKm;
+                for (var poiIdx = 0; poiIdx < poisInWindow.length; poiIdx++) {
+                  var poi = poisInWindow[poiIdx];
+                  if (!poi || typeof poi !== 'object') continue;
+                  var poiLeft =
+                    poiTrackWidth / 2 +
+                    ((poi.distanceMeters - distanceNowMeters) / 1000) * poiPxPerKm;
 
-                if (poiLeft >= -18 && poiLeft <= poiTrackWidth + 18) {
-                  var poiMarkerEl = document.createElement('div');
-                  poiMarkerEl.className = 'fgpx-weather-poi-marker';
-                  poiMarkerEl.style.left = String(Math.round(rulerOffset + poiLeft)) + 'px';
-                  poiMarkerEl.style.display = 'block';
+                  if (poiLeft >= -18 && poiLeft <= poiTrackWidth + 18) {
+                    var poiMarkerEl = document.createElement('div');
+                    poiMarkerEl.className = 'fgpx-weather-poi-marker';
+                    poiMarkerEl.style.left = String(Math.round(rulerOffset + poiLeft)) + 'px';
+                    poiMarkerEl.style.display = 'block';
 
-                  var poiDistanceFromNow = Math.abs(
-                    (Number(poi.distanceMeters) || 0) - (Number(distanceNowMeters) || 0)
-                  );
-                  var poiDistanceNorm =
-                    simulationWaypointWindowMeters > 0
-                      ? Math.min(1, poiDistanceFromNow / simulationWaypointWindowMeters)
-                      : 1;
-                  // Keep a strong minimum visibility while still emphasizing nearby POIs.
-                  var poiOccupancy = Math.max(0.5, 1 - poiDistanceNorm * 0.5);
+                    var poiDistanceFromNow = Math.abs(
+                      (Number(poi.distanceMeters) || 0) - (Number(distanceNowMeters) || 0)
+                    );
+                    var poiDistanceNorm =
+                      simulationWaypointWindowMeters > 0
+                        ? Math.min(1, poiDistanceFromNow / simulationWaypointWindowMeters)
+                        : 1;
+                    // Keep a strong minimum visibility while still emphasizing nearby POIs.
+                    var poiOccupancy = Math.max(0.5, 1 - poiDistanceNorm * 0.5);
 
-                  var poiMarkerLine = document.createElement('div');
-                  poiMarkerLine.className = 'fgpx-weather-poi-marker-line';
-                  poiMarkerLine.style.opacity = String(
-                    Math.max(0.42, Math.min(0.82, poiOccupancy * 0.78))
-                  );
+                    var poiMarkerLine = document.createElement('div');
+                    poiMarkerLine.className = 'fgpx-weather-poi-marker-line';
+                    poiMarkerLine.style.opacity = String(
+                      Math.max(0.42, Math.min(0.82, poiOccupancy * 0.78))
+                    );
 
-                  var poiMarkerLabel = document.createElement('div');
-                  poiMarkerLabel.className = 'fgpx-weather-poi-marker-label';
-                  var poiName = (poi.label || 'POI').toString();
-                  poiName = poiName.length > 15 ? poiName.substring(0, 15) + '...' : poiName;
-                  poiMarkerLabel.textContent = '\ud83d\udccd ' + poiName;
-                  poiMarkerLabel.style.opacity = String(Math.max(0.45, Math.min(1, poiOccupancy)));
+                    var poiMarkerLabel = document.createElement('div');
+                    poiMarkerLabel.className = 'fgpx-weather-poi-marker-label';
+                    var poiName = (poi.label || 'POI').toString();
+                    poiName = poiName.length > 15 ? poiName.substring(0, 15) + '...' : poiName;
+                    poiMarkerLabel.textContent = '\ud83d\udccd ' + poiName;
+                    poiMarkerLabel.style.opacity = String(
+                      Math.max(0.45, Math.min(1, poiOccupancy))
+                    );
 
-                  poiMarkerEl.style.opacity = String(poiOccupancy);
+                    poiMarkerEl.style.opacity = String(poiOccupancy);
 
-                  poiMarkerEl.appendChild(poiMarkerLine);
-                  poiMarkerEl.appendChild(poiMarkerLabel);
-                  poiContainerEl.appendChild(poiMarkerEl);
-                  renderedPoiCount++;
+                    poiMarkerEl.appendChild(poiMarkerLine);
+                    poiMarkerEl.appendChild(poiMarkerLabel);
+                    poiContainerEl.appendChild(poiMarkerEl);
+                    renderedPoiCount++;
+                  }
                 }
               }
-            }
-            if (dbgAllow('poi-render-loop', 2000)) {
-              DBG.log('POI render state', {
-                totalWaypoints: Array.isArray(waypoints) ? waypoints.length : 0,
-                inWindow: Array.isArray(poisInWindow) ? poisInWindow.length : 0,
-                rendered: renderedPoiCount,
-                windowKm: simulationWaypointWindowMeters / 1000,
-                currentDistanceMeters: Number(distanceNowMeters) || 0,
-                trackWidthPx: poiTrackWidth,
-              });
-            }
-            perfPoiRendered = renderedPoiCount;
-            perfPoiWindow = Array.isArray(poisInWindow) ? poisInWindow.length : 0;
-            perfPoiMs =
-              (typeof performance !== 'undefined' && typeof performance.now === 'function'
-                ? performance.now()
-                : Date.now()) - poiPerfStart;
+              if (dbgAllow('poi-render-loop', 2000)) {
+                DBG.log('POI render state', {
+                  totalWaypoints: Array.isArray(waypoints) ? waypoints.length : 0,
+                  inWindow: Array.isArray(poisInWindow) ? poisInWindow.length : 0,
+                  rendered: renderedPoiCount,
+                  windowKm: simulationWaypointWindowMeters / 1000,
+                  currentDistanceMeters: Number(distanceNowMeters) || 0,
+                  trackWidthPx: poiTrackWidth,
+                });
+              }
+              perfPoiRendered = renderedPoiCount;
+              perfPoiWindow = Array.isArray(poisInWindow) ? poisInWindow.length : 0;
+              perfPoiMs =
+                (typeof performance !== 'undefined' && typeof performance.now === 'function'
+                  ? performance.now()
+                  : Date.now()) - poiPerfStart;
             }
           }
         }
@@ -10041,64 +10089,68 @@
                   : Date.now();
               cinemaEl._lastCityRenderTs = now;
               cinemaEl._lastCityRenderDistance = distanceNowMeters;
-            var citiesInWindow = getCinemaCitiesNear(distanceNowMeters);
-            var cityTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
-            var renderedCityCount = 0;
+              var citiesInWindow = getCinemaCitiesNear(distanceNowMeters);
+              var cityTrackWidth = mileageTrackEl.clientWidth || mileageTrackEl.offsetWidth || 0;
+              var renderedCityCount = 0;
 
-            // Remove all existing city markers
-            while (citiesContainerEl.firstChild) {
-              citiesContainerEl.removeChild(citiesContainerEl.firstChild);
-            }
+              // Remove all existing city markers
+              while (citiesContainerEl.firstChild) {
+                citiesContainerEl.removeChild(citiesContainerEl.firstChild);
+              }
 
-            if (cityTrackWidth > 0 && Array.isArray(citiesInWindow) && citiesInWindow.length > 0) {
-              var cityVisibleKm = Math.max(2, (simulationCityWindowMeters / 1000) * 2);
-              var cityPxPerKm = cityTrackWidth / cityVisibleKm;
-              var rulerOffset = mileageRulerEl.offsetLeft || 0;
+              if (
+                cityTrackWidth > 0 &&
+                Array.isArray(citiesInWindow) &&
+                citiesInWindow.length > 0
+              ) {
+                var cityVisibleKm = Math.max(2, (simulationCityWindowMeters / 1000) * 2);
+                var cityPxPerKm = cityTrackWidth / cityVisibleKm;
+                var rulerOffset = mileageRulerEl.offsetLeft || 0;
 
-              for (var cityIdx = 0; cityIdx < citiesInWindow.length; cityIdx++) {
-                var city = citiesInWindow[cityIdx];
-                var cityLeft =
-                  cityTrackWidth / 2 +
-                  ((city.distanceMeters - distanceNowMeters) / 1000) * cityPxPerKm;
+                for (var cityIdx = 0; cityIdx < citiesInWindow.length; cityIdx++) {
+                  var city = citiesInWindow[cityIdx];
+                  var cityLeft =
+                    cityTrackWidth / 2 +
+                    ((city.distanceMeters - distanceNowMeters) / 1000) * cityPxPerKm;
 
-                if (cityLeft >= -18 && cityLeft <= cityTrackWidth + 18) {
-                  var cityMarkerEl = document.createElement('div');
-                  cityMarkerEl.className = 'fgpx-weather-city-marker';
-                  cityMarkerEl.style.left = String(Math.round(rulerOffset + cityLeft)) + 'px';
-                  cityMarkerEl.style.display = 'block';
+                  if (cityLeft >= -18 && cityLeft <= cityTrackWidth + 18) {
+                    var cityMarkerEl = document.createElement('div');
+                    cityMarkerEl.className = 'fgpx-weather-city-marker';
+                    cityMarkerEl.style.left = String(Math.round(rulerOffset + cityLeft)) + 'px';
+                    cityMarkerEl.style.display = 'block';
 
-                  var cityMarkerLine = document.createElement('div');
-                  cityMarkerLine.className = 'fgpx-weather-city-marker-line';
+                    var cityMarkerLine = document.createElement('div');
+                    cityMarkerLine.className = 'fgpx-weather-city-marker-line';
 
-                  var cityMarkerLabel = document.createElement('div');
-                  cityMarkerLabel.className = 'fgpx-weather-city-marker-label';
-                  var cityName =
-                    city.name.length > 12 ? city.name.substring(0, 12) + '...' : city.name;
-                  cityMarkerLabel.textContent = '🏙 ' + cityName;
+                    var cityMarkerLabel = document.createElement('div');
+                    cityMarkerLabel.className = 'fgpx-weather-city-marker-label';
+                    var cityName =
+                      city.name.length > 12 ? city.name.substring(0, 12) + '...' : city.name;
+                    cityMarkerLabel.textContent = '🏙 ' + cityName;
 
-                  cityMarkerEl.appendChild(cityMarkerLine);
-                  cityMarkerEl.appendChild(cityMarkerLabel);
-                  citiesContainerEl.appendChild(cityMarkerEl);
-                  renderedCityCount++;
+                    cityMarkerEl.appendChild(cityMarkerLine);
+                    cityMarkerEl.appendChild(cityMarkerLabel);
+                    citiesContainerEl.appendChild(cityMarkerEl);
+                    renderedCityCount++;
+                  }
                 }
               }
-            }
-            if (dbgAllow('city-render-loop', 2000)) {
-              DBG.log('City render state', {
-                totalCities: getLoadedCityCount(),
-                inWindow: Array.isArray(citiesInWindow) ? citiesInWindow.length : 0,
-                rendered: renderedCityCount,
-                windowKm: simulationCityWindowMeters / 1000,
-                currentDistanceMeters: Number(distanceNowMeters) || 0,
-                trackWidthPx: cityTrackWidth,
-              });
-            }
-            perfCityRendered = renderedCityCount;
-            perfCityWindow = Array.isArray(citiesInWindow) ? citiesInWindow.length : 0;
-            perfCityMs =
-              (typeof performance !== 'undefined' && typeof performance.now === 'function'
-                ? performance.now()
-                : Date.now()) - cityPerfStart;
+              if (dbgAllow('city-render-loop', 2000)) {
+                DBG.log('City render state', {
+                  totalCities: getLoadedCityCount(),
+                  inWindow: Array.isArray(citiesInWindow) ? citiesInWindow.length : 0,
+                  rendered: renderedCityCount,
+                  windowKm: simulationCityWindowMeters / 1000,
+                  currentDistanceMeters: Number(distanceNowMeters) || 0,
+                  trackWidthPx: cityTrackWidth,
+                });
+              }
+              perfCityRendered = renderedCityCount;
+              perfCityWindow = Array.isArray(citiesInWindow) ? citiesInWindow.length : 0;
+              perfCityMs =
+                (typeof performance !== 'undefined' && typeof performance.now === 'function'
+                  ? performance.now()
+                  : Date.now()) - cityPerfStart;
             }
           }
         }
@@ -12092,7 +12144,8 @@
             });
 
             // Show pointer cursor when hovering the chart area (indicates click-to-seek)
-            var _cursorLastX = -1, _cursorLastY = -1;
+            var _cursorLastX = -1,
+              _cursorLastY = -1;
             canvas.addEventListener('mousemove', function (e) {
               if (state.isSelecting) return; // crosshair already set during drag
               var rect = canvas.getBoundingClientRect();
@@ -12849,16 +12902,21 @@
           var p = Math.max(0, Math.min(85, Number(pitchDeg) || 0));
           if (p < 5) return markerPos.slice(0, 2);
           var pitchRad = (p * Math.PI) / 180;
-          var viewportHeightPx = ui && ui.mapEl && ui.mapEl.clientHeight ? ui.mapEl.clientHeight : 720;
+          var viewportHeightPx =
+            ui && ui.mapEl && ui.mapEl.clientHeight ? ui.mapEl.clientHeight : 720;
           var offsetPx = viewportHeightPx * 0.055;
           var offsetMeters = offsetPx / Math.tan(pitchRad);
           var markerLat = markerPos[1] || 0;
           var latRad = (markerLat * Math.PI) / 180;
           var cosLat = Math.cos(latRad);
-          var metersPerPixel = (40075000 / Math.pow(2, zoomLevel + 8)) / Math.max(0.1, cosLat);
+          var metersPerPixel = 40075000 / Math.pow(2, zoomLevel + 8) / Math.max(0.1, cosLat);
           var offsetDistanceMeters = offsetMeters * metersPerPixel;
           var forwardBearing = normalizeAngle(Number(bearing));
-          var correctedPos = offsetPositionByBearing(markerPos, forwardBearing, offsetDistanceMeters);
+          var correctedPos = offsetPositionByBearing(
+            markerPos,
+            forwardBearing,
+            offsetDistanceMeters
+          );
           return correctedPos.slice(0, 2);
         } catch (_) {
           return markerPos.slice(0, 2);
@@ -12927,7 +12985,8 @@
           var markerPos = positionAtDistance(dNow);
           var targetCenter = cameraTargetAtDistance(dNow, 0.4);
           var startBearing = targetBearingAtDistance(dNow);
-          var targetPitch = window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
+          var targetPitch =
+            window.FGPX && isFinite(Number(FGPX.defaultPitch)) ? Number(FGPX.defaultPitch) : 30;
           var perspectiveCorrectedCenter = computePerspectiveCorrectedZoomTarget(
             markerPos,
             startBearing,
@@ -13076,10 +13135,13 @@
                 function onMapSettled() {
                   if (shouldRunStartupCountdown()) {
                     var countdownSeconds = STARTUP_COUNTDOWN_SECONDS;
-                    
+
                     runStartupCountdown(countdownSeconds)
                       .then(function () {
-                        if (startupZoomTargetState && Array.isArray(startupZoomTargetState.center)) {
+                        if (
+                          startupZoomTargetState &&
+                          Array.isArray(startupZoomTargetState.center)
+                        ) {
                           cameraCenter[0] = startupZoomTargetState.center[0];
                           cameraCenter[1] = startupZoomTargetState.center[1];
                           startupZoomTargetState = null;
@@ -13922,14 +13984,6 @@
               for (var trackIdx = 0; trackIdx < usedCount; trackIdx++) {
                 progressSegments.push(trackIdx);
               }
-
-              // Hide the single-color progressive route (only toggle once)
-              if (progressLineVisible !== false) {
-                try {
-                  map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'none');
-                } catch (_) {}
-                progressLineVisible = false;
-              }
             } else {
               // Use single-color progressive route — clear pool slots
               if (segmentPoolReady) {
@@ -14118,54 +14172,54 @@
               if (prefetchBackoffUntilMs > nowPrefetchMs || inPlaybackWarmup) {
                 // Skip expensive prefetch during initial playback warmup or temporary backoff.
               } else {
-              vpLastPrefetch += lastFrameDt || 0.016;
-              var extra = bearingDeltaAbs > 1.0;
-              var terrainPrefetchInterval = extra ? 0.24 : 0.34;
-              var flatPrefetchInterval = extra ? 0.1 : 0.18;
-              if (!extra) {
-                var zoomDelta = 0;
-                try {
-                  zoomDelta = Math.abs((map.getZoom ? map.getZoom() : defaultZoom) - zoomNow);
-                } catch (_) {
-                  zoomDelta = 0;
+                vpLastPrefetch += lastFrameDt || 0.016;
+                var extra = bearingDeltaAbs > 1.0;
+                var terrainPrefetchInterval = extra ? 0.24 : 0.34;
+                var flatPrefetchInterval = extra ? 0.1 : 0.18;
+                if (!extra) {
+                  var zoomDelta = 0;
+                  try {
+                    zoomDelta = Math.abs((map.getZoom ? map.getZoom() : defaultZoom) - zoomNow);
+                  } catch (_) {
+                    zoomDelta = 0;
+                  }
+                  if (zoomDelta < 0.05) {
+                    terrainPrefetchInterval = 0.5;
+                    flatPrefetchInterval = 0.5;
+                  }
                 }
-                if (zoomDelta < 0.05) {
-                  terrainPrefetchInterval = 0.5;
-                  flatPrefetchInterval = 0.5;
-                }
-              }
-              var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
-              if (vpLastPrefetch >= prefetchInterval) {
-                // Widen bearing margin: prefetch with bearing + 15° lookahead to cover
-                // tiles that upcoming bearing changes will expose (reduces terrain flickering).
-                var prefetchBearing = bearing;
-                if (targetBearingSmooth != null) {
-                  var bearingLookahead = shortestAngleDelta(bearing, targetBearingSmooth) * 0.5;
-                  prefetchBearing = normalizeAngle(
-                    bearing +
-                      bearingLookahead +
-                      (bearingDeltaAbs > 0.5 ? Math.sign(bearingLookahead) * 15 : 0)
+                var prefetchInterval = hasTerrain ? terrainPrefetchInterval : flatPrefetchInterval;
+                if (vpLastPrefetch >= prefetchInterval) {
+                  // Widen bearing margin: prefetch with bearing + 15° lookahead to cover
+                  // tiles that upcoming bearing changes will expose (reduces terrain flickering).
+                  var prefetchBearing = bearing;
+                  if (targetBearingSmooth != null) {
+                    var bearingLookahead = shortestAngleDelta(bearing, targetBearingSmooth) * 0.5;
+                    prefetchBearing = normalizeAngle(
+                      bearing +
+                        bearingLookahead +
+                        (bearingDeltaAbs > 0.5 ? Math.sign(bearingLookahead) * 15 : 0)
+                    );
+                  }
+                  prefetchViewportTiles(
+                    extra ? (hasTerrain ? 0.25 : 0.35) : hasTerrain ? 0.2 : 0.25,
+                    hasTerrain ? false : extra,
+                    prefetchBearing
                   );
+                  vpLastPrefetch = 0;
                 }
-                prefetchViewportTiles(
-                  extra ? (hasTerrain ? 0.25 : 0.35) : hasTerrain ? 0.2 : 0.25,
-                  hasTerrain ? false : extra,
-                  prefetchBearing
-                );
-                vpLastPrefetch = 0;
-              }
-              // Forward-direction prefetch along the route (~1 Hz): warms tiles 500-1000m ahead
-              // at current zoom + 1 so high-speed playback sees sharp tiles instead of stretched parents.
-              forwardPrefetchCooldown += lastFrameDt || 0.016;
-              if (forwardPrefetchCooldown >= 1.0) {
-                forwardPrefetchCooldown = 0;
-                try {
-                  prefetchForwardRoute(d, speed);
-                } catch (_) {}
-              }
-              if (typeof map.setPrefetchZoomDelta === 'function') {
-                map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : hasTerrain ? 4 : 4);
-              }
+                // Forward-direction prefetch along the route (~1 Hz): warms tiles 500-1000m ahead
+                // at current zoom + 1 so high-speed playback sees sharp tiles instead of stretched parents.
+                forwardPrefetchCooldown += lastFrameDt || 0.016;
+                if (forwardPrefetchCooldown >= 1.0) {
+                  forwardPrefetchCooldown = 0;
+                  try {
+                    prefetchForwardRoute(d, speed);
+                  } catch (_) {}
+                }
+                if (typeof map.setPrefetchZoomDelta === 'function') {
+                  map.setPrefetchZoomDelta(extra ? (hasTerrain ? 5 : 5) : hasTerrain ? 4 : 4);
+                }
               }
             }
           }
@@ -14654,7 +14708,12 @@
         if (!endReached) {
           scheduleRaf();
         } else {
-          console.log('[FGPX end-zoom] track ended — reachedPrivacyEnd:', reachedPrivacyEnd, 'progress:', progress);
+          console.log(
+            '[FGPX end-zoom] track ended — reachedPrivacyEnd:',
+            reachedPrivacyEnd,
+            'progress:',
+            progress
+          );
           setPlaying(false);
           var shouldStopRecordingAfterEndZoom = !!(isRecording && videoRecorder);
           // At end handoff, prefetch once to warm tiles at overview zoom.
@@ -14713,7 +14772,10 @@
             endTransitionStarted = true;
             // Stop idle sway FIRST — its RAF calls jumpTo() every frame which cancels any easeTo.
             stopIdleSway();
-            console.log('[FGPX end-zoom] doEndZoomOut called, overviewCameraState:', overviewCameraState);
+            console.log(
+              '[FGPX end-zoom] doEndZoomOut called, overviewCameraState:',
+              overviewCameraState
+            );
             try {
               // Prefer the pre-computed overview state captured at map load.
               // Fall back to a fresh cameraForBounds call if not available.
@@ -14725,7 +14787,12 @@
                     ? map.cameraForBounds(targetBounds, { padding: 40 })
                     : null;
                 if (camFallback && isFinite(Number(camFallback.zoom))) {
-                  ov = { center: camFallback.center, zoom: Number(camFallback.zoom), pitch: 0, bearing: 0 };
+                  ov = {
+                    center: camFallback.center,
+                    zoom: Number(camFallback.zoom),
+                    pitch: 0,
+                    bearing: 0,
+                  };
                 }
               }
               if (ov) {
@@ -14742,7 +14809,13 @@
                 // At zoom ~9 the viewport covers ~700–900 km, so the whole route fits in frame
                 // without any panning needed. Keeping center fixed means the end-of-track marker
                 // stays anchored on screen while the map zooms out around it.
-                console.log('[FGPX end-zoom] easeTo target:', { zoom: ov.zoom, fromZoom: zoomNow, fromPitch: pitchNow, bearingNow: bearingNow, duration: END_ZOOMOUT_DURATION });
+                console.log('[FGPX end-zoom] easeTo target:', {
+                  zoom: ov.zoom,
+                  fromZoom: zoomNow,
+                  fromPitch: pitchNow,
+                  bearingNow: bearingNow,
+                  duration: END_ZOOMOUT_DURATION,
+                });
                 stopRecordingAfterEndZoom(END_ZOOMOUT_DURATION);
                 map.easeTo({
                   zoom: ov.zoom,
@@ -16163,18 +16236,6 @@
         setProgressBar(progress);
         DBG.log('=== SEEKING: About to call updateVisuals with progress:', progress);
         updateVisuals(progress);
-
-        // CRITICAL: Ensure progress line is visible and has correct color after seek
-        try {
-          if (map.getLayer('fgpx-route-progress-line')) {
-            map.setLayoutProperty('fgpx-route-progress-line', 'visibility', 'visible');
-            var progressColor =
-              (window.FGPX && FGPX.elevationColorFlat) ||
-              (window.FGPX && FGPX.chartColor) ||
-              '#ff5500';
-            map.setPaintProperty('fgpx-route-progress-line', 'line-color', progressColor);
-          }
-        } catch (_) {}
 
         try {
           // Move camera immediately to marker
