@@ -26,10 +26,10 @@ final class RestCoreBehaviorTest extends TestCase
         $source = (string) file_get_contents($restFile);
 
         // Should NOT use $_REQUEST anymore
-        $this->assertStringNotContainsString("\$id    = (int) (\$_REQUEST['id'] ?? 0);", $source, 'Should not use $_REQUEST for id');
+        $this->assertStringNotContainsString("\$id = (int) (\$_REQUEST['id'] ?? 0);", $source, 'Should not use $_REQUEST for id');
         $this->assertStringNotContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source, 'Should not use $_REQUEST for nonce');
         // Should use $_POST
-        $this->assertStringContainsString("\$id    = (int) (\$_POST['id'] ?? 0);", $source);
+        $this->assertStringContainsString("\$id = (int) (\$_POST['id'] ?? 0);", $source);
         $this->assertStringContainsString("\$nonce = (string) (\$_POST['nonce'] ?? '');", $source);
     }
 

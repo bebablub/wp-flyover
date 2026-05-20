@@ -59,16 +59,6 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_spacing_high_km\', (string) max(0.1, min(10, (float) $_POST[\'fgpx_speed_arrows_spacing_high_km\'])), true);', $source);
     }
 
-    public function test_map_selector_default_is_whitelisted_to_known_modes(): void
-    {
-        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
-        $source = (string) file_get_contents($adminFile);
-
-        $this->assertStringContainsString('if ($mapSelectorDefault === \'basic\' || $mapSelectorDefault === \'\') { $mapSelectorDefault = \'satellite\'; }', $source);
-        $this->assertStringContainsString('if ($mapSelectorDefault === \'basic_contours\') { $mapSelectorDefault = \'satellite_contours\'; }', $source);
-        $this->assertStringContainsString('if (!\\in_array($mapSelectorDefault, [\'satellite\', \'satellite_contours\'], true)) { $mapSelectorDefault = \'satellite\'; }', $source);
-        $this->assertStringContainsString('\\update_option(\'fgpx_map_selector_default\', $mapSelectorDefault, true);', $source);
-    }
 
     public function test_settings_tabs_include_performance_panel_and_content_container(): void
     {

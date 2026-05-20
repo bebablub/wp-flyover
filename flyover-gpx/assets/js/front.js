@@ -14629,8 +14629,10 @@
             cameraCenter[1] = nextCenterLat;
             var camOpts = { center: cameraCenter, bearing: bearing };
             if (nextPitch != null) camOpts.pitch = nextPitch;
-            if (map && typeof map.flyTo === 'function') {
-              map.flyTo(camOpts);
+            // Playback follow loop uses immediate camera writes so the camera
+            // stays phase-locked with marker updates at high speed.
+            if (map && typeof map.jumpTo === 'function') {
+              map.jumpTo(camOpts);
             } else if (map && typeof map.setCenter === 'function') {
               map.setCenter(cameraCenter);
               if (typeof map.setBearing === 'function' && isFinite(bearing))

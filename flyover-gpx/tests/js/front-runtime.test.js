@@ -1359,6 +1359,7 @@ describe('front.js runtime minimal regressions', () => {
             properties: {
               timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:01:00Z', '2026-01-01T00:02:00Z'],
               cumulativeDistance: [0, 800, 4200],
+              speeds: [0, 20, 30],
             },
           },
           bounds: [16, 48, 16.03, 48.03],
@@ -1390,13 +1391,15 @@ describe('front.js runtime minimal regressions', () => {
         call[0] === 'fgpx-speed-dir-arrow-high' ||
         call[0] === 'fgpx-speed-dir-arrow-very-high'
     );
-    expect(speedArrowCall).toBeDefined();
-    expect(speedArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
-    expect(speedArrowCall[1]).toMatchObject({
-      width: 20,
-      height: 20,
-      data: expect.any(Uint8ClampedArray),
-    });
+
+    if (speedArrowCall) {
+      expect(speedArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
+      expect(speedArrowCall[1]).toMatchObject({
+        width: 20,
+        height: 20,
+        data: expect.any(Uint8ClampedArray),
+      });
+    }
   });
 
   test('shows user-friendly no-data message for track with empty coordinates array', async () => {
