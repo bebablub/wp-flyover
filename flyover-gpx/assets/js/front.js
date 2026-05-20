@@ -2395,6 +2395,29 @@
     var _tileErrCount = 0;
     var _tileErrResetTimer = null;
     var _tileErrBannerShown = false;
+    function showMapBannerOnce(key, message) {
+      try {
+        if (!ui || !ui.mapEl) return;
+        var existing = ui.mapEl.querySelector('[data-fgpx-banner="' + key + '"]');
+        if (existing) return;
+        var banner = document.createElement('div');
+        banner.className = 'fgpx-tile-error-banner';
+        banner.setAttribute('role', 'alert');
+        banner.setAttribute('data-fgpx-banner', key);
+        var bannerMsg = document.createElement('span');
+        bannerMsg.textContent = String(message || 'Notice');
+        var bannerClose = document.createElement('button');
+        bannerClose.type = 'button';
+        bannerClose.setAttribute('aria-label', 'Dismiss');
+        bannerClose.textContent = '×';
+        bannerClose.addEventListener('click', function () {
+          if (banner.parentNode) banner.parentNode.removeChild(banner);
+        });
+        banner.appendChild(bannerMsg);
+        banner.appendChild(bannerClose);
+        ui.mapEl.appendChild(banner);
+      } catch (_) {}
+    }
     map.on('error', function (e) {
       if (e && e.error && e.error.status >= 500) {
         DBG.warn('Map tile server error (will retry automatically):', e.error.status, e.error.url);
@@ -2413,23 +2436,10 @@
         if (_tileErrCount >= 5) {
           _tileErrBannerShown = true;
           clearTimeout(_tileErrResetTimer);
-          try {
-            var banner = document.createElement('div');
-            banner.className = 'fgpx-tile-error-banner';
-            banner.setAttribute('role', 'alert');
-            var bannerMsg = document.createElement('span');
-            bannerMsg.textContent = '⚠ Map tiles unavailable. Check your internet connection.';
-            var bannerClose = document.createElement('button');
-            bannerClose.type = 'button';
-            bannerClose.setAttribute('aria-label', 'Dismiss');
-            bannerClose.textContent = '×';
-            bannerClose.addEventListener('click', function () {
-              if (banner.parentNode) banner.parentNode.removeChild(banner);
-            });
-            banner.appendChild(bannerMsg);
-            banner.appendChild(bannerClose);
-            ui.mapEl.appendChild(banner);
-          } catch (_) {}
+          showMapBannerOnce(
+            'tile-load-error',
+            '⚠ Map tiles unavailable. Check your internet connection.'
+          );
         }
       }
     });
@@ -4617,6 +4627,228 @@
           'circle-stroke-color': '#ffffff',
         },
       });
+
+      // Speed-based arrow overlay (static): highlights faster route segments
+      // with denser/brighter directional arrows above the marker layer.
+      var speedArrowsEnabled = !!(window.FGPX && FGPX.speedArrowsEnabled);
+      var speedArrowSeriesReady = Array.isArray(speedSeries) && speedSeries.length > 1;
+      if (
+        speedArrowsEnabled &&
+        !speedArrowSeriesReady &&
+        dbgAllow('speed-arrows-missing-series', 10000)
+      ) {
+        DBG.warn(
+          'Speed arrows enabled but cannot render: no usable speed series was resolved for this track'
+        );
+        var speedArrowsUnavailableMsg =
+          (window.FGPX &&
+            FGPX.i18n &&
+            typeof FGPX.i18n.speedArrowsUnavailable === 'string' &&
+            FGPX.i18n.speedArrowsUnavailable) ||
+          '⚠ Speed arrows are enabled but this track has no usable speed/timestamp data.';
+        showMapBannerOnce('speed-arrows-unavailable', speedArrowsUnavailableMsg);
+      }
+      if (speedArrowsEnabled && totalDistance > 0 && speedArrowSeriesReady) {
+        try {
+          var speedThresholdLow = Number(window.FGPX && FGPX.speedArrowsThresholdLow);
+          if (!isFinite(speedThresholdLow) || speedThresholdLow <= 0) {
+            speedThresholdLow = 18;
+          }
+          var speedThresholdHigh = Number(window.FGPX && FGPX.speedArrowsThresholdHigh);
+          if (!isFinite(speedThresholdHigh) || speedThresholdHigh <= speedThresholdLow) {
+            speedThresholdHigh = speedThresholdLow + 1;
+          }
+
+          var speedColorLow =
+            (window.FGPX && FGPX.speedArrowsColorLow) ||
+            (window.FGPX && FGPX.elevationColorFlat) ||
+            '#ffd54f';
+          var speedColorMid =
+            (window.FGPX && FGPX.speedArrowsColorMid) ||
+            (window.FGPX && FGPX.elevationColorSteep) ||
+            '#ff9800';
+          var speedColorHigh = (window.FGPX && FGPX.speedArrowsColorHigh) || '#ff3d00';
+
+          var spacingLowKm = Number(window.FGPX && FGPX.speedArrowsSpacingLowKm);
+          if (!isFinite(spacingLowKm) || spacingLowKm <= 0) {
+            spacingLowKm = 3.5;
+          }
+          spacingLowKm = Math.max(0.3, Math.min(25, spacingLowKm));
+
+          var spacingHighKm = Number(window.FGPX && FGPX.speedArrowsSpacingHighKm);
+          if (!isFinite(spacingHighKm) || spacingHighKm <= 0) {
+            spacingHighKm = 0.8;
+          }
+          spacingHighKm = Math.max(0.1, Math.min(10, spacingHighKm));
+          if (spacingHighKm > spacingLowKm) {
+            spacingHighKm = spacingLowKm;
+          }
+          var spacingMidKm = (spacingLowKm + spacingHighKm) / 2;
+
+          var speedThemeMode =
+            window.FGPX && typeof FGPX.themeMode === 'string' ? String(FGPX.themeMode) : 'system';
+          var speedArrowStrokeColor =
+            speedThemeMode === 'bright' ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.9)';
+
+          function ensureSpeedArrowIcon(iconId, fillColor, strokeColor) {
+            if (map.hasImage(iconId)) return;
+            var ac = document.createElement('canvas');
+            ac.width = 20;
+            ac.height = 20;
+            var actx = ac.getContext('2d');
+            if (!actx) {
+              throw new Error('Speed arrow canvas context unavailable');
+            }
+            actx.clearRect(0, 0, 20, 20);
+            actx.fillStyle = fillColor;
+            actx.strokeStyle = strokeColor;
+            actx.lineWidth = 1.6;
+            actx.beginPath();
+            actx.moveTo(10, 1);
+            actx.lineTo(18, 18);
+            actx.lineTo(10, 14);
+            actx.lineTo(2, 18);
+            actx.closePath();
+            actx.fill();
+            actx.stroke();
+            var imageData = actx.getImageData(0, 0, 20, 20);
+            map.addImage(iconId, { width: 20, height: 20, data: imageData.data });
+          }
+
+          var speedArrowIcons = {
+            medium: 'fgpx-speed-dir-arrow-medium',
+            high: 'fgpx-speed-dir-arrow-high',
+            veryHigh: 'fgpx-speed-dir-arrow-very-high',
+          };
+
+          ensureSpeedArrowIcon(speedArrowIcons.medium, speedColorLow, speedArrowStrokeColor);
+          ensureSpeedArrowIcon(speedArrowIcons.high, speedColorMid, speedArrowStrokeColor);
+          ensureSpeedArrowIcon(speedArrowIcons.veryHigh, speedColorHigh, speedArrowStrokeColor);
+
+          function speedBucketForValue(speedKmh) {
+            if (!isFinite(speedKmh) || speedKmh < speedThresholdLow) {
+              return null;
+            }
+            if (speedKmh >= speedThresholdHigh) {
+              return 'veryHigh';
+            }
+            var middleThreshold = (speedThresholdLow + speedThresholdHigh) / 2;
+            return speedKmh >= middleThreshold ? 'high' : 'medium';
+          }
+
+          function speedSpacingMeters(bucket) {
+            if (bucket === 'veryHigh') return spacingHighKm * 1000;
+            if (bucket === 'high') return spacingMidKm * 1000;
+            return spacingLowKm * 1000;
+          }
+
+          var speedArrowCollections = {
+            medium: { type: 'FeatureCollection', features: [] },
+            high: { type: 'FeatureCollection', features: [] },
+            veryHigh: { type: 'FeatureCollection', features: [] },
+          };
+          var speedArrowLastPlaced = {
+            medium: -Infinity,
+            high: -Infinity,
+            veryHigh: -Infinity,
+          };
+          var speedArrowFeatureLimit = Math.max(300, Math.min(2200, Math.floor(coords.length / 3)));
+          var speedArrowCandidates = [];
+          var speedArrowFeatureCount = 0;
+          var speedArrowCapped = false;
+
+          var speedStartD = privacyEnabled ? privacyStartD : 0;
+          var speedEndD = privacyEnabled ? privacyEndD : totalDistance;
+
+          for (var sai = 1; sai < coords.length; sai++) {
+            var dNow = cumDist[sai];
+            if (!isFinite(dNow) || dNow < speedStartD || dNow > speedEndD) {
+              continue;
+            }
+            var bucket = speedBucketForValue(Number(speedSeries[sai]));
+            if (!bucket) {
+              continue;
+            }
+            var requiredSpacing = speedSpacingMeters(bucket);
+            if (dNow - speedArrowLastPlaced[bucket] < requiredSpacing) {
+              continue;
+            }
+            var pPrev = coords[sai - 1] || coords[sai];
+            var pCurr = coords[sai];
+            if (!pPrev || !pCurr) {
+              continue;
+            }
+            var arrowBearing = bearingBetween([pPrev[0], pPrev[1]], [pCurr[0], pCurr[1]]);
+            speedArrowCandidates.push({
+              bucket: bucket,
+              feature: {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [pCurr[0], pCurr[1]] },
+                properties: { bearing: arrowBearing },
+              },
+            });
+            speedArrowLastPlaced[bucket] = dNow;
+          }
+
+          var selectedCandidates = speedArrowCandidates;
+          if (speedArrowCandidates.length > speedArrowFeatureLimit) {
+            speedArrowCapped = true;
+            selectedCandidates = [];
+            var step = (speedArrowCandidates.length - 1) / (speedArrowFeatureLimit - 1);
+            var lastIdx = -1;
+            for (var sci = 0; sci < speedArrowFeatureLimit; sci++) {
+              var rawIdx = Math.round(sci * step);
+              var candidateIdx = Math.max(lastIdx + 1, rawIdx);
+              if (candidateIdx >= speedArrowCandidates.length) {
+                candidateIdx = speedArrowCandidates.length - 1;
+              }
+              if (candidateIdx <= lastIdx) {
+                continue;
+              }
+              selectedCandidates.push(speedArrowCandidates[candidateIdx]);
+              lastIdx = candidateIdx;
+            }
+          }
+          speedArrowFeatureCount = selectedCandidates.length;
+          for (var sfi = 0; sfi < selectedCandidates.length; sfi++) {
+            var selected = selectedCandidates[sfi];
+            speedArrowCollections[selected.bucket].features.push(selected.feature);
+          }
+
+          if (speedArrowCapped && dbgAllow('speed-arrow-cap', 10000)) {
+            DBG.warn('Speed arrow count capped for performance', {
+              considered: speedArrowCandidates.length,
+              rendered: speedArrowFeatureCount,
+              limit: speedArrowFeatureLimit,
+            });
+          }
+
+          ['medium', 'high', 'veryHigh'].forEach(function (bucketName) {
+            var sourceId = 'fgpx-speed-arrows-' + bucketName + '-src';
+            var layerId = 'fgpx-speed-arrows-' + bucketName;
+            map.addSource(sourceId, {
+              type: 'geojson',
+              data: speedArrowCollections[bucketName],
+            });
+            map.addLayer({
+              id: layerId,
+              type: 'symbol',
+              source: sourceId,
+              layout: {
+                'icon-image': speedArrowIcons[bucketName],
+                'icon-size': bucketName === 'veryHigh' ? 0.9 : bucketName === 'high' ? 0.82 : 0.76,
+                'icon-rotate': ['coalesce', ['get', 'bearing'], 0],
+                'icon-rotation-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-keep-upright': false,
+              },
+            });
+          });
+        } catch (speedArrowError) {
+          DBG.warn('Speed arrow rendering skipped', speedArrowError);
+        }
+      }
 
       // Text-only labels (emoji + text) using DOM markers so they work with any style
       if (!window.FGPX || FGPX.showLabels !== false) {
@@ -7677,9 +7909,36 @@
       var elev = coords.map(function (c) {
         return typeof c[2] === 'number' ? c[2] : 0;
       });
-      // Build speed series (km/h) aligned to xVals when time is available
+      // Build speed series (km/h): prefer payload speed values, fall back to distance/time derivation.
       var speedSeries = null;
-      if (useTime && Array.isArray(cumDist)) {
+      var speedSeriesSource = 'none';
+      var rawSpeeds = Array.isArray(props.speeds) ? props.speeds : null;
+      if (Array.isArray(rawSpeeds) && rawSpeeds.length === coords.length) {
+        var speedSeriesFromPayload = new Array(coords.length);
+        var speedPayloadValidCount = 0;
+        for (var spi = 0; spi < coords.length; spi++) {
+          var speedVal = Number(rawSpeeds[spi]);
+          if (isFinite(speedVal) && speedVal >= 0) {
+            speedSeriesFromPayload[spi] = speedVal;
+            speedPayloadValidCount++;
+          } else {
+            speedSeriesFromPayload[spi] = null;
+          }
+        }
+        if (speedPayloadValidCount > 0) {
+          var speedLast = 0;
+          for (var spf = 0; spf < speedSeriesFromPayload.length; spf++) {
+            if (speedSeriesFromPayload[spf] == null) {
+              speedSeriesFromPayload[spf] = speedLast;
+            } else {
+              speedLast = speedSeriesFromPayload[spf];
+            }
+          }
+          speedSeries = speedSeriesFromPayload;
+          speedSeriesSource = 'payload';
+        }
+      }
+      if (!speedSeries && useTime && Array.isArray(cumDist)) {
         try {
           var tSeries = Array.isArray(movingTimeOffsets) ? movingTimeOffsets : timeOffsets;
           speedSeries = new Array(coords.length);
@@ -7689,9 +7948,16 @@
             var dtS = Math.max(1e-3, tSeries[si] - tSeries[si - 1]);
             speedSeries[si] = (ddS / dtS) * 3.6;
           }
+          speedSeriesSource = 'derived';
         } catch (_) {
           speedSeries = null;
+          speedSeriesSource = 'none';
         }
+      }
+      if (speedSeriesSource === 'none' && dbgAllow('speed-series-missing', 10000)) {
+        DBG.warn(
+          'Speed series unavailable: speed-based overlays require GPX point speed values or valid track timestamps'
+        );
       }
       var cursorX = 0;
       var cursorPlugin = {

@@ -481,6 +481,14 @@ final class Admin
 		$elevationThresholdMax = $options['fgpx_elevation_threshold_max'];
 		$arrowsEnabled = $options['fgpx_arrows_enabled'];
 		$arrowsKm = $options['fgpx_arrows_km'];
+		$speedArrowsEnabled = (string) ($options['fgpx_speed_arrows_enabled'] ?? '0');
+		$speedArrowsThresholdLow = (string) ($options['fgpx_speed_arrows_threshold_low'] ?? '18');
+		$speedArrowsThresholdHigh = (string) ($options['fgpx_speed_arrows_threshold_high'] ?? '35');
+		$speedArrowsColorLow = (string) ($options['fgpx_speed_arrows_color_low'] ?? '#ffd54f');
+		$speedArrowsColorMid = (string) ($options['fgpx_speed_arrows_color_mid'] ?? '#ff9800');
+		$speedArrowsColorHigh = (string) ($options['fgpx_speed_arrows_color_high'] ?? '#ff3d00');
+		$speedArrowsSpacingLowKm = (string) ($options['fgpx_speed_arrows_spacing_low_km'] ?? '3.5');
+		$speedArrowsSpacingHighKm = (string) ($options['fgpx_speed_arrows_spacing_high_km'] ?? '0.8');
 
 		echo '<div class="wrap">';
 		echo '<h1>' . \esc_html__('Flyover GPX Upload', 'flyover-gpx') . '</h1>';
@@ -774,6 +782,34 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_arrows_km">' . \esc_html__('Arrow spacing (km)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_arrows_km" name="fgpx_arrows_km" class="small-text" min="0.5" max="100" step="0.5" value="' . \esc_attr($arrowsKm) . '" />';
 		echo '<p class="description">' . \esc_html__('Distance in km between each direction arrow. Default 5 km.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_enabled">' . \esc_html__('Speed arrows overlay', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_speed_arrows_enabled" name="fgpx_speed_arrows_enabled" value="1"' . ($speedArrowsEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show speed-based direction arrows on top of the route and marker.', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Uses GPX speed values when available, otherwise derives speed from distance/time.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_threshold_low">' . \esc_html__('Speed threshold low (km/h)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_threshold_low" name="fgpx_speed_arrows_threshold_low" class="small-text" min="1" max="120" step="0.5" value="' . \esc_attr($speedArrowsThresholdLow) . '" />';
+		echo '<p class="description">' . \esc_html__('Below this speed, no speed arrows are drawn. Between low and high, medium arrows are used.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_threshold_high">' . \esc_html__('Speed threshold high (km/h)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_threshold_high" name="fgpx_speed_arrows_threshold_high" class="small-text" min="2" max="160" step="0.5" value="' . \esc_attr($speedArrowsThresholdHigh) . '" />';
+		echo '<p class="description">' . \esc_html__('At or above this speed, arrows use the densest spacing and strongest highlight color.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_spacing_low_km">' . \esc_html__('Speed arrows spacing low bucket (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_spacing_low_km" name="fgpx_speed_arrows_spacing_low_km" class="small-text" min="0.3" max="25" step="0.1" value="' . \esc_attr($speedArrowsSpacingLowKm) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_spacing_high_km">' . \esc_html__('Speed arrows spacing high bucket (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_spacing_high_km" name="fgpx_speed_arrows_spacing_high_km" class="small-text" min="0.1" max="10" step="0.1" value="' . \esc_attr($speedArrowsSpacingHighKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Higher speeds should usually use a smaller spacing than low speeds (denser arrows).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_low">' . \esc_html__('Speed arrows color (medium speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_low" name="fgpx_speed_arrows_color_low" value="' . \esc_attr($speedArrowsColorLow) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_mid">' . \esc_html__('Speed arrows color (high speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_mid" name="fgpx_speed_arrows_color_mid" value="' . \esc_attr($speedArrowsColorMid) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_high">' . \esc_html__('Speed arrows color (very high speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_high" name="fgpx_speed_arrows_color_high" value="' . \esc_attr($speedArrowsColorHigh) . '" />';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_chart_color">' . \esc_html__('Elevation chart color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color" name="fgpx_chart_color" value="' . \esc_attr($chartColor) . '" />';
@@ -1612,11 +1648,14 @@ final class Admin
 
 		// Count non-null values
 		$speedCount = count(array_filter($windSpeeds, function ($v) {
-			return $v !== null; }));
+			return $v !== null;
+		}));
 		$dirCount = count(array_filter($windDirections, function ($v) {
-			return $v !== null; }));
+			return $v !== null;
+		}));
 		$impactCount = count(array_filter($windImpacts, function ($v) {
-			return $v !== null; }));
+			return $v !== null;
+		}));
 
 		if ($speedCount === 0 || $dirCount === 0 || $impactCount === 0) {
 			echo '<span style="color: #d63638;" title="Wind data arrays contain only null values">✗ Empty</span>';
@@ -1625,12 +1664,14 @@ final class Admin
 
 		// Calculate average wind speed for display
 		$validSpeeds = array_filter($windSpeeds, function ($v) {
-			return $v !== null && $v > 0; });
+			return $v !== null && $v > 0;
+		});
 		$avgSpeed = count($validSpeeds) > 0 ? array_sum($validSpeeds) / count($validSpeeds) : 0;
 
 		// Calculate wind direction distribution for wind rose
 		$validDirections = array_filter($windDirections, function ($v) {
-			return $v !== null; });
+			return $v !== null;
+		});
 		$directionCount = count($validDirections);
 		$uniqueDirections = count(array_unique($validDirections));
 
@@ -1643,7 +1684,8 @@ final class Admin
 			}
 		}
 		$activeSectors = count(array_filter($windRoseSectors, function ($v) {
-			return $v > 0; }));
+			return $v > 0;
+		}));
 
 		$status = '✓ ' . $speedCount . ' pts';
 		$title = sprintf(
@@ -2686,6 +2728,38 @@ final class Admin
 		if (isset($_POST['fgpx_arrows_km'])) {
 			\update_option('fgpx_arrows_km', (string) max(0.5, min(100, (float) $_POST['fgpx_arrows_km'])), true);
 		}
+		\update_option('fgpx_speed_arrows_enabled', isset($_POST['fgpx_speed_arrows_enabled']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_speed_arrows_threshold_low'])) {
+			\update_option('fgpx_speed_arrows_threshold_low', (string) max(1, min(120, (float) $_POST['fgpx_speed_arrows_threshold_low'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_threshold_high'])) {
+			\update_option('fgpx_speed_arrows_threshold_high', (string) max(2, min(160, (float) $_POST['fgpx_speed_arrows_threshold_high'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_low'])) {
+			\update_option('fgpx_speed_arrows_color_low', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_low']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_mid'])) {
+			\update_option('fgpx_speed_arrows_color_mid', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_mid']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_high'])) {
+			\update_option('fgpx_speed_arrows_color_high', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_high']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_spacing_low_km'])) {
+			\update_option('fgpx_speed_arrows_spacing_low_km', (string) max(0.3, min(25, (float) $_POST['fgpx_speed_arrows_spacing_low_km'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_spacing_high_km'])) {
+			\update_option('fgpx_speed_arrows_spacing_high_km', (string) max(0.1, min(10, (float) $_POST['fgpx_speed_arrows_spacing_high_km'])), true);
+		}
+		$speedArrowsThresholdLowSaved = (float) \get_option('fgpx_speed_arrows_threshold_low', '18');
+		$speedArrowsThresholdHighSaved = (float) \get_option('fgpx_speed_arrows_threshold_high', '35');
+		if ($speedArrowsThresholdHighSaved <= $speedArrowsThresholdLowSaved) {
+			\update_option('fgpx_speed_arrows_threshold_high', (string) min(160, $speedArrowsThresholdLowSaved + 1), true);
+		}
+		$speedArrowsSpacingLowSaved = (float) \get_option('fgpx_speed_arrows_spacing_low_km', '3.5');
+		$speedArrowsSpacingHighSaved = (float) \get_option('fgpx_speed_arrows_spacing_high_km', '0.8');
+		if ($speedArrowsSpacingHighSaved > $speedArrowsSpacingLowSaved) {
+			\update_option('fgpx_speed_arrows_spacing_high_km', (string) $speedArrowsSpacingLowSaved, true);
+		}
 
 		// Weather settings
 		\update_option('fgpx_weather_enabled', isset($_POST['fgpx_weather_enabled']) ? '1' : '0', true);
@@ -2911,12 +2985,14 @@ final class Admin
 
 			// Generate summary stats
 			$rainValues = array_map(function ($f) {
-				return $f['properties']['rain_mm'] ?? 0; }, $weatherPoints);
+				return $f['properties']['rain_mm'] ?? 0;
+			}, $weatherPoints);
 			$summary = [
 				'max_mm' => !empty($rainValues) ? max($rainValues) : 0,
 				'avg_mm' => !empty($rainValues) ? array_sum($rainValues) / count($rainValues) : 0,
 				'wet_points' => count(array_filter($rainValues, function ($r) {
-					return $r > 0; })),
+					return $r > 0;
+				})),
 				'total_points' => count($rainValues),
 				'requested_samples' => $requestedSampleCount,
 				'used_samples' => \count($samples),
@@ -3784,6 +3860,7 @@ final class Admin
 		$heartRates = [];
 		$cadences = [];
 		$temperatures = [];
+		$speeds = [];
 		$powers = [];
 		$pointsCount = 0;
 		$totalDistance = 0.0; // meters
@@ -3813,13 +3890,33 @@ final class Admin
 					$heartRate = null;
 					$cadence = null;
 					$temperature = null;
+					$speedKmh = null;
 					$power = null;
+					$pointVars = \is_object($point) ? \get_object_vars($point) : [];
+					if (\array_key_exists('speed', $pointVars) && \is_numeric($pointVars['speed'])) {
+						$pointSpeed = (float) $pointVars['speed'];
+						if ($pointSpeed >= 0.0) {
+							$speedKmh = $pointSpeed * 3.6;
+						}
+					}
 					if ($point->extensions && $point->extensions->trackPointExtension) {
 						$ext = $point->extensions->trackPointExtension;
 						$heartRate = $ext->hr ?? $ext->heartRate ?? null;
 						$cadence = $ext->cad ?? $ext->cadence ?? null;
 						$temperature = $ext->aTemp ?? $ext->avgTemperature ?? null;
+						if ($speedKmh === null) {
+							$extSpeed = $ext->speed ?? $ext->velocity ?? null;
+							if ($extSpeed !== null && \is_numeric($extSpeed)) {
+								$extSpeedMs = (float) $extSpeed;
+								if ($extSpeedMs >= 0.0) {
+									$speedKmh = $extSpeedMs * 3.6;
+								}
+							}
+						}
 						$power = $ext->power ?? $ext->watts ?? null;
+					}
+					if ($speedKmh !== null) {
+						$speedKmh = max(0.0, min(250.0, $speedKmh));
 					}
 
 					// Bounds
@@ -3871,6 +3968,7 @@ final class Admin
 					$heartRates[] = $heartRate;
 					$cadences[] = $cadence;
 					$temperatures[] = $temperature;
+					$speeds[] = $speedKmh;
 					$powers[] = $power;
 					$pointsCount++;
 					$prev = ['lat' => $lat, 'lon' => $lon, 'ele' => $eleNullable, 'time' => $time];
@@ -3948,6 +4046,7 @@ final class Admin
 				'heartRates' => $heartRates,
 				'cadences' => $cadences,
 				'temperatures' => $temperatures,
+				'speeds' => $speeds,
 				'powers' => $powers,
 			],
 		];
@@ -5383,104 +5482,104 @@ final class Admin
 			}
 		</style>
 		<script>
-			(function () {
-				var widgetId = <?php echo \wp_json_encode($widgetId); ?>;
-				var chartKey = <?php echo \wp_json_encode($chartKey); ?>;
-				var countLabel = <?php echo \wp_json_encode($countLabel); ?>;
-				var restUrl = <?php echo \wp_json_encode($restUrl); ?>;
-				var nonce = <?php echo \wp_json_encode($nonce); ?>;
-				var statsUrl = restUrl;
+							(function () 					{
+								var w		idgetId = <?php echo \wp_json_encode($widgetId); ?>;
+								var chartKey = <?php echo \wp_json_encode($chartKey); ?>;
+								var countLabel = <?php echo \wp_json_encode($countLabel); ?>;
+								var restUrl = <?php echo \wp_json_encode($restUrl); ?>;
+								var nonce = <?php echo \wp_json_encode($nonce); ?>;
+								var statsUrl = restUrl;
 
-				var root = document.getElementById(widgetId);
-				var skeleton = root.querySelector('.fgpx-pw-skeleton');
-				var content = root.querySelector('.fgpx-pw-content');
+								var root = document.getElementById(widgetId);
+								var skeleton = root.querySelector('.fgpx-pw-skeleton');
+								var content = root.querySelector('.fgpx-pw-content');
 
-				function showError(msg) {
-					skeleton.style.display = 'none';
-					content.innerHTML = '<p style="color:#c00;">' + msg + '</p>';
-					content.style.display = '';
-				}
+								function showError(msg) {
+									skeleton.style.display = 'none';
+									content.innerHTML = '<p style="color:#c00;">' + msg + '</p>';
+									content.style.display = '';
+								}
 
-				function formatTable(rows, key) {
-					var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-					html += '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px 6px;">Period</th><th style="text-align:right;padding:4px 6px;">' + countLabel + '</th></tr>';
-					var reversed = rows.slice().reverse();
-					for (var i = 0; i < reversed.length; i++) {
-						html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">' + (reversed[i]['period'] || '') + '</td><td style="text-align:right;padding:4px 6px;">' + (parseInt(reversed[i][key], 10) || 0) + '</td></tr>';
-					}
-					html += '</table>';
-					return html;
-				}
+								function formatTable(rows, key) {
+									var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+									html += '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px 6px;">Period</th><th style="text-align:right;padding:4px 6px;">' + countLabel + '</th></tr>';
+									var reversed = rows.slice().reverse();
+									for (var i = 0; i < reversed.length; i++) {
+										html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">' + (reversed[i]['period'] || '') + '</td><td style="text-align:right;padding:4px 6px;">' + (parseInt(reversed[i][key], 10) || 0) + '</td></tr>';
+									}
+									html += '</table>';
+									return html;
+								}
 
-				function renderChart(canvasId, labels, data) {
-					function tryRender() {
-						var canvas = document.getElementById(canvasId);
-						if (!canvas || !window.Chart) { setTimeout(tryRender, 100); return; }
-						new window.Chart(canvas.getContext('2d'), {
-							type: 'line',
-							data: {
-								labels: labels,
-								datasets: [{
-									label: countLabel,
-									data: data,
-									borderColor: '#0f766e',
-									backgroundColor: 'rgba(15,118,110,0.15)',
-									fill: true,
-									tension: 0.25
-								}]
-							},
-							options: {
-								responsive: true,
-								maintainAspectRatio: false,
-								plugins: { legend: { display: true } }
-							}
-						});
-					}
-					tryRender();
-				}
+								function renderChart(canvasId, labels, data) {
+									function tryRender() {
+										var canvas = document.getElementById(canvasId);
+										if (!canvas || !window.Chart) { setTimeout(tryRender, 100); return; }
+										new window.Chart(canvas.getContext('2d'), {
+											type: 'line',
+											data: {
+												labels: labels,
+												datasets: [{
+													label: countLabel,
+													data: data,
+													borderColor: '#0f766e',
+													backgroundColor: 'rgba(15,118,110,0.15)',
+													fill: true,
+													tension: 0.25
+												}]
+											},
+											options: {
+												responsive: true,
+												maintainAspectRatio: false,
+												plugins: { legend: { display: true } }
+											}
+										});
+									}
+									tryRender();
+								}
 
-				function onDataLoaded(rows) {
-					var canvasId = widgetId + '-canvas';
-					var labels = rows.map(function (r) { return r['period'] || ''; });
-					var data = rows.map(function (r) { return parseInt(r['playbackCount'] || r['trackCount'] || 0, 10); });
+								function onDataLoaded(rows) {
+									var canvasId = widgetId + '-canvas';
+									var labels = rows.map(function (r) { return r['period'] || ''; });
+									var data = rows.map(function (r) { return parseInt(r['playbackCount'] || r['trackCount'] || 0, 10); });
 
-					var tableHtml = formatTable(rows, 'playbackCount');
+									var tableHtml = formatTable(rows, 'playbackCount');
 
-					content.innerHTML =
-						'<div style="margin-bottom:15px;">'
-						+ '<div style="position:relative;width:100%;height:220px;">'
-						+ '<canvas id="' + canvasId + '" style="display:block;width:100%;height:100%;"></canvas>'
-						+ '</div>'
-						+ '</div>'
-						+ '<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:10px;">'
-						+ tableHtml
-						+ '</div>'
-						+ '<p style="margin:0;"><a href="<?php echo \esc_js(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')); ?>"><?php echo \esc_js(__('View Full Statistics →', 'flyover-gpx')); ?></a></p>';
+									content.innerHTML =
+										'<div style="margin-bottom:15px;">'
+										+ '<div style="position:relative;width:100%;height:220px;">'
+										+ '<canvas id="' + canvasId + '" style="display:block;width:100%;height:100%;"></canvas>'
+										+ '</div>'
+										+ '</div>'
+										+ '<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:10px;">'
+										+ tableHtml
+										+ '</div>'
+										+ '<p style="margin:0;"><a href="<?php echo \esc_js(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')); ?>"><?php echo \esc_js(__('View Full Statistics →', 'flyover-gpx')); ?></a></p>';
 
-					skeleton.style.display = 'none';
-					content.style.display = '';
-					renderChart(canvasId, labels, data);
-				}
+									skeleton.style.display = 'none';
+									content.style.display = '';
+									renderChart(canvasId, labels, data);
+								}
 
-				fetch(statsUrl, {
-					headers: {
-						'X-WP-Nonce': nonce,
-						'Accept': 'application/json'
-					}
-				})
-					.then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-					.then(function (payload) {
-						var charts = (payload && payload.charts) ? payload.charts : {};
-						var rows = charts[chartKey] || [];
-						if (!rows.length) { showError('<?php echo \esc_js(__('No data available yet.', 'flyover-gpx')); ?>'); return; }
-						onDataLoaded(rows);
-					})
-					.catch(function () {
-						showError('<?php echo \esc_js(__('Could not load statistics.', 'flyover-gpx')); ?>');
-					});
-			})();
-		</script>
-		<?php
+								fetch(statsUrl, {
+									headers: {
+										'X-WP-Nonce': nonce,
+										'Accept': 'application/json'
+									}
+								})
+									.then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+									.then(function (payload) {
+										var charts = (payload && payload.charts) ? payload.charts : {};
+										var rows = charts[chartKey] || [];
+										if (!rows.length) { showError('<?php echo \esc_js(__('No data available yet.', 'flyover-gpx')); ?>'); return; }
+										onDataLoaded(rows);
+									})
+									.catch(function () {
+										showError('<?php echo \esc_js(__('Could not load statistics.', 'flyover-gpx')); ?>');
+									});
+							})();
+						</script>
+						<?php
 	}
 
 	/**

@@ -59,6 +59,16 @@ final class RestCoreBehaviorTest extends TestCase
         $this->assertSame(2, substr_count($source, "'photoOrderMode' => self::resolve_photo_order_mode()"));
     }
 
+    public function test_speed_series_property_is_preserved_for_rest_and_ajax_payloads(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString("\$speeds = isset(\$props['speeds']) && \\is_array(\$props['speeds']) ? \$props['speeds'] : null;", $source);
+        $this->assertStringContainsString("\$speeds = isset(\$props['speeds']) && is_array(\$props['speeds']) ? \$props['speeds'] : null;", $source);
+        $this->assertSame(2, substr_count($source, "'speeds' => []"));
+    }
+
     public function test_admin_upload_path_clears_stale_waypoints_when_no_waypoints_exist(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';

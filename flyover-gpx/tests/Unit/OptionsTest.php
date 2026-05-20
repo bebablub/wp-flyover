@@ -66,51 +66,52 @@ final class OptionsTest extends TestCase
     {
         return [
             // Map display
-            'default_style'            => ['fgpx_default_style'],
-            'map_selector_default'     => ['fgpx_map_selector_default'],
-            'contours_enabled'         => ['fgpx_contours_enabled'],
-            'contours_tiles_url'       => ['fgpx_contours_tiles_url'],
-            'contours_source_layer'    => ['fgpx_contours_source_layer'],
-            'satellite_layer_id'       => ['fgpx_satellite_layer_id'],
-            'satellite_tiles_url'      => ['fgpx_satellite_tiles_url'],
-            'smart_api_mode'           => ['fgpx_smart_api_keys_mode'],
-            'smart_api_pool'           => ['fgpx_smart_api_keys_pool'],
-            'smart_api_test_override'  => ['fgpx_smart_api_keys_test_url_override'],
-            'default_height'           => ['fgpx_default_height'],
-            'default_zoom'             => ['fgpx_default_zoom'],
-            'default_speed'            => ['fgpx_default_speed'],
+            'default_style' => ['fgpx_default_style'],
+            'map_selector_default' => ['fgpx_map_selector_default'],
+            'contours_enabled' => ['fgpx_contours_enabled'],
+            'contours_tiles_url' => ['fgpx_contours_tiles_url'],
+            'contours_source_layer' => ['fgpx_contours_source_layer'],
+            'satellite_layer_id' => ['fgpx_satellite_layer_id'],
+            'satellite_tiles_url' => ['fgpx_satellite_tiles_url'],
+            'smart_api_mode' => ['fgpx_smart_api_keys_mode'],
+            'smart_api_pool' => ['fgpx_smart_api_keys_pool'],
+            'smart_api_test_override' => ['fgpx_smart_api_keys_test_url_override'],
+            'default_height' => ['fgpx_default_height'],
+            'default_zoom' => ['fgpx_default_zoom'],
+            'default_speed' => ['fgpx_default_speed'],
             // Privacy
-            'privacy_enabled'          => ['fgpx_privacy_enabled'],
-            'privacy_km'               => ['fgpx_privacy_km'],
+            'privacy_enabled' => ['fgpx_privacy_enabled'],
+            'privacy_km' => ['fgpx_privacy_km'],
             // Features
-            'hud_enabled'              => ['fgpx_hud_enabled'],
-            'arrows_enabled'           => ['fgpx_arrows_enabled'],
-            'arrows_km'                => ['fgpx_arrows_km'],
-            'photos_enabled'           => ['fgpx_photos_enabled'],
-            'photo_order_mode'         => ['fgpx_photo_order_mode'],
-            'photo_queue_rotation'     => ['fgpx_photo_queue_rotation_enabled'],
-            'photo_max_distance'       => ['fgpx_photo_max_distance'],
-            'gpx_download_enabled'     => ['fgpx_gpx_download_enabled'],
-            'lazy_viewport'            => ['fgpx_lazy_viewport'],
-            'gallery_per_page'         => ['fgpx_gallery_per_page'],
-            'gallery_player_height'    => ['fgpx_gallery_player_height'],
-            'gallery_default_sort'     => ['fgpx_gallery_default_sort'],
+            'hud_enabled' => ['fgpx_hud_enabled'],
+            'arrows_enabled' => ['fgpx_arrows_enabled'],
+            'arrows_km' => ['fgpx_arrows_km'],
+            'speed_arrows_enabled' => ['fgpx_speed_arrows_enabled'],
+            'photos_enabled' => ['fgpx_photos_enabled'],
+            'photo_order_mode' => ['fgpx_photo_order_mode'],
+            'photo_queue_rotation' => ['fgpx_photo_queue_rotation_enabled'],
+            'photo_max_distance' => ['fgpx_photo_max_distance'],
+            'gpx_download_enabled' => ['fgpx_gpx_download_enabled'],
+            'lazy_viewport' => ['fgpx_lazy_viewport'],
+            'gallery_per_page' => ['fgpx_gallery_per_page'],
+            'gallery_player_height' => ['fgpx_gallery_player_height'],
+            'gallery_default_sort' => ['fgpx_gallery_default_sort'],
             'gallery_show_view_toggle' => ['fgpx_gallery_show_view_toggle'],
-            'gallery_show_search'      => ['fgpx_gallery_show_search'],
-            'ajax_first'               => ['fgpx_ajax_first'],
-            'weather_enabled'          => ['fgpx_weather_enabled'],
-            'daynight_enabled'         => ['fgpx_daynight_enabled'],
-            'elevation_coloring'       => ['fgpx_elevation_coloring'],
+            'gallery_show_search' => ['fgpx_gallery_show_search'],
+            'ajax_first' => ['fgpx_ajax_first'],
+            'weather_enabled' => ['fgpx_weather_enabled'],
+            'daynight_enabled' => ['fgpx_daynight_enabled'],
+            'elevation_coloring' => ['fgpx_elevation_coloring'],
             // Theme / dark mode
-            'theme_mode'               => ['fgpx_theme_mode'],
-            'theme_auto_dark_start'    => ['fgpx_theme_auto_dark_start'],
-            'theme_auto_dark_end'      => ['fgpx_theme_auto_dark_end'],
+            'theme_mode' => ['fgpx_theme_mode'],
+            'theme_auto_dark_start' => ['fgpx_theme_auto_dark_start'],
+            'theme_auto_dark_end' => ['fgpx_theme_auto_dark_end'],
             // Performance
             'backend_simplify_enabled' => ['fgpx_backend_simplify_enabled'],
-            'backend_simplify_target'  => ['fgpx_backend_simplify_target'],
+            'backend_simplify_target' => ['fgpx_backend_simplify_target'],
             // Chart colors
-            'chart_color'              => ['fgpx_chart_color'],
-            'chart_color2'             => ['fgpx_chart_color2'],
+            'chart_color' => ['fgpx_chart_color'],
+            'chart_color2' => ['fgpx_chart_color2'],
         ];
     }
 
@@ -131,35 +132,43 @@ final class OptionsTest extends TestCase
         $this->assertSame('#ffffff', Options::get('fgpx_contours_color'));
         $this->assertSame('1.2', Options::get('fgpx_contours_width'));
         $this->assertSame('0.75', Options::get('fgpx_contours_opacity'));
-        $this->assertSame('off',   Options::get('fgpx_smart_api_keys_mode'));
-        $this->assertSame('',      Options::get('fgpx_smart_api_keys_pool'));
-        $this->assertSame('',      Options::get('fgpx_smart_api_keys_test_url_override'));
-        $this->assertSame('820px',  Options::get('fgpx_default_height'));
-        $this->assertSame('11',     Options::get('fgpx_default_zoom'));
-        $this->assertSame('25',     Options::get('fgpx_default_speed'));
-        $this->assertSame('1',      Options::get('fgpx_hud_enabled'));
-        $this->assertSame('0',      Options::get('fgpx_arrows_enabled'));
-        $this->assertSame('5',      Options::get('fgpx_arrows_km'));
+        $this->assertSame('off', Options::get('fgpx_smart_api_keys_mode'));
+        $this->assertSame('', Options::get('fgpx_smart_api_keys_pool'));
+        $this->assertSame('', Options::get('fgpx_smart_api_keys_test_url_override'));
+        $this->assertSame('820px', Options::get('fgpx_default_height'));
+        $this->assertSame('11', Options::get('fgpx_default_zoom'));
+        $this->assertSame('25', Options::get('fgpx_default_speed'));
+        $this->assertSame('1', Options::get('fgpx_hud_enabled'));
+        $this->assertSame('0', Options::get('fgpx_arrows_enabled'));
+        $this->assertSame('5', Options::get('fgpx_arrows_km'));
+        $this->assertSame('0', Options::get('fgpx_speed_arrows_enabled'));
+        $this->assertSame('18', Options::get('fgpx_speed_arrows_threshold_low'));
+        $this->assertSame('35', Options::get('fgpx_speed_arrows_threshold_high'));
+        $this->assertSame('#ffd54f', Options::get('fgpx_speed_arrows_color_low'));
+        $this->assertSame('#ff9800', Options::get('fgpx_speed_arrows_color_mid'));
+        $this->assertSame('#ff3d00', Options::get('fgpx_speed_arrows_color_high'));
+        $this->assertSame('3.5', Options::get('fgpx_speed_arrows_spacing_low_km'));
+        $this->assertSame('0.8', Options::get('fgpx_speed_arrows_spacing_high_km'));
         $this->assertSame('geo_first', Options::get('fgpx_photo_order_mode'));
-        $this->assertSame('0',      Options::get('fgpx_photo_queue_rotation_enabled'));
-        $this->assertSame('500',    Options::get('fgpx_photo_max_distance'));
-        $this->assertSame('0',      Options::get('fgpx_weather_enabled'));
-        $this->assertSame('0.3',    Options::get('fgpx_weather_fog_threshold'));
-        $this->assertSame('0.1',    Options::get('fgpx_weather_rain_threshold'));
-        $this->assertSame('0.1',    Options::get('fgpx_weather_snow_threshold'));
-        $this->assertSame('3',      Options::get('fgpx_weather_wind_threshold'));
-        $this->assertSame('50',     Options::get('fgpx_weather_cloud_threshold'));
-        $this->assertSame('0',      Options::get('fgpx_gpx_download_enabled'));
-        $this->assertSame('16',     Options::get('fgpx_gallery_per_page'));
-        $this->assertSame('636px',  Options::get('fgpx_gallery_player_height'));
+        $this->assertSame('0', Options::get('fgpx_photo_queue_rotation_enabled'));
+        $this->assertSame('500', Options::get('fgpx_photo_max_distance'));
+        $this->assertSame('0', Options::get('fgpx_weather_enabled'));
+        $this->assertSame('0.3', Options::get('fgpx_weather_fog_threshold'));
+        $this->assertSame('0.1', Options::get('fgpx_weather_rain_threshold'));
+        $this->assertSame('0.1', Options::get('fgpx_weather_snow_threshold'));
+        $this->assertSame('3', Options::get('fgpx_weather_wind_threshold'));
+        $this->assertSame('50', Options::get('fgpx_weather_cloud_threshold'));
+        $this->assertSame('0', Options::get('fgpx_gpx_download_enabled'));
+        $this->assertSame('16', Options::get('fgpx_gallery_per_page'));
+        $this->assertSame('636px', Options::get('fgpx_gallery_player_height'));
         $this->assertSame('newest', Options::get('fgpx_gallery_default_sort'));
-        $this->assertSame('1',      Options::get('fgpx_gallery_show_view_toggle'));
-        $this->assertSame('1',      Options::get('fgpx_gallery_show_search'));
-        $this->assertSame('0',      Options::get('fgpx_ajax_first'));
+        $this->assertSame('1', Options::get('fgpx_gallery_show_view_toggle'));
+        $this->assertSame('1', Options::get('fgpx_gallery_show_search'));
+        $this->assertSame('0', Options::get('fgpx_ajax_first'));
         // Theme defaults
         $this->assertSame('system', Options::get('fgpx_theme_mode'));
-        $this->assertSame('22:00',  Options::get('fgpx_theme_auto_dark_start'));
-        $this->assertSame('06:00',  Options::get('fgpx_theme_auto_dark_end'));
+        $this->assertSame('22:00', Options::get('fgpx_theme_auto_dark_start'));
+        $this->assertSame('06:00', Options::get('fgpx_theme_auto_dark_end'));
     }
 
     public function test_is_defined_returns_false_for_unknown_key(): void
@@ -175,7 +184,7 @@ final class OptionsTest extends TestCase
 
     public function test_get_multiple_returns_all_requested_keys(): void
     {
-        $keys   = ['fgpx_default_zoom', 'fgpx_default_height', 'fgpx_chart_color'];
+        $keys = ['fgpx_default_zoom', 'fgpx_default_height', 'fgpx_chart_color'];
         $result = Options::getMultiple($keys);
 
         $this->assertCount(3, $result);
@@ -190,7 +199,7 @@ final class OptionsTest extends TestCase
 
     public function test_get_all_contains_every_definition_key(): void
     {
-        $all  = Options::getAll();
+        $all = Options::getAll();
         $defs = Options::getDefinitions();
 
         $this->assertSameSize($defs, $all, 'getAll() must return the same number of entries as getDefinitions()');
@@ -243,22 +252,44 @@ final class OptionsTest extends TestCase
         $frontend = Options::getForFrontend();
 
         $required = [
-            'chartColor', 'chartColor2', 'chartColorHr',
-            'chartColorCad', 'chartColorTemp', 'chartColorPower',
+            'chartColor',
+            'chartColor2',
+            'chartColorHr',
+            'chartColorCad',
+            'chartColorTemp',
+            'chartColorPower',
             'ftp',
-            'chartColorWindImpact', 'chartColorWindRose',
-            'windRoseColorNorth', 'windRoseColorSouth',
-            'windRoseColorEast', 'windRoseColorWest',
-            'daynightEnabled', 'daynightMapEnabled',
-            'daynightMapColor', 'daynightMapOpacity',
-            'photosEnabled', 'photoOrderMode', 'photoQueueRotationEnabled', 'photoMaxDistance', 'showLabels',
-            'defaultZoom', 'defaultPitch', 'styleJson',
-            'backendSimplify', 'backendSimplifyTarget',
+            'chartColorWindImpact',
+            'chartColorWindRose',
+            'windRoseColorNorth',
+            'windRoseColorSouth',
+            'windRoseColorEast',
+            'windRoseColorWest',
+            'daynightEnabled',
+            'daynightMapEnabled',
+            'daynightMapColor',
+            'daynightMapOpacity',
+            'photosEnabled',
+            'photoOrderMode',
+            'photoQueueRotationEnabled',
+            'photoMaxDistance',
+            'showLabels',
+            'defaultZoom',
+            'defaultPitch',
+            'styleJson',
+            'backendSimplify',
+            'backendSimplifyTarget',
             'debugWeatherData',
-            'weatherFogThreshold', 'weatherRainThreshold',
-            'weatherSnowThreshold', 'weatherWindThreshold', 'weatherCloudThreshold',
-            'clouds3dEnabled', 'clouds3dQuality',
-            'themeMode', 'themeAutoDarkStart', 'themeAutoDarkEnd',
+            'weatherFogThreshold',
+            'weatherRainThreshold',
+            'weatherSnowThreshold',
+            'weatherWindThreshold',
+            'weatherCloudThreshold',
+            'clouds3dEnabled',
+            'clouds3dQuality',
+            'themeMode',
+            'themeAutoDarkStart',
+            'themeAutoDarkEnd',
         ];
 
         foreach ($required as $key) {
@@ -271,39 +302,39 @@ final class OptionsTest extends TestCase
         $f = Options::getForFrontend();
 
         // Booleans
-        $this->assertIsBool($f['daynightEnabled'],     'daynightEnabled must be bool');
-        $this->assertIsBool($f['daynightMapEnabled'],  'daynightMapEnabled must be bool');
-        $this->assertIsBool($f['photosEnabled'],       'photosEnabled must be bool');
+        $this->assertIsBool($f['daynightEnabled'], 'daynightEnabled must be bool');
+        $this->assertIsBool($f['daynightMapEnabled'], 'daynightMapEnabled must be bool');
+        $this->assertIsBool($f['photosEnabled'], 'photosEnabled must be bool');
         $this->assertIsBool($f['photoQueueRotationEnabled'], 'photoQueueRotationEnabled must be bool');
-        $this->assertIsBool($f['showLabels'],          'showLabels must be bool');
-        $this->assertIsBool($f['backendSimplify'],     'backendSimplify must be bool');
-        $this->assertIsBool($f['debugWeatherData'],    'debugWeatherData must be bool');
+        $this->assertIsBool($f['showLabels'], 'showLabels must be bool');
+        $this->assertIsBool($f['backendSimplify'], 'backendSimplify must be bool');
+        $this->assertIsBool($f['debugWeatherData'], 'debugWeatherData must be bool');
 
         // Integers
-        $this->assertIsInt($f['defaultZoom'],              'defaultZoom must be int');
-        $this->assertIsInt($f['defaultPitch'],             'defaultPitch must be int');
-        $this->assertIsInt($f['backendSimplifyTarget'],    'backendSimplifyTarget must be int');
-        $this->assertIsInt($f['photoMaxDistance'],         'photoMaxDistance must be int');
-        $this->assertIsInt($f['ftp'],                      'ftp must be int');
+        $this->assertIsInt($f['defaultZoom'], 'defaultZoom must be int');
+        $this->assertIsInt($f['defaultPitch'], 'defaultPitch must be int');
+        $this->assertIsInt($f['backendSimplifyTarget'], 'backendSimplifyTarget must be int');
+        $this->assertIsInt($f['photoMaxDistance'], 'photoMaxDistance must be int');
+        $this->assertIsInt($f['ftp'], 'ftp must be int');
 
         // Floats / numbers
-        $this->assertIsFloat($f['daynightMapOpacity'],     'daynightMapOpacity must be float');
-        $this->assertIsFloat($f['weatherFogThreshold'],    'weatherFogThreshold must be float');
-        $this->assertIsFloat($f['weatherRainThreshold'],   'weatherRainThreshold must be float');
-        $this->assertIsFloat($f['weatherSnowThreshold'],   'weatherSnowThreshold must be float');
-        $this->assertIsFloat($f['weatherWindThreshold'],   'weatherWindThreshold must be float');
-        $this->assertIsFloat($f['weatherCloudThreshold'],  'weatherCloudThreshold must be float');
+        $this->assertIsFloat($f['daynightMapOpacity'], 'daynightMapOpacity must be float');
+        $this->assertIsFloat($f['weatherFogThreshold'], 'weatherFogThreshold must be float');
+        $this->assertIsFloat($f['weatherRainThreshold'], 'weatherRainThreshold must be float');
+        $this->assertIsFloat($f['weatherSnowThreshold'], 'weatherSnowThreshold must be float');
+        $this->assertIsFloat($f['weatherWindThreshold'], 'weatherWindThreshold must be float');
+        $this->assertIsFloat($f['weatherCloudThreshold'], 'weatherCloudThreshold must be float');
 
         // Strings
-        $this->assertIsString($f['chartColor'],    'chartColor must be string');
-        $this->assertIsString($f['chartColor2'],   'chartColor2 must be string');
+        $this->assertIsString($f['chartColor'], 'chartColor must be string');
+        $this->assertIsString($f['chartColor2'], 'chartColor2 must be string');
         $this->assertIsString($f['photoOrderMode'], 'photoOrderMode must be string');
-        $this->assertIsString($f['styleJson'],     'styleJson must be string');
-        $this->assertIsString($f['themeMode'],          'themeMode must be string');
+        $this->assertIsString($f['styleJson'], 'styleJson must be string');
+        $this->assertIsString($f['themeMode'], 'themeMode must be string');
         $this->assertIsString($f['themeAutoDarkStart'], 'themeAutoDarkStart must be string');
-        $this->assertIsString($f['themeAutoDarkEnd'],   'themeAutoDarkEnd must be string');
-        $this->assertIsBool($f['clouds3dEnabled'],      'clouds3dEnabled must be bool');
-        $this->assertIsString($f['clouds3dQuality'],    'clouds3dQuality must be string');
+        $this->assertIsString($f['themeAutoDarkEnd'], 'themeAutoDarkEnd must be string');
+        $this->assertIsBool($f['clouds3dEnabled'], 'clouds3dEnabled must be bool');
+        $this->assertIsString($f['clouds3dQuality'], 'clouds3dQuality must be string');
         $this->assertContains($f['clouds3dQuality'], ['low', 'medium', 'high'], 'clouds3dQuality must be a valid preset');
         $this->assertContains($f['photoOrderMode'], ['geo_first', 'time_first'], 'photoOrderMode must be a valid value');
         $this->assertContains($f['themeMode'], ['system', 'dark', 'bright', 'auto'], 'themeMode must be a valid value');

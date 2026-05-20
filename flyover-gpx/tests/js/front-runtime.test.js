@@ -396,6 +396,13 @@ describe('front.js runtime minimal regressions', () => {
     expect(FRONT_SRC.includes("map.addLayer(segmentLayerConfig, 'fgpx-point-circle')")).toBe(true);
   });
 
+  test('speed arrows include missing-series warning and long-track density cap', () => {
+    expect(FRONT_SRC.includes('speed-arrows-missing-series')).toBe(true);
+    expect(FRONT_SRC.includes('Speed arrows enabled but cannot render')).toBe(true);
+    expect(FRONT_SRC.includes('speedArrowFeatureLimit')).toBe(true);
+    expect(FRONT_SRC.includes('Speed arrow count capped for performance')).toBe(true);
+  });
+
   test('gallery player strategy param is passed to REST and AJAX URLs', async () => {
     document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="7"></div>';
 
@@ -1323,6 +1330,69 @@ describe('front.js runtime minimal regressions', () => {
     expect(routeArrowCall).toBeDefined();
     expect(routeArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
     expect(routeArrowCall[1]).toMatchObject({
+      width: 20,
+      height: 20,
+      data: expect.any(Uint8ClampedArray),
+    });
+  });
+
+  test('speed arrows: addImage is called with data object when speed overlay is enabled', async () => {
+    document.body.innerHTML = '<div id="fgpx-app" class="fgpx" data-track-id="1"></div>';
+    installMapLibreMock();
+
+    const addImageSpy = jest.spyOn(window.maplibregl.Map.prototype, 'addImage');
+
+    window.Chart = function ChartStub() {
+      return { destroy: jest.fn(), update: jest.fn(), resize: jest.fn() };
+    };
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          geojson: {
+            coordinates: [
+              [16, 48, 100],
+              [16.01, 48.01, 102],
+              [16.03, 48.03, 110],
+            ],
+            properties: {
+              timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:01:00Z', '2026-01-01T00:02:00Z'],
+              cumulativeDistance: [0, 800, 4200],
+            },
+          },
+          bounds: [16, 48, 16.03, 48.03],
+          stats: {},
+          photos: [],
+        }),
+    });
+    global.fetch = fetchMock;
+    window.fetch = fetchMock;
+
+    window.FGPX = baseFGPX({
+      speedArrowsEnabled: true,
+      speedArrowsThresholdLow: 15,
+      speedArrowsThresholdHigh: 25,
+      speedArrowsSpacingLowKm: 3,
+      speedArrowsSpacingHighKm: 0.5,
+    });
+
+    loadFront();
+    window.FGPX.boot();
+
+    await flushAsync();
+    await flushAsync();
+    await flushAsync();
+
+    const speedArrowCall = addImageSpy.mock.calls.find(
+      (call) =>
+        call[0] === 'fgpx-speed-dir-arrow-medium' ||
+        call[0] === 'fgpx-speed-dir-arrow-high' ||
+        call[0] === 'fgpx-speed-dir-arrow-very-high'
+    );
+    expect(speedArrowCall).toBeDefined();
+    expect(speedArrowCall[1] instanceof HTMLCanvasElement).toBe(false);
+    expect(speedArrowCall[1]).toMatchObject({
       width: 20,
       height: 20,
       data: expect.any(Uint8ClampedArray),

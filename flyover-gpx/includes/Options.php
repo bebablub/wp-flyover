@@ -169,6 +169,16 @@ final class Options
 		'fgpx_arrows_enabled' => '0',
 		'fgpx_arrows_km' => '5',
 
+		// Speed Arrows Overlay
+		'fgpx_speed_arrows_enabled' => '0',
+		'fgpx_speed_arrows_threshold_low' => '18',
+		'fgpx_speed_arrows_threshold_high' => '35',
+		'fgpx_speed_arrows_color_low' => '#ffd54f',
+		'fgpx_speed_arrows_color_mid' => '#ff9800',
+		'fgpx_speed_arrows_color_high' => '#ff3d00',
+		'fgpx_speed_arrows_spacing_low_km' => '3.5',
+		'fgpx_speed_arrows_spacing_high_km' => '0.8',
+
 		// Theme / Dark Mode
 		'fgpx_theme_mode' => 'system',          // system | dark | bright | auto
 		'fgpx_theme_auto_dark_start' => '22:00', // HH:MM – when dark mode begins (auto mode)

@@ -47,6 +47,18 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString('\\update_option(\'fgpx_arrows_km\', (string) max(0.5, min(100, (float) $_POST[\'fgpx_arrows_km\'])), true);', $source);
     }
 
+    public function test_speed_arrow_settings_are_bounded_and_persisted(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_enabled\', isset($_POST[\'fgpx_speed_arrows_enabled\']) ? \'1\' : \'0\', true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_threshold_low\', (string) max(1, min(120, (float) $_POST[\'fgpx_speed_arrows_threshold_low\'])), true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_threshold_high\', (string) max(2, min(160, (float) $_POST[\'fgpx_speed_arrows_threshold_high\'])), true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_spacing_low_km\', (string) max(0.3, min(25, (float) $_POST[\'fgpx_speed_arrows_spacing_low_km\'])), true);', $source);
+        $this->assertStringContainsString('\\update_option(\'fgpx_speed_arrows_spacing_high_km\', (string) max(0.1, min(10, (float) $_POST[\'fgpx_speed_arrows_spacing_high_km\'])), true);', $source);
+    }
+
     public function test_map_selector_default_is_whitelisted_to_known_modes(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
@@ -181,6 +193,16 @@ final class AdminSettingsValidationTest extends TestCase
         $this->assertStringContainsString("public static function parse_gpx_and_stats(string \$filePath)", $source);
         $this->assertStringContainsString("return new \\WP_Error('fgpx_parse_error', \\esc_html__('Failed to parse GPX file. The XML is readable, but the GPX structure is malformed or unsupported.'", $source);
         $this->assertStringContainsString("private static function validate_gpx_upload_file(string \$filePath)", $source);
+    }
+
+    public function test_parse_routine_exposes_point_speeds_when_available(): void
+    {
+        $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
+        $source = (string) file_get_contents($adminFile);
+
+        $this->assertStringContainsString('$speeds[] = $speedKmh;', $source);
+        $this->assertStringContainsString("'speeds' => \$speeds", $source);
+        $this->assertStringContainsString("\array_key_exists('speed', \$pointVars)", $source);
     }
 
     public function test_weather_enrichment_records_sampling_limits_and_truncation_summary(): void

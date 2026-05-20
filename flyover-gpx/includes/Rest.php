@@ -58,25 +58,25 @@ final class Rest
 
         $compressed = [];
         $precision = 100000; // ~1.1m precision at equator
-        
+
         // Use first coordinate as reference point
         $refLat = $coords[0][0];
         $refLon = $coords[0][1];
         $refEle = isset($coords[0][2]) ? $coords[0][2] : null;
-        
+
         foreach ($coords as $i => $coord) {
             if ($i === 0) {
                 // Keep first coordinate as-is for reference
                 $compressed[] = $coord;
                 continue;
             }
-            
+
             // Calculate relative offsets and round to precision
             $latOffset = round(($coord[0] - $refLat) * $precision) / $precision;
             $lonOffset = round(($coord[1] - $refLon) * $precision) / $precision;
-            
+
             $compressedCoord = [$refLat + $latOffset, $refLon + $lonOffset];
-            
+
             // Handle elevation if present
             if (isset($coord[2]) && $refEle !== null) {
                 $eleOffset = round(($coord[2] - $refEle) * 10) / 10; // 0.1m elevation precision
@@ -84,15 +84,15 @@ final class Rest
             } elseif (isset($coord[2])) {
                 $compressedCoord[] = round($coord[2] * 10) / 10;
             }
-            
+
             $compressed[] = $compressedCoord;
         }
-        
+
         // Calculate compression ratio
         $originalSize = strlen(json_encode($coords));
         $compressedSize = strlen(json_encode($compressed));
         $reduction = $originalSize > 0 ? (1 - $compressedSize / $originalSize) : 0.0;
-        
+
         return [
             'coordinates' => $compressed,
             'compressed' => true,
@@ -113,26 +113,26 @@ final class Rest
         // Safety bounds: never go below 300 or above 2500 points
         $minTarget = 300;
         $maxTarget = 2500;
-        
+
         // For small tracks (< 2000 points), use admin setting or minimal reduction
         if ($originalPoints <= 2000) {
             return max($minTarget, min($adminTarget, $originalPoints));
         }
-        
+
         // For medium tracks (2000-10000 points), use moderate reduction
         if ($originalPoints <= 10000) {
-            $dynamicTarget = max(800, min(1500, (int)($originalPoints * 0.15)));
+            $dynamicTarget = max(800, min(1500, (int) ($originalPoints * 0.15)));
             return max($minTarget, min($maxTarget, $dynamicTarget));
         }
-        
+
         // For large tracks (10000-50000 points), use more aggressive reduction
         if ($originalPoints <= 50000) {
-            $dynamicTarget = max(1000, min(2000, (int)($originalPoints * 0.05)));
+            $dynamicTarget = max(1000, min(2000, (int) ($originalPoints * 0.05)));
             return max($minTarget, min($maxTarget, $dynamicTarget));
         }
-        
+
         // For very large tracks (50000+ points), use maximum reduction
-        $dynamicTarget = max(1200, min(2500, (int)($originalPoints * 0.03)));
+        $dynamicTarget = max(1200, min(2500, (int) ($originalPoints * 0.03)));
         return max($minTarget, min($maxTarget, $dynamicTarget));
     }
 
@@ -260,14 +260,25 @@ final class Rest
             return [0, max(0, $n - 1)];
         }
         // Compute bbox diag as heuristic scale
-        $minX = INF; $minY = INF; $maxX = -INF; $maxY = -INF;
+        $minX = INF;
+        $minY = INF;
+        $maxX = -INF;
+        $maxY = -INF;
         foreach ($coords as $c) {
-            $x = (float) $c[0]; $y = (float) $c[1];
-            if ($x < $minX) $minX = $x; if ($x > $maxX) $maxX = $x;
-            if ($y < $minY) $minY = $y; if ($y > $maxY) $maxY = $y;
+            $x = (float) $c[0];
+            $y = (float) $c[1];
+            if ($x < $minX)
+                $minX = $x;
+            if ($x > $maxX)
+                $maxX = $x;
+            if ($y < $minY)
+                $minY = $y;
+            if ($y > $maxY)
+                $maxY = $y;
         }
         $diag = hypot($maxX - $minX, $maxY - $minY);
-        $low = 0.0; $high = max(1e-9, $diag * 0.01);
+        $low = 0.0;
+        $high = max(1e-9, $diag * 0.01);
         $bestTol = $high;
         for ($iter = 0; $iter < 10; $iter++) {
             $mid = ($low + $high) / 2.0;
@@ -275,7 +286,8 @@ final class Rest
             if (count($indices) > $targetPoints) {
                 $low = $mid; // need more tolerance
             } else {
-                $bestTol = $mid; $high = $mid;
+                $bestTol = $mid;
+                $high = $mid;
             }
         }
         return self::dp_simplify_indices($coords, $bestTol * $bestTol);
@@ -290,29 +302,44 @@ final class Rest
     private static function dp_simplify_indices(array $coords, float $sqTol): array
     {
         $n = count($coords);
-        if ($n <= 2) { return [0, max(0, $n - 1)]; }
+        if ($n <= 2) {
+            return [0, max(0, $n - 1)];
+        }
         $markers = array_fill(0, $n, 0);
         $stack = [[0, $n - 1]];
-        $markers[0] = 1; $markers[$n - 1] = 1;
+        $markers[0] = 1;
+        $markers[$n - 1] = 1;
 
-        $getSqSegDist = static function(array $p, array $p1, array $p2): float {
-            $x = (float) $p1[0]; $y = (float) $p1[1];
-            $dx = (float) $p2[0] - $x; $dy = (float) $p2[1] - $y;
+        $getSqSegDist = static function (array $p, array $p1, array $p2): float {
+            $x = (float) $p1[0];
+            $y = (float) $p1[1];
+            $dx = (float) $p2[0] - $x;
+            $dy = (float) $p2[1] - $y;
             if ($dx != 0.0 || $dy != 0.0) {
                 $t = ((($p[0] - $x) * $dx) + (($p[1] - $y) * $dy)) / (($dx * $dx) + ($dy * $dy));
-                if ($t > 1.0) { $x = (float) $p2[0]; $y = (float) $p2[1]; }
-                elseif ($t > 0.0) { $x += $dx * $t; $y += $dy * $t; }
+                if ($t > 1.0) {
+                    $x = (float) $p2[0];
+                    $y = (float) $p2[1];
+                } elseif ($t > 0.0) {
+                    $x += $dx * $t;
+                    $y += $dy * $t;
+                }
             }
-            $dx = (float) $p[0] - $x; $dy = (float) $p[1] - $y;
+            $dx = (float) $p[0] - $x;
+            $dy = (float) $p[1] - $y;
             return $dx * $dx + $dy * $dy;
         };
 
         while (!empty($stack)) {
             [$first, $last] = array_pop($stack);
-            $maxSq = 0.0; $index = -1;
+            $maxSq = 0.0;
+            $index = -1;
             for ($i = $first + 1; $i < $last; $i++) {
                 $sq = $getSqSegDist($coords[$i], $coords[$first], $coords[$last]);
-                if ($sq > $maxSq) { $maxSq = $sq; $index = $i; }
+                if ($sq > $maxSq) {
+                    $maxSq = $sq;
+                    $index = $i;
+                }
             }
             if ($maxSq > $sqTol && $index !== -1) {
                 $markers[$index] = 1;
@@ -322,8 +349,14 @@ final class Rest
         }
 
         $out = [];
-        for ($i = 0; $i < $n; $i++) { if ($markers[$i] === 1) { $out[] = $i; } }
-        if (empty($out)) { $out = [0, $n - 1]; }
+        for ($i = 0; $i < $n; $i++) {
+            if ($markers[$i] === 1) {
+                $out[] = $i;
+            }
+        }
+        if (empty($out)) {
+            $out = [0, $n - 1];
+        }
         return $out;
     }
     /**
@@ -331,7 +364,9 @@ final class Rest
      */
     private static function exif_gps_to_float($coord, $hemisphere)
     {
-        if (!is_array($coord) || count($coord) < 3) { return null; }
+        if (!is_array($coord) || count($coord) < 3) {
+            return null;
+        }
         $toFloat = static function ($v) {
             if (is_string($v) && strpos($v, '/') !== false) {
                 list($n, $d) = array_map('floatval', explode('/', $v, 2));
@@ -363,7 +398,7 @@ final class Rest
                 $noLocation[] = $p;
                 continue;
             }
-            $key = \sprintf('%.4f,%.4f', \round((float)$lat, 4), \round((float)$lon, 4));
+            $key = \sprintf('%.4f,%.4f', \round((float) $lat, 4), \round((float) $lon, 4));
             if (!isset($kept[$key])) {
                 $kept[$key] = $p;
             } else {
@@ -486,9 +521,12 @@ final class Rest
 
         // Use optimized bulk meta loading for better performance in REST endpoint
         $metaData = DatabaseOptimizer::getPostsWithMeta([$id], [
-            'fgpx_stats', 'fgpx_geojson', 'fgpx_bounds', 'fgpx_points_count'
+            'fgpx_stats',
+            'fgpx_geojson',
+            'fgpx_bounds',
+            'fgpx_points_count'
         ])[$id];
-        
+
         $stats = $metaData['fgpx_stats'];
         $geojson = $metaData['fgpx_geojson'];
         $bounds = $metaData['fgpx_bounds'];
@@ -543,15 +581,16 @@ final class Rest
             $heartRates = isset($props['heartRates']) && \is_array($props['heartRates']) ? $props['heartRates'] : null;
             $cadences = isset($props['cadences']) && \is_array($props['cadences']) ? $props['cadences'] : null;
             $temperatures = isset($props['temperatures']) && \is_array($props['temperatures']) ? $props['temperatures'] : null;
+            $speeds = isset($props['speeds']) && \is_array($props['speeds']) ? $props['speeds'] : null;
             $powers = isset($props['powers']) && \is_array($props['powers']) ? $props['powers'] : null;
             $windSpeeds = isset($props['windSpeeds']) && \is_array($props['windSpeeds']) ? $props['windSpeeds'] : null;
             $windDirections = isset($props['windDirections']) && \is_array($props['windDirections']) ? $props['windDirections'] : null;
             $windImpacts = isset($props['windImpacts']) && \is_array($props['windImpacts']) ? $props['windImpacts'] : null;
-            
+
             // Calculate dynamic target based on original point count for better performance
             $originalPoints = \count($coords);
             $dynamicTarget = self::calculateOptimalTarget($originalPoints, $simplifyTarget);
-            
+
             // Log performance optimization for large tracks
             if ($originalPoints > 10000) {
                 ErrorHandler::info('Large track simplification', [
@@ -561,16 +600,17 @@ final class Rest
                     'reduction_ratio' => round((1 - $dynamicTarget / $originalPoints) * 100, 1) . '%'
                 ]);
             }
-            
+
             if ($originalPoints > max(200, $dynamicTarget)) {
                 $indices = self::dp_choose_and_simplify($coords, max(100, $dynamicTarget));
                 if (!empty($indices)) {
-                    $simplifiedCoords = array_values(array_map(static function($idx) use ($coords) { return $coords[$idx]; }, $indices));
-                    
+                    $simplifiedCoords = array_values(array_map(static function ($idx) use ($coords) {
+                        return $coords[$idx]; }, $indices));
+
                     // Apply coordinate compression for additional payload reduction (REST endpoint)
                     $compressionResult = self::compressCoordinates($simplifiedCoords);
                     $decodedGeo['coordinates'] = $compressionResult['coordinates'];
-                    
+
                     // Log compression effectiveness for large tracks
                     if ($originalPoints > 10000 && $compressionResult['compressed']) {
                         ErrorHandler::debug('Coordinate compression applied (REST)', [
@@ -579,15 +619,46 @@ final class Rest
                             'compression_reduction' => round($compressionResult['reduction'] * 100, 1) . '%'
                         ]);
                     }
-                    if ($timestamps !== null) { $props['timestamps'] = array_values(array_map(static function($idx) use ($timestamps) { return $timestamps[$idx]; }, $indices)); }
-                    if ($cum !== null) { $props['cumulativeDistance'] = array_values(array_map(static function($idx) use ($cum) { return $cum[$idx]; }, $indices)); }
-                    if ($heartRates !== null) { $props['heartRates'] = array_values(array_map(static function($idx) use ($heartRates) { return $heartRates[$idx]; }, $indices)); }
-                    if ($cadences !== null) { $props['cadences'] = array_values(array_map(static function($idx) use ($cadences) { return $cadences[$idx]; }, $indices)); }
-                    if ($temperatures !== null) { $props['temperatures'] = array_values(array_map(static function($idx) use ($temperatures) { return $temperatures[$idx]; }, $indices)); }
-                    if ($powers !== null) { $props['powers'] = array_values(array_map(static function($idx) use ($powers) { return $powers[$idx]; }, $indices)); }
-                    if ($windSpeeds !== null) { $props['windSpeeds'] = array_values(array_map(static function($idx) use ($windSpeeds) { return $windSpeeds[$idx]; }, $indices)); }
-                    if ($windDirections !== null) { $props['windDirections'] = array_values(array_map(static function($idx) use ($windDirections) { return $windDirections[$idx]; }, $indices)); }
-                    if ($windImpacts !== null) { $props['windImpacts'] = array_values(array_map(static function($idx) use ($windImpacts) { return $windImpacts[$idx]; }, $indices)); }
+                    if ($timestamps !== null) {
+                        $props['timestamps'] = array_values(array_map(static function ($idx) use ($timestamps) {
+                            return $timestamps[$idx]; }, $indices));
+                    }
+                    if ($cum !== null) {
+                        $props['cumulativeDistance'] = array_values(array_map(static function ($idx) use ($cum) {
+                            return $cum[$idx]; }, $indices));
+                    }
+                    if ($heartRates !== null) {
+                        $props['heartRates'] = array_values(array_map(static function ($idx) use ($heartRates) {
+                            return $heartRates[$idx]; }, $indices));
+                    }
+                    if ($cadences !== null) {
+                        $props['cadences'] = array_values(array_map(static function ($idx) use ($cadences) {
+                            return $cadences[$idx]; }, $indices));
+                    }
+                    if ($temperatures !== null) {
+                        $props['temperatures'] = array_values(array_map(static function ($idx) use ($temperatures) {
+                            return $temperatures[$idx]; }, $indices));
+                    }
+                    if ($speeds !== null) {
+                        $props['speeds'] = array_values(array_map(static function ($idx) use ($speeds) {
+                            return $speeds[$idx]; }, $indices));
+                    }
+                    if ($powers !== null) {
+                        $props['powers'] = array_values(array_map(static function ($idx) use ($powers) {
+                            return $powers[$idx]; }, $indices));
+                    }
+                    if ($windSpeeds !== null) {
+                        $props['windSpeeds'] = array_values(array_map(static function ($idx) use ($windSpeeds) {
+                            return $windSpeeds[$idx]; }, $indices));
+                    }
+                    if ($windDirections !== null) {
+                        $props['windDirections'] = array_values(array_map(static function ($idx) use ($windDirections) {
+                            return $windDirections[$idx]; }, $indices));
+                    }
+                    if ($windImpacts !== null) {
+                        $props['windImpacts'] = array_values(array_map(static function ($idx) use ($windImpacts) {
+                            return $windImpacts[$idx]; }, $indices));
+                    }
                     $decodedGeo['properties'] = $props;
                 }
             }
@@ -639,7 +710,9 @@ final class Rest
             // 1) Attached media to the host post
             $attached = \get_attached_media('image', $collectFromPost);
             if (\is_array($attached)) {
-                foreach ($attached as $att) { $attachmentIds[(int) $att->ID] = true; }
+                foreach ($attached as $att) {
+                    $attachmentIds[(int) $att->ID] = true;
+                }
             }
             // 2) Gallery block / shortcode ids
             $galleries = function_exists('get_post_galleries') ? get_post_galleries($collectFromPost, false) : [];
@@ -647,7 +720,9 @@ final class Rest
                 foreach ($galleries as $gal) {
                     if (!empty($gal['ids'])) {
                         $ids = array_filter(array_map('intval', explode(',', (string) $gal['ids'])));
-                        foreach ($ids as $gid) { $attachmentIds[$gid] = true; }
+                        foreach ($ids as $gid) {
+                            $attachmentIds[$gid] = true;
+                        }
                     }
                 }
             }
@@ -655,18 +730,32 @@ final class Rest
             $content = (string) get_post_field('post_content', $collectFromPost);
             if ($content !== '') {
                 if (preg_match_all('/wp-image-(\d+)/', $content, $m)) {
-                    foreach ($m[1] as $mid) { $attachmentIds[(int) $mid] = true; }
+                    foreach ($m[1] as $mid) {
+                        $attachmentIds[(int) $mid] = true;
+                    }
                 }
                 // Collect URLs from <img src> and <a href> that look like images; allow query strings
                 if (preg_match_all('/<img[^>]+src="([^\"]+\.(?:jpe?g|png|webp))(?:\?[^\"]*)?"/i', $content, $mImg)) {
-                    foreach ($mImg[1] as $u) { $imageUrls[] = (string) $u; $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($u) : 0; if ($aid) { $attachmentIds[(int) $aid] = true; } }
+                    foreach ($mImg[1] as $u) {
+                        $imageUrls[] = (string) $u;
+                        $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($u) : 0;
+                        if ($aid) {
+                            $attachmentIds[(int) $aid] = true;
+                        }
+                    }
                 }
                 if (preg_match_all('/<a[^>]+href="([^\"]+\.(?:jpe?g|png|webp))(?:\?[^\"]*)?"/i', $content, $mHref)) {
-                    foreach ($mHref[1] as $u) { $imageUrls[] = (string) $u; $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($u) : 0; if ($aid) { $attachmentIds[(int) $aid] = true; } }
+                    foreach ($mHref[1] as $u) {
+                        $imageUrls[] = (string) $u;
+                        $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($u) : 0;
+                        if ($aid) {
+                            $attachmentIds[(int) $aid] = true;
+                        }
+                    }
                 }
             }
         }
-        
+
         // Log fallback to track attachments if strategy found no embedding post
         if ($collectFromPost === 0 && $strategy === 'latest_embed') {
             ErrorHandler::debug('Gallery photo strategy fell back to track attachments', [
@@ -696,7 +785,9 @@ final class Rest
 
         foreach (array_keys($attachmentIds) as $att_id) {
             $file = \get_attached_file($att_id);
-            if (!$file || !is_readable($file)) { continue; }
+            if (!$file || !is_readable($file)) {
+                continue;
+            }
             $thumb = \wp_get_attachment_image_src($att_id, 'medium');
             $full = \wp_get_attachment_image_src($att_id, 'large');
             $meta = \wp_read_image_metadata($file);
@@ -713,11 +804,13 @@ final class Rest
                 }
                 if ($createdTs === null && isset($ex['EXIF']['DateTimeOriginal'])) {
                     $dto = $ex['EXIF']['DateTimeOriginal'];
-                    $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
+                    $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto, 0, 10)) . substr($dto, 10)) : null;
                 }
             }
             $cap = function_exists('wp_get_attachment_caption') ? (\wp_get_attachment_caption($att_id) ?: '') : '';
-            if ($cap === '') { $cap = (string) get_post_field('post_excerpt', $att_id) ?: ''; }
+            if ($cap === '') {
+                $cap = (string) get_post_field('post_excerpt', $att_id) ?: '';
+            }
             $desc = (string) get_post_field('post_content', $att_id);
             $photoSourcePostId = isset($fallbackAttachmentIds[$att_id]) ? 0 : $sourcePostId;
             $photoSourcePostTitle = isset($fallbackAttachmentIds[$att_id]) ? '' : $sourcePostTitle;
@@ -746,26 +839,46 @@ final class Rest
             $basedir = isset($uploads['basedir']) ? (string) $uploads['basedir'] : '';
             $uploadsPath = is_string($baseurl) ? (string) parse_url($baseurl, PHP_URL_PATH) : '';
             foreach ($imageUrls as $u) {
-                $exists = false; foreach ($photos as $p) { if (!empty($p['fullUrl']) && $p['fullUrl'] === $u) { $exists = true; break; } }
-                if ($exists) { continue; }
+                $exists = false;
+                foreach ($photos as $p) {
+                    if (!empty($p['fullUrl']) && $p['fullUrl'] === $u) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if ($exists) {
+                    continue;
+                }
                 $parsed = @parse_url((string) $u);
                 $path = isset($parsed['path']) ? (string) $parsed['path'] : '';
-                if ($path === '' || $basedir === '') { continue; }
+                if ($path === '' || $basedir === '') {
+                    continue;
+                }
                 $rel = '';
                 if ($uploadsPath && strpos($path, $uploadsPath) !== false) {
                     $rel = ltrim(str_replace($uploadsPath, '', $path), '/');
                 } elseif (preg_match('#/uploads/(.+)$#', $path, $mRel)) {
                     $rel = $mRel[1];
-                } else { continue; }
+                } else {
+                    continue;
+                }
                 $rel = preg_replace('/-\d+x\d+(?=\.[a-zA-Z]{3,4}$)/', '', $rel);
                 $candidate = rtrim($basedir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel);
                 // Security hardening: normalize path and ensure it's inside uploads basedir; reject traversal
                 $realBase = realpath($basedir);
                 $realCand = $candidate !== '' ? realpath($candidate) : false;
-                if ($realBase === false || $realCand === false) { continue; }
-                if (strpos($realCand, $realBase) !== 0) { continue; }
-                if (strpos($rel, '..') !== false) { continue; }
-                if (!is_readable($realCand)) { continue; }
+                if ($realBase === false || $realCand === false) {
+                    continue;
+                }
+                if (strpos($realCand, $realBase) !== 0) {
+                    continue;
+                }
+                if (strpos($rel, '..') !== false) {
+                    continue;
+                }
+                if (!is_readable($realCand)) {
+                    continue;
+                }
                 $meta = \wp_read_image_metadata($realCand);
                 $lat = isset($meta['latitude']) ? (float) $meta['latitude'] : null;
                 $lon = isset($meta['longitude']) ? (float) $meta['longitude'] : null;
@@ -779,7 +892,7 @@ final class Rest
                     }
                     if ($createdTs === null && isset($ex['EXIF']['DateTimeOriginal'])) {
                         $dto = $ex['EXIF']['DateTimeOriginal'];
-                        $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
+                        $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto, 0, 10)) . substr($dto, 10)) : null;
                     }
                 }
                 if ($sourcePostId > 0) {
@@ -809,7 +922,7 @@ final class Rest
         $weatherSummary = \get_post_meta($id, 'fgpx_weather_summary', true);
         $decodedWeather = null;
         $decodedWeatherSummaryRest = null;
-        
+
         if (\is_string($weatherPoints) && $weatherPoints !== '') {
             $decodedWeather = \json_decode($weatherPoints, true);
             if (\json_last_error() !== JSON_ERROR_NONE) {
@@ -821,7 +934,7 @@ final class Rest
                 $decodedWeather = null;
             }
         }
-        
+
         if (\is_string($weatherSummary) && $weatherSummary !== '') {
             $decodedWeatherSummaryRest = \json_decode($weatherSummary, true);
             if (\json_last_error() !== JSON_ERROR_NONE) {
@@ -851,6 +964,7 @@ final class Rest
                 'heartRates' => [],
                 'cadences' => [],
                 'temperatures' => [],
+                'speeds' => [],
                 'powers' => [],
                 'windSpeeds' => [],
                 'windDirections' => [],
@@ -913,7 +1027,7 @@ final class Rest
         $hostPostForCache = self::normalize_host_post_id(isset($_GET['host_post']) ? (int) $_GET['host_post'] : 0);
         $strategy = self::normalize_track_strategy((string) ($_GET['strategy'] ?? ''));
         $hostPost = $hostPostForCache;
-        
+
         // Gallery playback strategy: resolve latest embedding post if strategy=latest_embed
         if ($hostPost === 0 && $strategy === 'latest_embed') {
             $hostPost = $this->find_latest_embedding_post_id($id);
@@ -929,16 +1043,16 @@ final class Rest
                 }
             }
         }
-        
+
         $modified = (string) \strtotime((string) $post->post_modified_gmt);
         $simplifyEnabled = (string) \get_option('fgpx_backend_simplify_enabled', '0') === '1';
         $simplifyTarget = (int) \get_option('fgpx_backend_simplify_target', '1500');
         $windAnalysisEnabled = (string) \get_option('fgpx_wind_analysis_enabled', '0');
-        
+
         // Include weather data status in cache key to invalidate cache when weather data changes
         $weatherPoints = \get_post_meta($id, 'fgpx_weather_points', true);
         $hasWeather = (\is_string($weatherPoints) && $weatherPoints !== '') ? '1' : '0';
-        
+
         $cache_key = 'fgpx_json_v3_' . $id . '_' . $modified . '_rh_' . $hostPost . '_sm_' . $sourcePostModifiedToken . '_simp_' . ($simplifyEnabled ? $simplifyTarget : 0) . '_w_' . $hasWeather . '_wind_' . $windAnalysisEnabled . '_st_' . ($strategy ?: 'default');
         $cached = \get_transient($cache_key);
         if (\is_array($cached)) {
@@ -948,14 +1062,17 @@ final class Rest
 
         // Use optimized bulk meta loading for better performance in AJAX endpoint
         $metaData = DatabaseOptimizer::getPostsWithMeta([$id], [
-            'fgpx_stats', 'fgpx_geojson', 'fgpx_bounds', 'fgpx_points_count'
+            'fgpx_stats',
+            'fgpx_geojson',
+            'fgpx_bounds',
+            'fgpx_points_count'
         ])[$id];
-        
+
         $stats = $metaData['fgpx_stats'];
         $geojson = $metaData['fgpx_geojson'];
         $bounds = $metaData['fgpx_bounds'];
         $pointsCount = (int) $metaData['fgpx_points_count'];
-        
+
         // Optimize JSON parsing - single decode with error handling
         $decodedGeo = null;
         $geojsonDecodeError = false;
@@ -1003,24 +1120,26 @@ final class Rest
             $heartRates = isset($props['heartRates']) && is_array($props['heartRates']) ? $props['heartRates'] : null;
             $cadences = isset($props['cadences']) && is_array($props['cadences']) ? $props['cadences'] : null;
             $temperatures = isset($props['temperatures']) && is_array($props['temperatures']) ? $props['temperatures'] : null;
+            $speeds = isset($props['speeds']) && is_array($props['speeds']) ? $props['speeds'] : null;
             $powers = isset($props['powers']) && is_array($props['powers']) ? $props['powers'] : null;
             $windSpeeds = isset($props['windSpeeds']) && is_array($props['windSpeeds']) ? $props['windSpeeds'] : null;
             $windDirections = isset($props['windDirections']) && is_array($props['windDirections']) ? $props['windDirections'] : null;
             $windImpacts = isset($props['windImpacts']) && is_array($props['windImpacts']) ? $props['windImpacts'] : null;
-            
+
             // Calculate dynamic target based on original point count for better performance
             $originalPoints = count($coords);
             $dynamicTarget = self::calculateOptimalTarget($originalPoints, $simplifyTarget);
-            
+
             if ($originalPoints > max(200, $dynamicTarget)) {
                 $indices = self::dp_choose_and_simplify($coords, max(100, $dynamicTarget));
                 if (!empty($indices)) {
-                    $simplifiedCoords = array_values(array_map(static function($idx) use ($coords) { return $coords[$idx]; }, $indices));
-                    
+                    $simplifiedCoords = array_values(array_map(static function ($idx) use ($coords) {
+                        return $coords[$idx]; }, $indices));
+
                     // Apply coordinate compression for additional payload reduction (AJAX endpoint)
                     $compressionResult = self::compressCoordinates($simplifiedCoords);
                     $decodedGeo['coordinates'] = $compressionResult['coordinates'];
-                    
+
                     // Log compression effectiveness for large tracks
                     if ($originalPoints > 10000 && $compressionResult['compressed']) {
                         ErrorHandler::debug('Coordinate compression applied (AJAX)', [
@@ -1029,15 +1148,46 @@ final class Rest
                             'compression_reduction' => round($compressionResult['reduction'] * 100, 1) . '%'
                         ]);
                     }
-                    if ($timestamps !== null) { $props['timestamps'] = array_values(array_map(static function($idx) use ($timestamps) { return $timestamps[$idx]; }, $indices)); }
-                    if ($cum !== null) { $props['cumulativeDistance'] = array_values(array_map(static function($idx) use ($cum) { return $cum[$idx]; }, $indices)); }
-                    if ($heartRates !== null) { $props['heartRates'] = array_values(array_map(static function($idx) use ($heartRates) { return $heartRates[$idx]; }, $indices)); }
-                    if ($cadences !== null) { $props['cadences'] = array_values(array_map(static function($idx) use ($cadences) { return $cadences[$idx]; }, $indices)); }
-                    if ($temperatures !== null) { $props['temperatures'] = array_values(array_map(static function($idx) use ($temperatures) { return $temperatures[$idx]; }, $indices)); }
-                    if ($powers !== null) { $props['powers'] = array_values(array_map(static function($idx) use ($powers) { return $powers[$idx]; }, $indices)); }
-                    if ($windSpeeds !== null) { $props['windSpeeds'] = array_values(array_map(static function($idx) use ($windSpeeds) { return $windSpeeds[$idx]; }, $indices)); }
-                    if ($windDirections !== null) { $props['windDirections'] = array_values(array_map(static function($idx) use ($windDirections) { return $windDirections[$idx]; }, $indices)); }
-                    if ($windImpacts !== null) { $props['windImpacts'] = array_values(array_map(static function($idx) use ($windImpacts) { return $windImpacts[$idx]; }, $indices)); }
+                    if ($timestamps !== null) {
+                        $props['timestamps'] = array_values(array_map(static function ($idx) use ($timestamps) {
+                            return $timestamps[$idx]; }, $indices));
+                    }
+                    if ($cum !== null) {
+                        $props['cumulativeDistance'] = array_values(array_map(static function ($idx) use ($cum) {
+                            return $cum[$idx]; }, $indices));
+                    }
+                    if ($heartRates !== null) {
+                        $props['heartRates'] = array_values(array_map(static function ($idx) use ($heartRates) {
+                            return $heartRates[$idx]; }, $indices));
+                    }
+                    if ($cadences !== null) {
+                        $props['cadences'] = array_values(array_map(static function ($idx) use ($cadences) {
+                            return $cadences[$idx]; }, $indices));
+                    }
+                    if ($temperatures !== null) {
+                        $props['temperatures'] = array_values(array_map(static function ($idx) use ($temperatures) {
+                            return $temperatures[$idx]; }, $indices));
+                    }
+                    if ($speeds !== null) {
+                        $props['speeds'] = array_values(array_map(static function ($idx) use ($speeds) {
+                            return $speeds[$idx]; }, $indices));
+                    }
+                    if ($powers !== null) {
+                        $props['powers'] = array_values(array_map(static function ($idx) use ($powers) {
+                            return $powers[$idx]; }, $indices));
+                    }
+                    if ($windSpeeds !== null) {
+                        $props['windSpeeds'] = array_values(array_map(static function ($idx) use ($windSpeeds) {
+                            return $windSpeeds[$idx]; }, $indices));
+                    }
+                    if ($windDirections !== null) {
+                        $props['windDirections'] = array_values(array_map(static function ($idx) use ($windDirections) {
+                            return $windDirections[$idx]; }, $indices));
+                    }
+                    if ($windImpacts !== null) {
+                        $props['windImpacts'] = array_values(array_map(static function ($idx) use ($windImpacts) {
+                            return $windImpacts[$idx]; }, $indices));
+                    }
                     $decodedGeo['properties'] = $props;
                 }
             }
@@ -1064,31 +1214,45 @@ final class Rest
         if ($collectFromPost > 0) {
             $attached = \get_attached_media('image', $collectFromPost);
             if (\is_array($attached)) {
-                foreach ($attached as $att) { $attachmentIds[(int) $att->ID] = true; }
+                foreach ($attached as $att) {
+                    $attachmentIds[(int) $att->ID] = true;
+                }
             }
             $galleries = function_exists('get_post_galleries') ? get_post_galleries($collectFromPost, false) : [];
             if (\is_array($galleries)) {
                 foreach ($galleries as $gal) {
                     if (!empty($gal['ids'])) {
                         $ids = array_filter(array_map('intval', explode(',', (string) $gal['ids'])));
-                        foreach ($ids as $gid) { $attachmentIds[$gid] = true; }
+                        foreach ($ids as $gid) {
+                            $attachmentIds[$gid] = true;
+                        }
                     }
                 }
             }
             $content = (string) get_post_field('post_content', $collectFromPost);
             if ($content !== '') {
                 if (preg_match_all('/wp-image-(\d+)/', $content, $m)) {
-                    foreach ($m[1] as $mid) { $attachmentIds[(int) $mid] = true; }
+                    foreach ($m[1] as $mid) {
+                        $attachmentIds[(int) $mid] = true;
+                    }
                 }
                 if (preg_match_all('/<img[^>]+src="([^\"]+\.(?:jpe?g|png|webp))(?:\?[^\"]*)?"/i', $content, $m2)) {
                     foreach ($m2[1] as $url) {
                         $imageUrls[] = (string) $url;
                         $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($url) : 0;
-                        if ($aid) { $attachmentIds[(int) $aid] = true; }
+                        if ($aid) {
+                            $attachmentIds[(int) $aid] = true;
+                        }
                     }
                 }
                 if (preg_match_all('/<a[^>]+href="([^\"]+\.(?:jpe?g|png|webp))(?:\?[^\"]*)?"/i', $content, $mA)) {
-                    foreach ($mA[1] as $urlA) { $imageUrls[] = (string) $urlA; $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($urlA) : 0; if ($aid) { $attachmentIds[(int) $aid] = true; } }
+                    foreach ($mA[1] as $urlA) {
+                        $imageUrls[] = (string) $urlA;
+                        $aid = function_exists('attachment_url_to_postid') ? attachment_url_to_postid($urlA) : 0;
+                        if ($aid) {
+                            $attachmentIds[(int) $aid] = true;
+                        }
+                    }
                 }
             }
         }
@@ -1110,7 +1274,9 @@ final class Rest
         }
         foreach (array_keys($attachmentIds) as $att_id) {
             $file = \get_attached_file($att_id);
-            if (!$file || !is_readable($file)) { continue; }
+            if (!$file || !is_readable($file)) {
+                continue;
+            }
             $thumb = \wp_get_attachment_image_src($att_id, 'medium');
             $full = \wp_get_attachment_image_src($att_id, 'large');
             $meta = \wp_read_image_metadata($file);
@@ -1126,11 +1292,13 @@ final class Rest
                 }
                 if ($createdTs === null && isset($ex['EXIF']['DateTimeOriginal'])) {
                     $dto = $ex['EXIF']['DateTimeOriginal'];
-                    $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
+                    $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto, 0, 10)) . substr($dto, 10)) : null;
                 }
             }
             $cap = function_exists('wp_get_attachment_caption') ? (\wp_get_attachment_caption($att_id) ?: '') : '';
-            if ($cap === '') { $cap = (string) get_post_field('post_excerpt', $att_id) ?: ''; }
+            if ($cap === '') {
+                $cap = (string) get_post_field('post_excerpt', $att_id) ?: '';
+            }
             $desc = (string) get_post_field('post_content', $att_id);
             $photoSourcePostId = isset($fallbackAttachmentIds[$att_id]) ? 0 : $sourcePostId;
             $photoSourcePostTitle = isset($fallbackAttachmentIds[$att_id]) ? '' : $sourcePostTitle;
@@ -1157,26 +1325,46 @@ final class Rest
             $basedir = isset($uploads['basedir']) ? (string) $uploads['basedir'] : '';
             $uploadsPath = is_string($baseurl) ? (string) parse_url($baseurl, PHP_URL_PATH) : '';
             foreach ($imageUrls as $u) {
-                $exists = false; foreach ($photos as $p) { if (!empty($p['fullUrl']) && $p['fullUrl'] === $u) { $exists = true; break; } }
-                if ($exists) { continue; }
+                $exists = false;
+                foreach ($photos as $p) {
+                    if (!empty($p['fullUrl']) && $p['fullUrl'] === $u) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if ($exists) {
+                    continue;
+                }
                 $parsed = @parse_url((string) $u);
                 $path = isset($parsed['path']) ? (string) $parsed['path'] : '';
-                if ($path === '' || $basedir === '') { continue; }
+                if ($path === '' || $basedir === '') {
+                    continue;
+                }
                 $rel = '';
                 if ($uploadsPath && strpos($path, $uploadsPath) !== false) {
                     $rel = ltrim(str_replace($uploadsPath, '', $path), '/');
                 } elseif (preg_match('#/uploads/(.+)$#', $path, $mRel)) {
                     $rel = $mRel[1];
-                } else { continue; }
+                } else {
+                    continue;
+                }
                 $rel = preg_replace('/-\d+x\d+(?=\.[a-zA-Z]{3,4}$)/', '', $rel);
                 $candidate = rtrim($basedir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel);
                 // Security hardening: normalize path and ensure it's inside uploads basedir; reject traversal
                 $realBase = realpath($basedir);
                 $realCand = $candidate !== '' ? realpath($candidate) : false;
-                if ($realBase === false || $realCand === false) { continue; }
-                if (strpos($realCand, $realBase) !== 0) { continue; }
-                if (strpos($rel, '..') !== false) { continue; }
-                if (!is_readable($realCand)) { continue; }
+                if ($realBase === false || $realCand === false) {
+                    continue;
+                }
+                if (strpos($realCand, $realBase) !== 0) {
+                    continue;
+                }
+                if (strpos($rel, '..') !== false) {
+                    continue;
+                }
+                if (!is_readable($realCand)) {
+                    continue;
+                }
                 $meta = \wp_read_image_metadata($realCand);
                 $lat = isset($meta['latitude']) ? (float) $meta['latitude'] : null;
                 $lon = isset($meta['longitude']) ? (float) $meta['longitude'] : null;
@@ -1190,7 +1378,7 @@ final class Rest
                     }
                     if ($createdTs === null && isset($ex['EXIF']['DateTimeOriginal'])) {
                         $dto = $ex['EXIF']['DateTimeOriginal'];
-                        $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto,0,10)) . substr($dto,10)) : null;
+                        $createdTs = $dto ? strtotime(str_replace(':', '-', substr($dto, 0, 10)) . substr($dto, 10)) : null;
                     }
                 }
                 if ($sourcePostId > 0) {
@@ -1219,7 +1407,7 @@ final class Rest
         $weatherSummary = \get_post_meta($id, 'fgpx_weather_summary', true);
         $decodedWeatherAjax = null;
         $decodedWeatherSummary = null;
-        
+
         if (\is_string($weatherPoints) && $weatherPoints !== '') {
             $decodedWeatherAjax = \json_decode($weatherPoints, true);
             if (\json_last_error() !== JSON_ERROR_NONE) {
@@ -1231,7 +1419,7 @@ final class Rest
                 $decodedWeatherAjax = null;
             }
         }
-        
+
         if (\is_string($weatherSummary) && $weatherSummary !== '') {
             $decodedWeatherSummary = \json_decode($weatherSummary, true);
             if (\json_last_error() !== JSON_ERROR_NONE) {
@@ -1260,6 +1448,7 @@ final class Rest
                 'heartRates' => [],
                 'cadences' => [],
                 'temperatures' => [],
+                'speeds' => [],
                 'powers' => [],
                 'windSpeeds' => [],
                 'windDirections' => [],
@@ -1306,7 +1495,7 @@ final class Rest
      */
     public function ajax_download_gpx(): void
     {
-        $id    = (int) ($_POST['id'] ?? 0);
+        $id = (int) ($_POST['id'] ?? 0);
         $nonce = (string) ($_POST['nonce'] ?? '');
 
         if ($id <= 0 || !\wp_verify_nonce($nonce, 'fgpx_download_gpx_' . $id)) {
@@ -1328,8 +1517,8 @@ final class Rest
 
         // Resolve real path and ensure it is inside the uploads directory
         $uploadsDir = \wp_upload_dir();
-        $realBase   = \realpath((string) ($uploadsDir['basedir'] ?? ''));
-        $realPath   = \realpath($filePath);
+        $realBase = \realpath((string) ($uploadsDir['basedir'] ?? ''));
+        $realPath = \realpath($filePath);
         if ($realBase === false || $realPath === false || \strpos($realPath, $realBase) !== 0) {
             \wp_die('Forbidden', '', ['response' => 403]);
         }
