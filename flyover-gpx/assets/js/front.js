@@ -13060,6 +13060,7 @@
       var startupZoomTargetState = null; // preserves the final zoom-in camera center for countdown handoff
       var suppressCameraUpdateFrames = 0; // startup handoff guard to prevent first-frame snap after countdown
       var STARTUP_COUNTDOWN_SECONDS = 3;
+      var STARTUP_CAMERA_FLYTO_WINDOW_MS = 3000;
       var startupSpeedRampRemaining = 0; // seconds remaining in startup speed ramp (0 = full speed)
       var startupSpeedRampDuration = 0; // total ramp duration for easing calculation
       var playbackStartedAtMs = 0; // wall clock ms when playback starts
@@ -14629,9 +14630,22 @@
             cameraCenter[1] = nextCenterLat;
             var camOpts = { center: cameraCenter, bearing: bearing };
             if (nextPitch != null) camOpts.pitch = nextPitch;
-            // Playback follow loop uses immediate camera writes so the camera
-            // stays phase-locked with marker updates at high speed.
-            if (map && typeof map.jumpTo === 'function') {
+            // Hybrid follow: smooth startup for a short window, then
+            // switch to jumpTo for phase-locked high-speed tracking.
+            var useStartupFlyTo =
+              playbackStartedAtMs > 0 &&
+              Date.now() - playbackStartedAtMs < STARTUP_CAMERA_FLYTO_WINDOW_MS;
+            if (useStartupFlyTo && map && typeof map.flyTo === 'function') {
+              map.flyTo(
+                Object.assign(
+                  {
+                    duration: 350,
+                    essential: true,
+                  },
+                  camOpts
+                )
+              );
+            } else if (map && typeof map.jumpTo === 'function') {
               map.jumpTo(camOpts);
             } else if (map && typeof map.setCenter === 'function') {
               map.setCenter(cameraCenter);
