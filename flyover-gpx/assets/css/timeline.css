@@ -6,7 +6,7 @@
  */
 
 /* CSS Custom Properties for Theme Management */
-:root {
+.fgpx-timeline {
 	--fgpx-t-line-color: #ccc;
 	--fgpx-t-dot-color: #999;
 	--fgpx-t-dot-bg: #fff;
@@ -25,7 +25,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-	:root {
+	.fgpx-timeline {
 		--fgpx-t-line-color: #444;
 		--fgpx-t-dot-color: #666;
 		--fgpx-t-dot-bg: #1a1a1a;
@@ -218,7 +218,7 @@
 	width: 100%;
 	height: var(--fgpx-card-height);
 	background-color: var(--fgpx-t-card-bg);
-	border: 1px solid var(--fgpx-t-card-border);
+	/* border: 1px solid var(--fgpx-t-card-border); */
 	border-radius: 0;
 	overflow: hidden;
 	cursor: pointer;
@@ -421,7 +421,7 @@
 
 /* Tablet (max-width: 1100px) */
 @media (max-width: 1100px) {
-	:root {
+	.fgpx-timeline {
 		--fgpx-card-width: 240px;
 		--fgpx-card-height: 240px;
 		--fgpx-gap: 20px;
@@ -442,7 +442,7 @@
 
 /* Mobile (max-width: 740px) */
 @media (max-width: 740px) {
-	:root {
+	.fgpx-timeline {
 		--fgpx-card-width: 100%;
 		--fgpx-card-height: 320px;
 		--fgpx-gap: 16px;
@@ -516,7 +516,7 @@
 
 /* Small phones (max-width: 400px) */
 @media (max-width: 400px) {
-	:root {
+	.fgpx-timeline {
 		--fgpx-card-height: 280px;
 	}
 

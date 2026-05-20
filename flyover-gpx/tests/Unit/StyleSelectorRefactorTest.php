@@ -41,10 +41,10 @@ final class StyleSelectorRefactorTest extends TestCase
 
         // Shortcode with old style="raster" should map to 'default' internally
         $html = (new Plugin())->render_shortcode(['id' => '1', 'style' => 'raster']);
-        
+
         // Should render without error and not break;
         $this->assertStringContainsString('data-style="default"', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -63,7 +63,7 @@ final class StyleSelectorRefactorTest extends TestCase
         // Old vector + URL should render as new 'url' mode
         $this->assertStringContainsString('data-style="url"', $html);
         $this->assertStringContainsString('data-style-url="' . $styleUrl . '"', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -82,7 +82,7 @@ final class StyleSelectorRefactorTest extends TestCase
         $this->assertStringContainsString('data-style="default"', $html);
         // URL should be empty/absent since we're not providing one
         $this->assertStringContainsString('data-style-url=""', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -101,7 +101,7 @@ final class StyleSelectorRefactorTest extends TestCase
         // URL mode should pass through style_url
         $this->assertStringContainsString('data-style="url"', $html);
         $this->assertStringContainsString('data-style-url="' . $styleUrl . '"', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -118,7 +118,7 @@ final class StyleSelectorRefactorTest extends TestCase
 
         // Inline mode should still allow shortcode to work
         $this->assertStringContainsString('data-style="inline"', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -135,7 +135,7 @@ final class StyleSelectorRefactorTest extends TestCase
 
         // Invalid mode should safely fall back to 'default'
         $this->assertStringContainsString('data-style="default"', $html);
-        
+
         unset($GLOBALS['fgpx_test_current_user_can']);
     }
 
@@ -151,7 +151,7 @@ final class StyleSelectorRefactorTest extends TestCase
         // but for now we test the conceptual priority at the Options level.
         $this->assertNotEmpty($inlineJson);
         $this->assertNotEmpty($remoteUrl);
-        
+
         // The Plugin::render_shortcode uses resolveStyle() which handles this priority.
         // Functional test: inline JSON should win if present in options.
     }
@@ -163,7 +163,7 @@ final class StyleSelectorRefactorTest extends TestCase
     {
         // This is implicitly tested via plugin behavior, but we can verify the modes are valid.
         $validModes = ['default', 'url', 'inline'];
-        
+
         foreach ($validModes as $mode) {
             $this->assertContains($mode, $validModes);
         }
@@ -176,7 +176,7 @@ final class StyleSelectorRefactorTest extends TestCase
     {
         // If somehow an old mode reaches preview context, it should map correctly.
         $oldToNew = ['raster' => 'default', 'vector' => 'url'];
-        
+
         foreach ($oldToNew as $old => $new) {
             // The Admin preview code should handle this internally
             $this->assertNotEquals($old, $new);
@@ -221,5 +221,25 @@ final class StyleSelectorRefactorTest extends TestCase
         $this->assertIsArray($localized);
         $this->assertTrue($localized['arrowsEnabled'] ?? false);
         $this->assertSame(100.0, $localized['arrowsKm'] ?? null);
+    }
+
+    public function test_shortcode_speed_arrow_overrides_are_localized_and_clamped(): void
+    {
+        (new Plugin())->render_shortcode([
+            'id' => '1',
+            'speed_arrows_enabled' => 'true',
+            'speed_arrows_threshold_low' => '0',
+            'speed_arrows_threshold_high' => '0',
+            'speed_arrows_spacing_low_km' => '80',
+            'speed_arrows_spacing_high_km' => '40',
+        ]);
+
+        $localized = $GLOBALS['fgpx_test_localized_scripts']['fgpx-lazy']['FGPX'] ?? null;
+        $this->assertIsArray($localized);
+        $this->assertTrue($localized['speedArrowsEnabled'] ?? false);
+        $this->assertSame(1.0, $localized['speedArrowsThresholdLow'] ?? null);
+        $this->assertSame(2.0, $localized['speedArrowsThresholdHigh'] ?? null);
+        $this->assertSame(25.0, $localized['speedArrowsSpacingLowKm'] ?? null);
+        $this->assertSame(10.0, $localized['speedArrowsSpacingHighKm'] ?? null);
     }
 }

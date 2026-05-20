@@ -27,21 +27,21 @@ final class Options
 	 */
 	private static $definitions = [
 		// Map Display & Styling
-			'fgpx_default_style' => 'default',
+		'fgpx_default_style' => 'default',
 		'fgpx_default_style_url' => '',
 		'fgpx_default_style_json' => '{"version":8,"glyphs":"https://maps.6bes.de/fonts/{fontstack}/{range}.pbf?key={{API_KEY}}","sources":{"terrain":{"type":"raster-dem","tiles":["https://maps.6bes.de/tiles/terrain-rgb-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}"],"tileSize":512,"minzoom":0,"maxzoom":14},"satellite":{"type":"raster","tiles":["https://maps.6bes.de/maps/satellite/{z}/{x}/{y}.jpg?key={{API_KEY}}"],"tileSize":512},"openmaptiles":{"type":"vector","tiles":["https://maps.6bes.de/tiles/v3/{z}/{x}/{y}.pbf?key={{API_KEY}}"],"minzoom":0,"maxzoom":14}},"layers":[{"id":"satellite","type":"raster","source":"satellite"},{"id":"cycleways","type":"line","source":"openmaptiles","source-layer":"transportation","filter":["any",["==",["get","class"],"cycleway"],["all",["==",["get","class"],"path"],["in",["get","bicycle"],["literal",["yes","designated","official"]]]]],"paint":{"line-color":"#00c853","line-width":2}},{"id":"place-labels","type":"symbol","source":"openmaptiles","source-layer":"place","layout":{"text-field":["get","name"],"text-font":["Open Sans Bold","Arial Unicode MS Bold"],"text-size":14,"text-anchor":"center"},"paint":{"text-color":"#ffffff","text-halo-color":"#000000","text-halo-width":1}},{"id":"water-name-labels","type":"symbol","source":"openmaptiles","source-layer":"water_name","layout":{"text-field":["get","name"],"text-font":["Open Sans Italic","Arial Unicode MS Regular"],"text-size":12,"symbol-placement":"line"},"paint":{"text-color":"#4FC3F7","text-halo-color":"#000000","text-halo-width":0.5}}]}',
 
-			'fgpx_map_selector_default' => 'satellite',
-			'fgpx_contours_enabled' => '1',
-			'fgpx_contours_tiles_url' => 'https://api.maptiler.com/tiles/contours-v2/{z}/{x}/{y}.pbf?key={{API_KEY}}',
-			'fgpx_contours_source_layer' => 'contour',
-			'fgpx_satellite_layer_id' => 'satellite',
-			'fgpx_satellite_tiles_url' => 'https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}',
-			'fgpx_contours_color' => '#ffffff',
-			'fgpx_contours_width' => '1.2',
-			'fgpx_contours_opacity' => '0.75',
-			'fgpx_contours_minzoom' => '9',
-			'fgpx_contours_maxzoom' => '16',
+		'fgpx_map_selector_default' => 'satellite',
+		'fgpx_contours_enabled' => '1',
+		'fgpx_contours_tiles_url' => 'https://api.maptiler.com/tiles/contours-v2/{z}/{x}/{y}.pbf?key={{API_KEY}}',
+		'fgpx_contours_source_layer' => 'contour',
+		'fgpx_satellite_layer_id' => 'satellite',
+		'fgpx_satellite_tiles_url' => 'https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key={{API_KEY}}',
+		'fgpx_contours_color' => '#ffffff',
+		'fgpx_contours_width' => '1.2',
+		'fgpx_contours_opacity' => '0.75',
+		'fgpx_contours_minzoom' => '9',
+		'fgpx_contours_maxzoom' => '16',
 		'fgpx_smart_api_keys_mode' => 'off',
 		'fgpx_smart_api_keys_pool' => '',
 		'fgpx_smart_api_keys_test_url_override' => '',
@@ -72,6 +72,7 @@ final class Options
 		'fgpx_gallery_auto_speed_enabled' => '1',
 		'fgpx_gallery_auto_speed_threshold_km' => '200',
 		'fgpx_gallery_auto_speed_value' => '100',
+		'fgpx_gallery_share_include_ui_settings' => '0',
 		'fgpx_timeline_per_page' => '20',
 		'fgpx_timeline_orientation' => 'vertical',
 		'fgpx_timeline_card_width' => '280px',
@@ -134,13 +135,6 @@ final class Options
 		'fgpx_weather_heatmap_zoom14' => '3000',
 		'fgpx_weather_heatmap_zoom15' => '5000',
 
-		// Weather Circle Settings (for high zoom levels)
-		'fgpx_weather_circle_zoom12' => '40',   // Circle radius at zoom 12
-		'fgpx_weather_circle_zoom14' => '80',   // Circle radius at zoom 14
-		'fgpx_weather_circle_zoom16' => '120',  // Circle radius at zoom 16
-		'fgpx_weather_circle_zoom18' => '200',  // Circle radius at zoom 18
-		'fgpx_weather_circle_blur' => '1.5',    // Circle blur amount (0-2)
-
 		// Wind Analysis
 		'fgpx_wind_analysis_enabled' => '0',
 		'fgpx_wind_interpolation_density' => '3',
@@ -175,6 +169,16 @@ final class Options
 		'fgpx_arrows_enabled' => '0',
 		'fgpx_arrows_km' => '5',
 
+		// Speed Arrows Overlay
+		'fgpx_speed_arrows_enabled' => '0',
+		'fgpx_speed_arrows_threshold_low' => '18',
+		'fgpx_speed_arrows_threshold_high' => '35',
+		'fgpx_speed_arrows_color_low' => '#ffd54f',
+		'fgpx_speed_arrows_color_mid' => '#ff9800',
+		'fgpx_speed_arrows_color_high' => '#ff3d00',
+		'fgpx_speed_arrows_spacing_low_km' => '3.5',
+		'fgpx_speed_arrows_spacing_high_km' => '0.8',
+
 		// Theme / Dark Mode
 		'fgpx_theme_mode' => 'system',          // system | dark | bright | auto
 		'fgpx_theme_auto_dark_start' => '22:00', // HH:MM – when dark mode begins (auto mode)
@@ -205,13 +209,13 @@ final class Options
 	{
 		if (self::$cache === null) {
 			self::$cache = [];
-			
+
 			// Load all options in a single query using WordPress's option autoloading
 			foreach (self::$definitions as $key => $default) {
 				self::$cache[$key] = \get_option($key, $default);
 			}
 		}
-		
+
 		return self::$cache;
 	}
 
@@ -225,16 +229,16 @@ final class Options
 	public static function get(string $key, $default = null)
 	{
 		$options = self::getAll();
-		
+
 		if (isset($options[$key])) {
 			return $options[$key];
 		}
-		
+
 		// Use provided default or fall back to definition default
 		if ($default !== null) {
 			return $default;
 		}
-		
+
 		return self::$definitions[$key] ?? '';
 	}
 
@@ -248,11 +252,11 @@ final class Options
 	{
 		$options = self::getAll();
 		$result = [];
-		
+
 		foreach ($keys as $key) {
 			$result[$key] = $options[$key] ?? (self::$definitions[$key] ?? '');
 		}
-		
+
 		return $result;
 	}
 
@@ -313,7 +317,7 @@ final class Options
 		if (!\in_array($photoOrderMode, ['geo_first', 'time_first'], true)) {
 			$photoOrderMode = 'geo_first';
 		}
-		
+
 		return [
 			// Chart colors
 			'chartColor' => $options['fgpx_chart_color'],
@@ -325,13 +329,13 @@ final class Options
 			'ftp' => (int) $options['fgpx_ftp'],
 			'chartColorWindImpact' => $options['fgpx_chart_color_wind_impact'],
 			'chartColorWindRose' => $options['fgpx_chart_color_wind_rose'],
-			
+
 			// Wind rose colors
 			'windRoseColorNorth' => $options['fgpx_wind_rose_color_north'],
 			'windRoseColorSouth' => $options['fgpx_wind_rose_color_south'],
 			'windRoseColorEast' => $options['fgpx_wind_rose_color_east'],
 			'windRoseColorWest' => $options['fgpx_wind_rose_color_west'],
-			
+
 			// Feature flags
 			'daynightEnabled' => $options['fgpx_daynight_enabled'] === '1',
 			'daynightMapEnabled' => $options['fgpx_daynight_map_enabled'] === '1',
@@ -349,12 +353,12 @@ final class Options
 			'photoMaxDistance' => (int) $options['fgpx_photo_max_distance'],
 			'showLabels' => $options['fgpx_show_labels'] !== '0',
 			'debugWeatherData' => $options['fgpx_debug_weather_data'] === '1',
-			
+
 			// Map settings
 			'defaultZoom' => (int) $options['fgpx_default_zoom'],
 			'defaultPitch' => (int) $options['fgpx_default_pitch'],
 			'styleJson' => $options['fgpx_default_style_json'],
-			
+
 			// Performance
 			'backendSimplify' => $options['fgpx_backend_simplify_enabled'] === '1',
 			'backendSimplifyTarget' => (int) $options['fgpx_backend_simplify_target'],

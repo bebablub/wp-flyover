@@ -1,10 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const GALLERY_SRC = fs.readFileSync(
-  path.resolve(__dirname, '../../assets/js/gallery.js'),
-  'utf8'
-);
+const GALLERY_SRC = fs.readFileSync(path.resolve(__dirname, '../../assets/js/gallery.js'), 'utf8');
 
 function loadGallery() {
   // eslint-disable-next-line no-eval
@@ -65,7 +62,9 @@ function mockReducedMotion(matches) {
 }
 
 function setupGalleryDom(markup) {
-  document.body.innerHTML = markup || `
+  document.body.innerHTML =
+    markup ||
+    `
     <div class="fgpx-gallery" data-root-id="gallery-default">
       <div class="fgpx-gallery-toolbar">
         <input type="search" class="fgpx-gallery-search" />
@@ -304,8 +303,12 @@ describe('gallery.js', () => {
 
     cards = Array.from(document.querySelectorAll('.fgpx-gallery-card'));
     expect(cards).toHaveLength(15);
-    expect(cards.slice(0, 12).every((card) => !card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
-    expect(cards.slice(12).every((card) => card.classList.contains('fgpx-gallery-card-reveal'))).toBe(true);
+    expect(
+      cards.slice(0, 12).every((card) => !card.classList.contains('fgpx-gallery-card-reveal'))
+    ).toBe(true);
+    expect(
+      cards.slice(12).every((card) => card.classList.contains('fgpx-gallery-card-reveal'))
+    ).toBe(true);
     expect(cards[12].style.getPropertyValue('--fgpx-gallery-reveal-delay')).toBe('0ms');
   });
 
@@ -368,9 +371,45 @@ describe('gallery.js', () => {
 
   test('applies configured defaultSort on first render', () => {
     window.FGPXGallery.tracks = [
-      { id: 10, title: 'Zulu', distanceKm: 3, durationS: 100, durationLabel: '01:40', elevationGainM: 30, elevationGainLabel: '30', dateTs: 300, dateLabel: '2026-01-03', gpxDownloadUrl: '', keywords: '' },
-      { id: 20, title: 'Alpha', distanceKm: 2, durationS: 90, durationLabel: '01:30', elevationGainM: 20, elevationGainLabel: '20', dateTs: 200, dateLabel: '2026-01-02', gpxDownloadUrl: '', keywords: '' },
-      { id: 30, title: 'Mike', distanceKm: 1, durationS: 80, durationLabel: '01:20', elevationGainM: 10, elevationGainLabel: '10', dateTs: 100, dateLabel: '2026-01-01', gpxDownloadUrl: '', keywords: '' },
+      {
+        id: 10,
+        title: 'Zulu',
+        distanceKm: 3,
+        durationS: 100,
+        durationLabel: '01:40',
+        elevationGainM: 30,
+        elevationGainLabel: '30',
+        dateTs: 300,
+        dateLabel: '2026-01-03',
+        gpxDownloadUrl: '',
+        keywords: '',
+      },
+      {
+        id: 20,
+        title: 'Alpha',
+        distanceKm: 2,
+        durationS: 90,
+        durationLabel: '01:30',
+        elevationGainM: 20,
+        elevationGainLabel: '20',
+        dateTs: 200,
+        dateLabel: '2026-01-02',
+        gpxDownloadUrl: '',
+        keywords: '',
+      },
+      {
+        id: 30,
+        title: 'Mike',
+        distanceKm: 1,
+        durationS: 80,
+        durationLabel: '01:20',
+        elevationGainM: 10,
+        elevationGainLabel: '10',
+        dateTs: 100,
+        dateLabel: '2026-01-01',
+        gpxDownloadUrl: '',
+        keywords: '',
+      },
     ];
     window.FGPXGallery.defaultSort = 'title';
     window.FGPXGallery.perPage = 3;
@@ -437,13 +476,13 @@ describe('gallery.js', () => {
 
     const mount = document.querySelector('.fgpx-gallery-player-mount .fgpx');
     const playerId = mount.getAttribute('id');
-    
+
     // Verify per-instance override is set
     expect(window.FGPX.instances).not.toBeNull();
     expect(window.FGPX.instances[playerId]).not.toBeUndefined();
     expect(window.FGPX.instances[playerId].galleryPhotoStrategy).toBe('latest_embed');
     expect(window.FGPX.instances[playerId].gpxDownloadUrl).toBe('https://example.test/dl.gpx');
-    
+
     // Verify global strategy key was not promoted to top-level config
     expect(window.FGPX.galleryPhotoStrategy).toBeUndefined();
     expect(window.FGPX.gpxDownloadUrl).toBeUndefined();
@@ -560,7 +599,9 @@ describe('gallery.js', () => {
     await flushPromises();
 
     expect(document.querySelector('.fgpx-gallery-player-panel').hidden).toBe(false);
-    expect(document.querySelector('.fgpx-gallery-player-mount').textContent).toContain('Could not load the track player. Please try again.');
+    expect(document.querySelector('.fgpx-gallery-player-mount').textContent).toContain(
+      'Could not load the track player. Please try again.'
+    );
   });
 
   test('server mode fetches the first page and load more appends the next page', async () => {
@@ -684,8 +725,24 @@ describe('gallery.js', () => {
     };
 
     window.FGPXGalleryInstances = {
-      'gallery-a': { tracks: makeTracks(15), perPage: 4, defaultSort: 'newest', playerHeight: '400px', playerStyle: 'raster', playerStyleUrl: '', strings: sharedStrings },
-      'gallery-b': { tracks: makeTracks(5), perPage: 3, defaultSort: 'newest', playerHeight: '400px', playerStyle: 'raster', playerStyleUrl: '', strings: sharedStrings },
+      'gallery-a': {
+        tracks: makeTracks(15),
+        perPage: 4,
+        defaultSort: 'newest',
+        playerHeight: '400px',
+        playerStyle: 'raster',
+        playerStyleUrl: '',
+        strings: sharedStrings,
+      },
+      'gallery-b': {
+        tracks: makeTracks(5),
+        perPage: 3,
+        defaultSort: 'newest',
+        playerHeight: '400px',
+        playerStyle: 'raster',
+        playerStyleUrl: '',
+        strings: sharedStrings,
+      },
     };
     delete window.FGPXGallery;
 
@@ -741,8 +798,24 @@ describe('gallery.js', () => {
 
     const tracks = makeTracks(15);
     window.FGPXGalleryInstances = {
-      'gallery-a': { tracks, perPage: 15, defaultSort: 'newest', playerHeight: '400px', playerStyle: 'raster', playerStyleUrl: '', strings: sharedStrings },
-      'gallery-b': { tracks, perPage: 15, defaultSort: 'newest', playerHeight: '400px', playerStyle: 'raster', playerStyleUrl: '', strings: sharedStrings },
+      'gallery-a': {
+        tracks,
+        perPage: 15,
+        defaultSort: 'newest',
+        playerHeight: '400px',
+        playerStyle: 'raster',
+        playerStyleUrl: '',
+        strings: sharedStrings,
+      },
+      'gallery-b': {
+        tracks,
+        perPage: 15,
+        defaultSort: 'newest',
+        playerHeight: '400px',
+        playerStyle: 'raster',
+        playerStyleUrl: '',
+        strings: sharedStrings,
+      },
     };
     delete window.FGPXGallery;
     window.location.hash = '#track-15';
@@ -763,5 +836,134 @@ describe('gallery.js', () => {
     expect(mountB).not.toBeNull();
     expect(mountA.getAttribute('data-track-id')).toBe('15');
     expect(mountB.getAttribute('data-track-id')).toBe('15');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Share URL generation tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('shareUrlBaseWithHash', () => {
+  // Extract shareUrlBaseWithHash from the IIFE source.
+  function loadShareFn() {
+    var match = GALLERY_SRC.match(/function shareUrlBaseWithHash\([^)]*\)\s*\{[\s\S]*?\n  \}/);
+    if (!match) throw new Error('shareUrlBaseWithHash not found in gallery.js');
+    // eslint-disable-next-line no-new-func
+    return new Function(match[0] + '\nreturn shareUrlBaseWithHash;')();
+  }
+
+  let shareUrlBaseWithHash;
+  let originalLocation;
+
+  beforeAll(() => {
+    shareUrlBaseWithHash = loadShareFn();
+  });
+
+  beforeEach(() => {
+    originalLocation = window.location;
+    delete window.location;
+    window.location = { href: 'https://example.test/page/', search: '', hash: '' };
+  });
+
+  afterEach(() => {
+    window.location = originalLocation;
+  });
+
+  test('returns URL with hash only when no uiParams provided', () => {
+    const url = shareUrlBaseWithHash(42);
+    expect(url).toContain('#track-42');
+    expect(url).not.toContain('?');
+  });
+
+  test('appends query params before hash when uiParams provided', () => {
+    const url = shareUrlBaseWithHash(7, { weather: '1', charts: '0' });
+    expect(url).toContain('#track-7');
+    expect(url).toContain('weather=1');
+    expect(url).toContain('charts=0');
+  });
+
+  test('empty uiParams object produces no query string', () => {
+    const url = shareUrlBaseWithHash(3, {});
+    expect(url).toContain('#track-3');
+    expect(url).not.toContain('?');
+  });
+
+  test('null uiParams produces no query string', () => {
+    const url = shareUrlBaseWithHash(5, null);
+    expect(url).toContain('#track-5');
+    expect(url).not.toContain('?');
+  });
+
+  test('preserves existing non-FGPX query params when uiParams are not included', () => {
+    window.location.href = 'https://example.test/page/?foo=bar&ref=abc';
+    window.location.search = '?foo=bar&ref=abc';
+    const url = shareUrlBaseWithHash(11, null);
+    expect(url).toContain('#track-11');
+    expect(url).toContain('foo=bar');
+    expect(url).toContain('ref=abc');
+  });
+
+  test('strips existing fgpx params from current page URL before adding new ones', () => {
+    window.location.href = 'https://example.test/page/?weather=0&charts=0';
+    window.location.search = '?weather=0&charts=0';
+    const url = shareUrlBaseWithHash(9, { weather: '1' });
+    expect(url).toContain('weather=1');
+    // old value should be gone (replaced)
+    const weatherCount = (url.match(/weather=/g) || []).length;
+    expect(weatherCount).toBe(1);
+  });
+
+  test('works with string track ids', () => {
+    const url = shareUrlBaseWithHash('12');
+    expect(url).toContain('#track-12');
+  });
+});
+
+describe('collectShareUiParams', () => {
+  // Extract collectShareUiParams from the IIFE source.
+  function loadCollectFn() {
+    var match = GALLERY_SRC.match(/function collectShareUiParams\([^)]*\)\s*\{[\s\S]*?\n  \}/);
+    if (!match) throw new Error('collectShareUiParams not found in gallery.js');
+    // eslint-disable-next-line no-new-func
+    return new Function(match[0] + '\nreturn collectShareUiParams;')();
+  }
+
+  let collectShareUiParams;
+
+  beforeAll(() => {
+    collectShareUiParams = loadCollectFn();
+  });
+
+  test('returns empty object when no overrides set', () => {
+    const result = collectShareUiParams({ playerConfig: {} });
+    expect(result).toEqual({});
+  });
+
+  test('includes fullscreen=1 when requestFullscreenOnLoad=true', () => {
+    const result = collectShareUiParams({ playerConfig: { requestFullscreenOnLoad: true } });
+    expect(result.fullscreen).toBe('1');
+  });
+
+  test('includes charts=0 when chartsVisible=false', () => {
+    const result = collectShareUiParams({ playerConfig: { chartsVisible: false } });
+    expect(result.charts).toBe('0');
+  });
+
+  test('includes videorecording=0 when videoRecordingVisible=false', () => {
+    const result = collectShareUiParams({ playerConfig: { videoRecordingVisible: false } });
+    expect(result.videorecording).toBe('0');
+  });
+
+  test('includes temp=0 and wind=0 when individually disabled', () => {
+    const result = collectShareUiParams({
+      playerConfig: { weatherTemperatureVisible: false, weatherWindVisible: false },
+    });
+    expect(result.temp).toBe('0');
+    expect(result.wind).toBe('0');
+  });
+
+  test('does NOT include fullscreen param when requestFullscreenOnLoad is false/undefined', () => {
+    const result = collectShareUiParams({ playerConfig: {} });
+    expect(result.fullscreen).toBeUndefined();
   });
 });

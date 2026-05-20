@@ -53,6 +53,38 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   });
 }
 
+// MediaRecorder mock for Node.js/JSDOM (video-recorder tests)
+if (typeof global.MediaRecorder === 'undefined') {
+  global.MediaRecorder = class {
+    constructor(stream, options) {
+      this.stream = stream;
+      this.options = options;
+      this.state = 'inactive';
+      this.ondataavailable = null;
+      this.onstop = null;
+      this.onerror = null;
+    }
+    start(timeslice) {
+      this.state = 'recording';
+      if (typeof this.ondataavailable === 'function') {
+        setTimeout(() => {
+          this.ondataavailable({ data: Buffer.from('mockdata') });
+        }, 10);
+      }
+    }
+    stop() {
+      this.state = 'inactive';
+      if (typeof this.onstop === 'function') {
+        setTimeout(() => this.onstop(), 10);
+      }
+    }
+    pause() { this.state = 'paused'; }
+    resume() { this.state = 'recording'; }
+    requestData() {}
+    static isTypeSupported() { return true; }
+  };
+}
+
 if (typeof URL !== 'undefined') {
   if (typeof URL.createObjectURL !== 'function') {
     Object.defineProperty(URL, 'createObjectURL', {

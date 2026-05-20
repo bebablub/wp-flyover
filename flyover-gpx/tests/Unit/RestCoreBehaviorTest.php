@@ -25,8 +25,12 @@ final class RestCoreBehaviorTest extends TestCase
         $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
         $source = (string) file_get_contents($restFile);
 
-        $this->assertStringContainsString("\$id    = (int) (\$_REQUEST['id'] ?? 0);", $source);
-        $this->assertStringContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source);
+        // Should NOT use $_REQUEST anymore
+        $this->assertStringNotContainsString("\$id = (int) (\$_REQUEST['id'] ?? 0);", $source, 'Should not use $_REQUEST for id');
+        $this->assertStringNotContainsString("\$nonce = (string) (\$_REQUEST['nonce'] ?? '');", $source, 'Should not use $_REQUEST for nonce');
+        // Should use $_POST
+        $this->assertStringContainsString("\$id = (int) (\$_POST['id'] ?? 0);", $source);
+        $this->assertStringContainsString("\$nonce = (string) (\$_POST['nonce'] ?? '');", $source);
     }
 
     public function test_plugin_localizes_download_nonce_without_nonce_query_parameter(): void
@@ -53,6 +57,16 @@ final class RestCoreBehaviorTest extends TestCase
         $source = (string) file_get_contents($restFile);
 
         $this->assertSame(2, substr_count($source, "'photoOrderMode' => self::resolve_photo_order_mode()"));
+    }
+
+    public function test_speed_series_property_is_preserved_for_rest_and_ajax_payloads(): void
+    {
+        $restFile = dirname(__DIR__, 2) . '/includes/Rest.php';
+        $source = (string) file_get_contents($restFile);
+
+        $this->assertStringContainsString("\$speeds = isset(\$props['speeds']) && \\is_array(\$props['speeds']) ? \$props['speeds'] : null;", $source);
+        $this->assertStringContainsString("\$speeds = isset(\$props['speeds']) && is_array(\$props['speeds']) ? \$props['speeds'] : null;", $source);
+        $this->assertSame(2, substr_count($source, "'speeds' => []"));
     }
 
     public function test_admin_upload_path_clears_stale_waypoints_when_no_waypoints_exist(): void

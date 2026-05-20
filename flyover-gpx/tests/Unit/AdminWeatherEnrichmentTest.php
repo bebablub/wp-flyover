@@ -18,17 +18,17 @@ final class AdminWeatherEnrichmentTest extends TestCase
 {
     protected function setUp(): void
     {
-        $GLOBALS['fgpx_test_transients']      = [];
-        $GLOBALS['fgpx_test_post_meta']       = [];
-        $GLOBALS['fgpx_test_options']         = [];
+        $GLOBALS['fgpx_test_transients'] = [];
+        $GLOBALS['fgpx_test_post_meta'] = [];
+        $GLOBALS['fgpx_test_options'] = [];
         unset($GLOBALS['fgpx_test_wp_remote_get']);
     }
 
     protected function tearDown(): void
     {
-        $GLOBALS['fgpx_test_transients']      = [];
-        $GLOBALS['fgpx_test_post_meta']       = [];
-        $GLOBALS['fgpx_test_options']         = [];
+        $GLOBALS['fgpx_test_transients'] = [];
+        $GLOBALS['fgpx_test_post_meta'] = [];
+        $GLOBALS['fgpx_test_options'] = [];
         unset($GLOBALS['fgpx_test_wp_remote_get']);
     }
 
@@ -41,13 +41,13 @@ final class AdminWeatherEnrichmentTest extends TestCase
         $method = new ReflectionMethod(Admin::class, 'generateWeatherSamples');
         $method->setAccessible(true);
 
-        $n           = 100;
-        $coords      = [];
-        $timestamps  = [];
-        $cumulative  = [];
+        $n = 100;
+        $coords = [];
+        $timestamps = [];
+        $cumulative = [];
         $totalMeters = 0.0;
         for ($i = 0; $i < $n; $i++) {
-            $coords[]     = [(float) $i * 0.001, 48.0, 500.0];
+            $coords[] = [(float) $i * 0.001, 48.0, 500.0];
             $timestamps[] = gmdate('c', 1700000000 + $i * 60);
             $cumulative[] = $totalMeters;
             $totalMeters += 1000; // 1 km per step
@@ -67,13 +67,13 @@ final class AdminWeatherEnrichmentTest extends TestCase
         $method = new ReflectionMethod(Admin::class, 'generateWeatherSamples');
         $method->setAccessible(true);
 
-        $n           = 120; // 120 minutes
-        $coords      = [];
-        $timestamps  = [];
-        $cumulative  = [];
-        $startUnix   = 1700000000;
+        $n = 120; // 120 minutes
+        $coords = [];
+        $timestamps = [];
+        $cumulative = [];
+        $startUnix = 1700000000;
         for ($i = 0; $i < $n; $i++) {
-            $coords[]     = [(float) $i * 0.001, 48.0, 500.0];
+            $coords[] = [(float) $i * 0.001, 48.0, 500.0];
             $timestamps[] = gmdate('c', $startUnix + $i * 60);
             $cumulative[] = (float) $i * 100;
         }
@@ -92,7 +92,7 @@ final class AdminWeatherEnrichmentTest extends TestCase
         $method = new ReflectionMethod(Admin::class, 'generateWeatherSamples');
         $method->setAccessible(true);
 
-        $n      = 500;
+        $n = 500;
         $coords = [];
         for ($i = 0; $i < $n; $i++) {
             $coords[] = [(float) $i * 0.001, 48.0, 500.0];
@@ -111,7 +111,7 @@ final class AdminWeatherEnrichmentTest extends TestCase
     public function test_sample_cap_preserves_first_and_last_sample(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
-        $source    = (string) file_get_contents($adminFile);
+        $source = (string) file_get_contents($adminFile);
 
         // Confirm the evenly-distributed selection pattern is present
         $this->assertStringContainsString('$step = ($requestedSampleCount - 1) / ($maxWeatherSamples - 1)', $source);
@@ -123,9 +123,9 @@ final class AdminWeatherEnrichmentTest extends TestCase
     public function test_coord_cap_uses_even_distribution_not_leading_slice(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
-        $source    = (string) file_get_contents($adminFile);
+        $source = (string) file_get_contents($adminFile);
 
-        $this->assertStringContainsString('$coordStep    = ($totalCoords - 1) / ($maxUniqueCoords - 1)', $source);
+        $this->assertStringContainsString('$coordStep = ($totalCoords - 1) / ($maxUniqueCoords - 1)', $source);
         $this->assertStringContainsString('$allCoordKeys[(int) round($ci * $coordStep)]', $source);
         // Old leading slice must be gone
         $this->assertStringNotContainsString('array_slice($uniqueCoords, 0, $maxUniqueCoords, true)', $source);
@@ -215,7 +215,7 @@ final class AdminWeatherEnrichmentTest extends TestCase
             ['lon' => 11.0, 'lat' => 49.0, 'time_unix' => 0, 'index' => 5, 'sample_type' => 'distance'],
         ];
 
-        $meta   = [];
+        $meta = [];
         $method = new ReflectionMethod(Admin::class, 'fetchWeatherForSamples');
         $method->setAccessible(true);
 
@@ -240,15 +240,15 @@ final class AdminWeatherEnrichmentTest extends TestCase
         $samples = [];
         for ($i = 0; $i < 60; $i++) {
             $samples[] = [
-                'lon'         => round($i * 0.15, 2),
-                'lat'         => round($i * 0.15, 2),
-                'time_unix'   => 3600,
-                'index'       => $i,
+                'lon' => round($i * 0.15, 2),
+                'lat' => round($i * 0.15, 2),
+                'time_unix' => 3600,
+                'index' => $i,
                 'sample_type' => 'distance',
             ];
         }
 
-        $meta   = [];
+        $meta = [];
         $method = new ReflectionMethod(Admin::class, 'fetchWeatherForSamples');
         $method->setAccessible(true);
 
@@ -266,7 +266,7 @@ final class AdminWeatherEnrichmentTest extends TestCase
     public function test_bulk_weather_enrichment_capped_at_twenty_five(): void
     {
         $adminFile = dirname(__DIR__, 2) . '/includes/Admin.php';
-        $source    = (string) file_get_contents($adminFile);
+        $source = (string) file_get_contents($adminFile);
 
         $this->assertStringContainsString('$maxEnrichPerRequest = 25', $source);
         $this->assertStringContainsString("\$queryArgs['fgpx_weather_deferred'] = \$deferred;", $source);

@@ -69,7 +69,7 @@ final class Admin
 		\add_action('add_meta_boxes', [$this, 'add_metaboxes']);
 		// Replace GPX functionality removed - use "Add New Track" instead
 		// (Preview removed)
-		
+
 		// Hide default "Add New" buttons except our menu item
 		\add_action('admin_head', [$this, 'hide_default_add_new_buttons']);
 
@@ -88,14 +88,14 @@ final class Admin
 	private function validateNonce(string $action, string $nonceField = 'fgpx_nonce', bool $die = true): bool
 	{
 		$nonce = isset($_POST[$nonceField]) ? (string) $_POST[$nonceField] : '';
-		
+
 		if (!\wp_verify_nonce($nonce, $action)) {
 			if ($die) {
 				\wp_die(\esc_html__('Security check failed. Please try again.', 'flyover-gpx'));
 			}
 			return false;
 		}
-		
+
 		return true;
 	}
 
@@ -114,7 +114,7 @@ final class Admin
 			}
 			return false;
 		}
-		
+
 		return true;
 	}
 
@@ -141,10 +141,10 @@ final class Admin
 	private function getValidTrackId(string $field = 'track_id'): int
 	{
 		$id = isset($_POST[$field]) ? $_POST[$field] : '';
-		
+
 		// Remove any non-numeric characters and convert to int
 		$cleanId = (int) \preg_replace('/[^0-9]/', '', (string) $id);
-		
+
 		return $cleanId > 0 ? $cleanId : 0;
 	}
 
@@ -162,13 +162,13 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$value = \filter_var($_POST[$field], FILTER_VALIDATE_INT);
-		
+
 		if ($value === false || $value < $min || $value > $max) {
 			return $default;
 		}
-		
+
 		return $value;
 	}
 
@@ -186,13 +186,13 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$value = \filter_var($_POST[$field], FILTER_VALIDATE_FLOAT);
-		
+
 		if ($value === false || $value < $min || $value > $max) {
 			return $default;
 		}
-		
+
 		return $value;
 	}
 
@@ -208,9 +208,9 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$value = \strtolower(\trim((string) $_POST[$field]));
-		
+
 		return \in_array($value, ['1', 'true', 'yes', 'on'], true);
 	}
 
@@ -242,13 +242,13 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$value = \sanitize_text_field((string) $_POST[$field]);
-		
+
 		if (\strlen($value) > $maxLength) {
 			$value = \substr($value, 0, $maxLength);
 		}
-		
+
 		return $value;
 	}
 
@@ -264,9 +264,9 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$url = \esc_url_raw((string) $_POST[$field]);
-		
+
 		return \is_string($url) && $url !== '' ? $url : $default;
 	}
 
@@ -282,9 +282,9 @@ final class Admin
 		if (!isset($_POST[$field])) {
 			return $default;
 		}
-		
+
 		$color = \sanitize_hex_color((string) $_POST[$field]);
-		
+
 		return $color !== null ? $color : $default;
 	}
 
@@ -300,27 +300,27 @@ final class Admin
 
 		?>
 		<style type="text/css">
-		/* Hide "Add New" button on track list page */
-		.page-title-action[href*="post-new.php?post_type=fgpx_track"],
-		.page-title-action[href*="post-new.php"][href*="fgpx_track"] {
-			display: none !important;
-		}
-		
-		/* Hide "Add New" from admin bar */
-		#wp-admin-bar-new-fgpx_track {
-			display: none !important;
-		}
-		
-		/* Hide any other "Add New" buttons that might appear */
-		a[href*="post-new.php?post_type=fgpx_track"],
-		a[href*="post-new.php"][href*="fgpx_track"] {
-			display: none !important;
-		}
-		
-		/* But keep our menu item visible */
-		.wp-submenu a[href*="page=fgpx-add-new-track"] {
-			display: block !important;
-		}
+			/* Hide "Add New" button on track list page */
+			.page-title-action[href*="post-new.php?post_type=fgpx_track"],
+			.page-title-action[href*="post-new.php"][href*="fgpx_track"] {
+				display: none !important;
+			}
+
+			/* Hide "Add New" from admin bar */
+			#wp-admin-bar-new-fgpx_track {
+				display: none !important;
+			}
+
+			/* Hide any other "Add New" buttons that might appear */
+			a[href*="post-new.php?post_type=fgpx_track"],
+			a[href*="post-new.php"][href*="fgpx_track"] {
+				display: none !important;
+			}
+
+			/* But keep our menu item visible */
+			.wp-submenu a[href*="page=fgpx-add-new-track"] {
+				display: block !important;
+			}
 		</style>
 		<?php
 	}
@@ -346,7 +346,7 @@ final class Admin
 	{
 		// Remove the default WordPress "Add New" submenu
 		\remove_submenu_page('edit.php?post_type=fgpx_track', 'post-new.php?post_type=fgpx_track');
-		
+
 		// Add our custom "Add New Track" page
 		\add_submenu_page(
 			'edit.php?post_type=fgpx_track',
@@ -384,21 +384,24 @@ final class Admin
 
 		$actionUrl = \esc_url(\admin_url('admin-post.php'));
 		$hasPhpGpx = \class_exists('\\phpGPX\\phpGPX');
-		
+
 		// Get all options in a single cached call
 		$options = Options::getAll();
-		
+
 		$customCss = $options['fgpx_custom_css'];
 		$defStyle = $options['fgpx_default_style'];
 		$defStyleUrl = $options['fgpx_default_style_url'];
 		$defStyleJson = $options['fgpx_default_style_json'];
 		$mapSelectorDefault = isset($options['fgpx_map_selector_default']) ? \sanitize_key((string) $options['fgpx_map_selector_default']) : 'satellite';
 		// Back-compat: old stored values
-		if ($mapSelectorDefault === 'basic' || $mapSelectorDefault === '') { $mapSelectorDefault = 'satellite'; }
-		if ($mapSelectorDefault === 'basic_contours') { $mapSelectorDefault = 'satellite_contours'; }
-		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) { $mapSelectorDefault = 'satellite'; }
-		if (!\in_array($mapSelectorDefault, ['basic', 'basic_contours', 'satellite'], true)) {
-			$mapSelectorDefault = 'basic';
+		if ($mapSelectorDefault === 'basic' || $mapSelectorDefault === '') {
+			$mapSelectorDefault = 'satellite';
+		}
+		if ($mapSelectorDefault === 'basic_contours') {
+			$mapSelectorDefault = 'satellite_contours';
+		}
+		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) {
+			$mapSelectorDefault = 'satellite';
 		}
 		$contoursEnabled = ($options['fgpx_contours_enabled'] ?? '1') === '1';
 		$contoursTilesUrl = (string) ($options['fgpx_contours_tiles_url'] ?? '');
@@ -442,6 +445,7 @@ final class Admin
 		$galleryAutoSpeedEnabled = $options['fgpx_gallery_auto_speed_enabled'];
 		$galleryAutoSpeedThresholdKm = $options['fgpx_gallery_auto_speed_threshold_km'];
 		$galleryAutoSpeedValue = $options['fgpx_gallery_auto_speed_value'];
+		$galleryShareIncludeUiSettings = ($options['fgpx_gallery_share_include_ui_settings'] ?? '0') === '1';
 		$showLabels = $options['fgpx_show_labels'];
 		$photosEnabled = $options['fgpx_photos_enabled'];
 		$photoOrderMode = isset($options['fgpx_photo_order_mode']) ? (string) $options['fgpx_photo_order_mode'] : 'geo_first';
@@ -477,6 +481,14 @@ final class Admin
 		$elevationThresholdMax = $options['fgpx_elevation_threshold_max'];
 		$arrowsEnabled = $options['fgpx_arrows_enabled'];
 		$arrowsKm = $options['fgpx_arrows_km'];
+		$speedArrowsEnabled = (string) ($options['fgpx_speed_arrows_enabled'] ?? '0');
+		$speedArrowsThresholdLow = (string) ($options['fgpx_speed_arrows_threshold_low'] ?? '18');
+		$speedArrowsThresholdHigh = (string) ($options['fgpx_speed_arrows_threshold_high'] ?? '35');
+		$speedArrowsColorLow = (string) ($options['fgpx_speed_arrows_color_low'] ?? '#ffd54f');
+		$speedArrowsColorMid = (string) ($options['fgpx_speed_arrows_color_mid'] ?? '#ff9800');
+		$speedArrowsColorHigh = (string) ($options['fgpx_speed_arrows_color_high'] ?? '#ff3d00');
+		$speedArrowsSpacingLowKm = (string) ($options['fgpx_speed_arrows_spacing_low_km'] ?? '3.5');
+		$speedArrowsSpacingHighKm = (string) ($options['fgpx_speed_arrows_spacing_high_km'] ?? '0.8');
 
 		echo '<div class="wrap">';
 		echo '<h1>' . \esc_html__('Flyover GPX Upload', 'flyover-gpx') . '</h1>';
@@ -502,8 +514,19 @@ final class Admin
 		echo '<form method="post" action="' . $actionUrl . '">';
 		echo '<input type="hidden" name="action" value="fgpx_save_settings" />';
 		echo '<input type="hidden" name="fgpx_nonce" value="' . \esc_attr(\wp_create_nonce('fgpx_save_settings')) . '" />';
-		
-		// Map Display & Styling Section
+
+		// Tab Navigation
+		echo '<div class="fgpx-settings-tabs" role="tablist">';
+		echo '<button type="button" data-tab="display-layout" class="active" role="tab" aria-selected="true">' . \esc_html__('Display & Layout', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="playback-content" role="tab" aria-selected="false">' . \esc_html__('Playback & Content', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="visualization" role="tab" aria-selected="false">' . \esc_html__('Visualization', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="weather" role="tab" aria-selected="false">' . \esc_html__('Weather & Environmental', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="performance" role="tab" aria-selected="false">' . \esc_html__('Performance', 'flyover-gpx') . '</button>';
+		echo '<button type="button" data-tab="advanced" role="tab" aria-selected="false">' . \esc_html__('Advanced', 'flyover-gpx') . '</button>';
+		echo '</div>';
+
+		// Tab 1: Display & Layout
+		echo '<div id="display-layout-content" class="fgpx-tab-content active">';
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🗺️ Map Display & Styling', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row"><label for="fgpx_default_style">' . \esc_html__('Map style source', 'flyover-gpx') . '</label></th><td>';
@@ -569,8 +592,8 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_smart_api_keys_mode">' . \esc_html__('Smart API key mode', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_smart_api_keys_mode" name="fgpx_smart_api_keys_mode">';
 		echo '<option value="off"' . selected($smartApiMode, SmartApiKeys::MODE_OFF, false) . '>' . \esc_html__('Off', 'flyover-gpx') . '</option>';
-			   echo '<option value="single"' . selected($smartApiMode, SmartApiKeys::MODE_SINGLE, false) . '>' . \esc_html__('One random key per style', 'flyover-gpx') . '</option>';
-			   echo '<option value="per_occurrence"' . selected($smartApiMode, SmartApiKeys::MODE_PER_OCCURRENCE, false) . '>' . \esc_html__('Random key per placeholder', 'flyover-gpx') . '</option>';
+		echo '<option value="single"' . selected($smartApiMode, SmartApiKeys::MODE_SINGLE, false) . '>' . \esc_html__('One random key per style', 'flyover-gpx') . '</option>';
+		echo '<option value="per_occurrence"' . selected($smartApiMode, SmartApiKeys::MODE_PER_OCCURRENCE, false) . '>' . \esc_html__('Random key per placeholder', 'flyover-gpx') . '</option>';
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Controls replacement behavior for {{API_KEY}} placeholders in style JSON and vector style URLs.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
@@ -591,7 +614,7 @@ final class Admin
 		echo '<p class="description">' . \esc_html__('Initial and reset zoom (lower = wider view).', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_default_pitch">' . \esc_html__('Default pitch', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_default_pitch" name="fgpx_default_pitch" class="small-text" min="0" max="60" step="1" value="' . \esc_attr($defPitch) . '" />';
+		echo '<input type="number" id="fgpx_default_pitch" name="fgpx_default_pitch" class="small-text" min="0" max="80" step="1" value="' . \esc_attr($defPitch) . '" />';
 		echo '<p class="description">' . \esc_html__('Map viewing angle tilt in degrees. Lower = flatter (top-down).', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
@@ -633,9 +656,15 @@ final class Admin
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_gallery_auto_speed_value">' . \esc_html__('Auto-speed value (×)', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_gallery_auto_speed_value" name="fgpx_gallery_auto_speed_value">';
-		foreach (['1','10','25','50','100','250'] as $opt) { echo '<option value="' . \esc_attr($opt) . '"' . selected($galleryAutoSpeedValue, $opt, false) . '>' . \esc_html($opt . '×') . '</option>'; }
+		foreach (['1', '10', '25', '50', '100', '250'] as $opt) {
+			echo '<option value="' . \esc_attr($opt) . '"' . selected($galleryAutoSpeedValue, $opt, false) . '>' . \esc_html($opt . '×') . '</option>';
+		}
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Playback speed to apply for long tracks in gallery.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gallery_share_include_ui_settings">' . \esc_html__('Include UI settings in share links', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gallery_share_include_ui_settings" name="fgpx_gallery_share_include_ui_settings" value="1"' . ($galleryShareIncludeUiSettings ? ' checked' : '') . ' /> ' . \esc_html__('Append player UI state as query parameters when copying or sharing a track link (fullscreen, weather, charts, etc.)', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('When enabled, share buttons include parameters like ?weather=1&charts=1. Users can also add these manually to any link.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
 
@@ -663,13 +692,19 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_timeline_month_grouping" name="fgpx_timeline_month_grouping" value="1"' . ($timelineMonthGrouping === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show month headers and groups by default.', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
+		echo '</div>'; // Close display-layout-content tab
+
+		// Tab 2: Playback & Content
+		echo '<div id="playback-content-content" class="fgpx-tab-content">';
 
 		// Playback Controls Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('▶️ Playback Controls & Interface', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
 		echo '<tr><th scope="row"><label for="fgpx_default_speed">' . \esc_html__('Default speed (×)', 'flyover-gpx') . '</label></th><td>';
 		echo '<select id="fgpx_default_speed" name="fgpx_default_speed">';
-		foreach (['1','10','25','50','100','250'] as $opt) { echo '<option value="' . esc_attr($opt) . '"' . selected($defSpeed, $opt, false) . '>' . esc_html($opt . '×') . '</option>'; }
+		foreach (['1', '10', '25', '50', '100', '250'] as $opt) {
+			echo '<option value="' . esc_attr($opt) . '"' . selected($defSpeed, $opt, false) . '>' . esc_html($opt . '×') . '</option>';
+		}
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Initial playback speed multiplier.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
@@ -680,6 +715,44 @@ final class Admin
 		echo '<label><input type="checkbox" id="fgpx_hud_enabled" name="fgpx_hud_enabled" value="1"' . ($hudEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show live HUD overlay on the map', 'flyover-gpx') . '</label>';
 		echo '</td></tr>';
 		echo '</table>';
+
+		// Continue Playback & Content tab with Media & Privacy Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📷 Media & Privacy', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
+		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_order_mode">' . \esc_html__('Photo ordering mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<select id="fgpx_photo_order_mode" name="fgpx_photo_order_mode">';
+		echo '<option value="geo_first"' . selected($photoOrderMode, 'geo_first', false) . '>' . \esc_html__('Route order (GPS first)', 'flyover-gpx') . '</option>';
+		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_photo_queue_rotation_enabled">' . \esc_html__('Rotate media gallery with playback', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"' . ($photoQueueRotationEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Keep the next upcoming photo in the first gallery position and move passed photos to the end with animation', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('When enabled, the Media tab behaves like a rotating queue during playback and recomputes order after seek or rewind.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Can be overridden per embed via shortcode attribute gpx_download="1" or gpx_download="0".', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_privacy_enabled">' . \esc_html__('Enable privacy mode', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_privacy_enabled" name="fgpx_privacy_enabled" value="1"' . ($privacyEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Hide first/last N km from playback (stats unaffected)', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_privacy_km">' . \esc_html__('Privacy distance (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_privacy_km" name="fgpx_privacy_km" class="small-text" min="0" step="0.1" value="' . \esc_attr($privacyKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Each end hidden by this distance when privacy mode is enabled. Default 3 km.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '</table>';
+		echo '</div>'; // Close playback-content-content tab
+
+		// Tab 3: Visualization  
+		echo '<div id="visualization-content" class="fgpx-tab-content">';
 
 		// Route Visualization Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🎨 Route Visualization & Charts', 'flyover-gpx') . '</h3>';
@@ -709,6 +782,34 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_arrows_km">' . \esc_html__('Arrow spacing (km)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="number" id="fgpx_arrows_km" name="fgpx_arrows_km" class="small-text" min="0.5" max="100" step="0.5" value="' . \esc_attr($arrowsKm) . '" />';
 		echo '<p class="description">' . \esc_html__('Distance in km between each direction arrow. Default 5 km.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_enabled">' . \esc_html__('Speed arrows overlay', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_speed_arrows_enabled" name="fgpx_speed_arrows_enabled" value="1"' . ($speedArrowsEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show speed-based direction arrows on top of the route and marker.', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Uses GPX speed values when available, otherwise derives speed from distance/time.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_threshold_low">' . \esc_html__('Speed threshold low (km/h)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_threshold_low" name="fgpx_speed_arrows_threshold_low" class="small-text" min="1" max="120" step="0.5" value="' . \esc_attr($speedArrowsThresholdLow) . '" />';
+		echo '<p class="description">' . \esc_html__('Below this speed, no speed arrows are drawn. Between low and high, medium arrows are used.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_threshold_high">' . \esc_html__('Speed threshold high (km/h)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_threshold_high" name="fgpx_speed_arrows_threshold_high" class="small-text" min="2" max="160" step="0.5" value="' . \esc_attr($speedArrowsThresholdHigh) . '" />';
+		echo '<p class="description">' . \esc_html__('At or above this speed, arrows use the densest spacing and strongest highlight color.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_spacing_low_km">' . \esc_html__('Speed arrows spacing low bucket (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_spacing_low_km" name="fgpx_speed_arrows_spacing_low_km" class="small-text" min="0.3" max="25" step="0.1" value="' . \esc_attr($speedArrowsSpacingLowKm) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_spacing_high_km">' . \esc_html__('Speed arrows spacing high bucket (km)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_speed_arrows_spacing_high_km" name="fgpx_speed_arrows_spacing_high_km" class="small-text" min="0.1" max="10" step="0.1" value="' . \esc_attr($speedArrowsSpacingHighKm) . '" />';
+		echo '<p class="description">' . \esc_html__('Higher speeds should usually use a smaller spacing than low speeds (denser arrows).', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_low">' . \esc_html__('Speed arrows color (medium speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_low" name="fgpx_speed_arrows_color_low" value="' . \esc_attr($speedArrowsColorLow) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_mid">' . \esc_html__('Speed arrows color (high speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_mid" name="fgpx_speed_arrows_color_mid" value="' . \esc_attr($speedArrowsColorMid) . '" />';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_speed_arrows_color_high">' . \esc_html__('Speed arrows color (very high speed)', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="color" id="fgpx_speed_arrows_color_high" name="fgpx_speed_arrows_color_high" value="' . \esc_attr($speedArrowsColorHigh) . '" />';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_chart_color">' . \esc_html__('Elevation chart color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color" name="fgpx_chart_color" value="' . \esc_attr($chartColor) . '" />';
@@ -742,70 +843,45 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_chart_color_wind_rose">' . \esc_html__('Wind rose chart color (default)', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_chart_color_wind_rose" name="fgpx_chart_color_wind_rose" value="' . \esc_attr($chartColorWindRose) . '" />';
 		echo '</td></tr>';
-		
+
 		// Wind rose directional colors
 		$windRoseColorNorth = $options['fgpx_wind_rose_color_north']; // Blue - Headwind
 		$windRoseColorSouth = $options['fgpx_wind_rose_color_south']; // Green - Tailwind  
 		$windRoseColorEast = $options['fgpx_wind_rose_color_east'];   // Orange - Right sidewind
 		$windRoseColorWest = $options['fgpx_wind_rose_color_west'];   // Red - Left sidewind
-		
+
 		echo '<tr><th scope="row">' . \esc_html__('Wind Rose Directional Colors', 'flyover-gpx') . '</th><td>';
 		echo '<p style="margin: 0 0 10px 0; color: #666;">' . \esc_html__('Colors for the 4 main wind directions (±45°)', 'flyover-gpx') . '</p>';
 		echo '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 400px;">';
-		
+
 		echo '<div><label for="fgpx_wind_rose_color_north" style="display: block; margin-bottom: 5px;">' . \esc_html__('North (Headwind)', 'flyover-gpx') . '</label>';
 		echo '<input type="color" id="fgpx_wind_rose_color_north" name="fgpx_wind_rose_color_north" value="' . \esc_attr($windRoseColorNorth) . '" /></div>';
-		
+
 		echo '<div><label for="fgpx_wind_rose_color_south" style="display: block; margin-bottom: 5px;">' . \esc_html__('South (Tailwind)', 'flyover-gpx') . '</label>';
 		echo '<input type="color" id="fgpx_wind_rose_color_south" name="fgpx_wind_rose_color_south" value="' . \esc_attr($windRoseColorSouth) . '" /></div>';
-		
+
 		echo '<div><label for="fgpx_wind_rose_color_east" style="display: block; margin-bottom: 5px;">' . \esc_html__('East (Right Sidewind)', 'flyover-gpx') . '</label>';
 		echo '<input type="color" id="fgpx_wind_rose_color_east" name="fgpx_wind_rose_color_east" value="' . \esc_attr($windRoseColorEast) . '" /></div>';
-		
+
 		echo '<div><label for="fgpx_wind_rose_color_west" style="display: block; margin-bottom: 5px;">' . \esc_html__('West (Left Sidewind)', 'flyover-gpx') . '</label>';
 		echo '<input type="color" id="fgpx_wind_rose_color_west" name="fgpx_wind_rose_color_west" value="' . \esc_attr($windRoseColorWest) . '" /></div>';
-		
+
 		echo '</div></td></tr>';
 		echo '</table>';
 
-		// Media & Privacy Section
-		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📷 Media & Privacy', 'flyover-gpx') . '</h3>';
-		echo '<table class="form-table" role="presentation">';
-		echo '<tr><th scope="row"><label for="fgpx_photos_enabled">' . \esc_html__('Enable photo thumbnails/overlay', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_photos_enabled" name="fgpx_photos_enabled" value="1"' . ($photosEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show gallery photos on the map and fullscreen on cue', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_max_distance">' . \esc_html__('Photo trigger max distance (m)', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_photo_max_distance" name="fgpx_photo_max_distance" class="small-text" min="1" max="50000" step="1" value="' . \esc_attr($photoMaxDistance) . '" />';
-		echo '<p class="description">' . \esc_html__('Maximum distance between current marker and photo location before skipping the overlay. Increase for photos taken away from the track.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_order_mode">' . \esc_html__('Photo ordering mode', 'flyover-gpx') . '</label></th><td>';
-		echo '<select id="fgpx_photo_order_mode" name="fgpx_photo_order_mode">';
-		echo '<option value="geo_first"' . selected($photoOrderMode, 'geo_first', false) . '>' . \esc_html__('Route order (GPS first)', 'flyover-gpx') . '</option>';
-		echo '<option value="time_first"' . selected($photoOrderMode, 'time_first', false) . '>' . \esc_html__('Chronological (timestamp first)', 'flyover-gpx') . '</option>';
-		echo '</select>';
-		echo '<p class="description">' . \esc_html__('Route order follows position along the GPX track. Chronological mode sorts by photo capture time and keeps photos without valid timestamps at the end.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_photo_queue_rotation_enabled">' . \esc_html__('Rotate media gallery with playback', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_photo_queue_rotation_enabled" name="fgpx_photo_queue_rotation_enabled" value="1"' . ($photoQueueRotationEnabled ? ' checked' : '') . ' /> ' . \esc_html__('Keep the next upcoming photo in the first gallery position and move passed photos to the end with animation', 'flyover-gpx') . '</label>';
-		echo '<p class="description">' . \esc_html__('When enabled, the Media tab behaves like a rotating queue during playback and recomputes order after seek or rewind.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_gpx_download_enabled">' . \esc_html__('Enable GPX download button', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_gpx_download_enabled" name="fgpx_gpx_download_enabled" value="1"' . ($gpxDownloadEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show a download button in the player so visitors can download the original GPX file', 'flyover-gpx') . '</label>';
-		echo '<p class="description">' . \esc_html__('Can be overridden per embed via shortcode attribute gpx_download="1" or gpx_download="0".', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_privacy_enabled">' . \esc_html__('Enable privacy mode', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_privacy_enabled" name="fgpx_privacy_enabled" value="1"' . ($privacyEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Hide first/last N km from playback (stats unaffected)', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_privacy_km">' . \esc_html__('Privacy distance (km)', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_privacy_km" name="fgpx_privacy_km" class="small-text" min="0" step="0.1" value="' . \esc_attr($privacyKm) . '" />';
-		echo '<p class="description">' . \esc_html__('Each end hidden by this distance when privacy mode is enabled. Default 3 km.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '</table>';
+		// Player Theme (Custom CSS) Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🎨 Player Theme (Custom CSS)', 'flyover-gpx') . '</h3>';
+		echo '<p>' . \esc_html__('Add custom CSS to override the player styles. These rules load after the default stylesheet.', 'flyover-gpx') . '</p>';
+		echo '<textarea name="fgpx_custom_css" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($customCss) . '</textarea>';
+		echo '</div>'; // Close visualization-content tab
+
+		// Tab 4: Weather & Environmental
+		echo '<div id="weather-content" class="fgpx-tab-content">';
 
 		// Weather Integration Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌦️ Weather Integration', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
-		
+
 		// Weather enrichment settings
 		$weatherEnabled = $options['fgpx_weather_enabled'];
 		$weatherSampling = $options['fgpx_weather_sampling'];
@@ -857,7 +933,7 @@ final class Admin
 		echo '<label for="fgpx_weather_heatmap_zoom15">Zoom 15: <input type="number" id="fgpx_weather_heatmap_zoom15" name="fgpx_weather_heatmap_zoom15" class="small-text" min="1000" max="10000" value="' . \esc_attr($weatherHeatmapZoom15) . '" />px</label>';
 		echo '<p class="description">' . \esc_html__('Heatmap radius for ALL weather types (rain, snow, fog, clouds). Larger values (1000-6000+) create extensive coverage. Rain circles at high zoom use hardcoded sizes.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
-		
+
 		echo '<tr><th scope="row"><label for="fgpx_weather_multi_point">' . \esc_html__('Multi-point weather sampling', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_weather_multi_point" name="fgpx_weather_multi_point" value="1"' . ($weatherMultiPoint === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Query additional weather points around each track position (N, S, E, W)', 'flyover-gpx') . '</label>';
 		echo '<p class="description">' . \esc_html__('Provides better weather coverage by sampling points in all directions around the track.', 'flyover-gpx') . '</p>';
@@ -866,7 +942,7 @@ final class Admin
 		echo '<input type="number" id="fgpx_weather_multi_point_distance" name="fgpx_weather_multi_point_distance" class="small-text" min="1" max="20" step="0.5" value="' . \esc_attr($weatherMultiPointDistance) . '" />';
 		echo '<p class="description">' . \esc_html__('Distance in kilometers for additional sample points (North, South, East, West of track position).', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
-		
+
 		// Multi-Weather Visualization Settings
 		$weatherPriorityOrder = $options['fgpx_weather_priority_order'];
 		$weatherFogThreshold = (float) $options['fgpx_weather_fog_threshold'];
@@ -883,7 +959,7 @@ final class Admin
 		$simulationCitiesEnabled = $options['fgpx_simulation_cities_enabled'];
 		$simulationWaypointWindowKm = (float) $options['fgpx_simulation_waypoint_window_km'];
 		$simulationCityWindowKm = (float) $options['fgpx_simulation_city_window_km'];
-		
+
 		echo '<tr><th scope="row" style="padding-top: 20px; border-top: 1px solid #ddd;"><label for="fgpx_weather_priority_order">' . \esc_html__('Weather type priority order', 'flyover-gpx') . '</label></th><td style="padding-top: 20px; border-top: 1px solid #ddd;">';
 		echo '<input type="text" id="fgpx_weather_priority_order" name="fgpx_weather_priority_order" class="regular-text" value="' . \esc_attr($weatherPriorityOrder) . '" />';
 		echo '<p class="description">' . \esc_html__('Comma-separated priority order for weather visualization. When multiple conditions exist, the first one in this list will be displayed. Options: snow, rain, fog, clouds', 'flyover-gpx') . '</p>';
@@ -964,7 +1040,7 @@ final class Admin
 		echo '<label for="fgpx_weather_color_clouds" style="display: inline-block; margin-right: 20px; margin-bottom: 8px;">' . \esc_html__('Clouds:', 'flyover-gpx') . ' <input type="color" id="fgpx_weather_color_clouds" name="fgpx_weather_color_clouds" value="' . \esc_attr($weatherColorClouds) . '" /></label>';
 		echo '<p class="description">' . \esc_html__('Customize colors for each weather type visualization on the map.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
-		
+
 		// Wind Analysis Settings
 		echo '<tr><th scope="row" style="padding-top: 20px; border-top: 1px solid #ddd;"><label for="fgpx_wind_analysis_enabled">' . \esc_html__('Enable wind impact analysis', 'flyover-gpx') . '</label></th><td style="padding-top: 20px; border-top: 1px solid #ddd;">';
 		echo '<label><input type="checkbox" id="fgpx_wind_analysis_enabled" name="fgpx_wind_analysis_enabled" value="1"' . ($windAnalysisEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Calculate wind impact on track performance and show in charts', 'flyover-gpx') . '</label>';
@@ -978,7 +1054,7 @@ final class Admin
 		echo '</select>';
 		echo '<p class="description">' . \esc_html__('Balance between accuracy and performance for wind data interpolation.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
-		
+
 		// Day/Night Settings (moved from Route Visualization section)
 		echo '<tr><th scope="row" style="padding-top: 20px; border-top: 1px solid #ddd;"><label for="fgpx_daynight_enabled">' . \esc_html__('Enable day/night chart visualization', 'flyover-gpx') . '</label></th><td style="padding-top: 20px; border-top: 1px solid #ddd;">';
 		echo '<label><input type="checkbox" id="fgpx_daynight_enabled" name="fgpx_daynight_enabled" value="1"' . ($options['fgpx_daynight_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show sunrise/sunset lines and night periods in charts', 'flyover-gpx') . '</label>';
@@ -987,6 +1063,10 @@ final class Admin
 		echo '<tr><th scope="row"><label for="fgpx_daynight_map_enabled">' . \esc_html__('Enable day/night map overlay', 'flyover-gpx') . '</label></th><td>';
 		echo '<label><input type="checkbox" id="fgpx_daynight_map_enabled" name="fgpx_daynight_map_enabled" value="1"' . ($options['fgpx_daynight_map_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Show animated night overlay on the map during track playback', 'flyover-gpx') . '</label>';
 		echo '<p class="description">' . \esc_html__('Displays a smooth blue overlay on the map during night periods with animated transitions at sunrise/sunset.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_daynight_visible_by_default">' . \esc_html__('Show day/night overlay by default', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_daynight_visible_by_default" name="fgpx_daynight_visible_by_default" value="1"' . ($options['fgpx_daynight_visible_by_default'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Make the night overlay visible when playback starts (can be toggled off by users)', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('If unchecked, users must click the visibility toggle to enable the day/night overlay.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '<tr><th scope="row"><label for="fgpx_daynight_map_color">' . \esc_html__('Night overlay color', 'flyover-gpx') . '</label></th><td>';
 		echo '<input type="color" id="fgpx_daynight_map_color" name="fgpx_daynight_map_color" value="' . \esc_attr($options['fgpx_daynight_map_color']) . '" />';
@@ -997,6 +1077,40 @@ final class Admin
 		echo '<p class="description">' . \esc_html__('Opacity of the night overlay (0.1 = very transparent, 1.0 = opaque). Default 0.4.', 'flyover-gpx') . '</p>';
 		echo '</td></tr>';
 		echo '</table>';
+		echo '</div>'; // Close weather-content tab
+
+		// Tab 5: Performance
+		echo '<div id="performance-content" class="fgpx-tab-content">';
+
+		// Performance & Optimization Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('⚡ Performance & Optimization', 'flyover-gpx') . '</h3>';
+		echo '<table class="form-table" role="presentation">';
+		echo '<tr><th scope="row"><label for="fgpx_backend_simplify_enabled">' . \esc_html__('Backend GPX simplification', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_backend_simplify_enabled" name="fgpx_backend_simplify_enabled" value="1"' . ($backendSimplify === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Simplify track on the server (recommended for large tracks 40k+ points). The original GPX remains unchanged.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_backend_simplify_target">' . \esc_html__('Simplification target points', 'flyover-gpx') . '</label></th><td>';
+		echo '<input type="number" id="fgpx_backend_simplify_target" name="fgpx_backend_simplify_target" class="small-text" min="300" max="2500" step="100" value="' . \esc_attr($backendSimplifyTarget) . '" />';
+		echo '<p class="description">' . \esc_html__('Base target for Ramer–Douglas–Peucker simplification (default 1200). System automatically adjusts based on track size for optimal performance.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_prefetch_enabled">' . \esc_html__('Enable tile prefetching', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_prefetch_enabled" name="fgpx_prefetch_enabled" value="1"' . ($prefetchEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Proactively prefetch map tiles (faster feel, more external requests). Uncheck to reduce requests/quotas.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_lazy_viewport">' . \esc_html__('Lazy load on viewport', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_lazy_viewport" name="fgpx_lazy_viewport" value="1"' . ($lazyViewport === '1' ? ' checked' : '') . ' /> ' .
+			\esc_html__('Only load map libraries & tiles when the player scrolls into view.', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_asset_fallbacks_enabled">' . \esc_html__('Asset fallbacks', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_asset_fallbacks_enabled" name="fgpx_asset_fallbacks_enabled" value="1"' . ($options['fgpx_asset_fallbacks_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Enable automatic fallback to alternative CDNs if primary assets fail to load', 'flyover-gpx') . '</label>';
+		echo '<p class="description">' . \esc_html__('Improves reliability by automatically switching to backup CDNs when primary assets are unavailable.', 'flyover-gpx') . '</p>';
+		echo '</td></tr>';
+		echo '<tr><th scope="row"><label for="fgpx_ajax_first">' . \esc_html__('Prefer admin-ajax.php over REST API', 'flyover-gpx') . '</label></th><td>';
+		echo '<label><input type="checkbox" id="fgpx_ajax_first" name="fgpx_ajax_first" value="1"' . ($ajaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before /wp-json for all track data requests (recommended when the REST API is blocked by a firewall or security plugin).', 'flyover-gpx') . '</label>';
+		echo '</td></tr>';
+		echo '</table>';
+		echo '</div>'; // Close performance-content tab
+
+		// Tab 6: Advanced
+		echo '<div id="advanced-content" class="fgpx-tab-content">';
 
 		// Theme / Dark Mode Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🌗 Theme / Dark Mode', 'flyover-gpx') . '</h3>';
@@ -1023,32 +1137,6 @@ final class Admin
 		echo '</tbody>';
 		echo '</table>';
 
-		// Performance & Optimization Section
-		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('⚡ Performance & Optimization', 'flyover-gpx') . '</h3>';
-		echo '<table class="form-table" role="presentation">';
-		echo '<tr><th scope="row"><label for="fgpx_backend_simplify_enabled">' . \esc_html__('Backend GPX simplification', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_backend_simplify_enabled" name="fgpx_backend_simplify_enabled" value="1"' . ($backendSimplify === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Simplify track on the server (recommended for large tracks 40k+ points). The original GPX remains unchanged.', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_backend_simplify_target">' . \esc_html__('Simplification target points', 'flyover-gpx') . '</label></th><td>';
-		echo '<input type="number" id="fgpx_backend_simplify_target" name="fgpx_backend_simplify_target" class="small-text" min="300" max="2500" step="100" value="' . \esc_attr($backendSimplifyTarget) . '" />';
-		echo '<p class="description">' . \esc_html__('Base target for Ramer–Douglas–Peucker simplification (default 1200). System automatically adjusts based on track size for optimal performance.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_prefetch_enabled">' . \esc_html__('Enable tile prefetching', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_prefetch_enabled" name="fgpx_prefetch_enabled" value="1"' . ($prefetchEnabled === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Proactively prefetch map tiles (faster feel, more external requests). Uncheck to reduce requests/quotas.', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_lazy_viewport">' . \esc_html__('Lazy load on viewport', 'flyover-gpx') . '</label></th><td>';
-        echo '<label><input type="checkbox" id="fgpx_lazy_viewport" name="fgpx_lazy_viewport" value="1"' . ($lazyViewport === '1' ? ' checked' : '') . ' /> ' .
-             \esc_html__('Only load map libraries & tiles when the player scrolls into view.', 'flyover-gpx') . '</label>';
-        echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_asset_fallbacks_enabled">' . \esc_html__('Asset fallbacks', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_asset_fallbacks_enabled" name="fgpx_asset_fallbacks_enabled" value="1"' . ($options['fgpx_asset_fallbacks_enabled'] === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Enable automatic fallback to alternative CDNs if primary assets fail to load', 'flyover-gpx') . '</label>';
-		echo '<p class="description">' . \esc_html__('Improves reliability by automatically switching to backup CDNs when primary assets are unavailable.', 'flyover-gpx') . '</p>';
-		echo '</td></tr>';
-		echo '<tr><th scope="row"><label for="fgpx_ajax_first">' . \esc_html__('Prefer admin-ajax.php over REST API', 'flyover-gpx') . '</label></th><td>';
-		echo '<label><input type="checkbox" id="fgpx_ajax_first" name="fgpx_ajax_first" value="1"' . ($ajaxFirst === '1' ? ' checked' : '') . ' /> ' . \esc_html__('Use admin-ajax.php before /wp-json for all track data requests (recommended when the REST API is blocked by a firewall or security plugin).', 'flyover-gpx') . '</label>';
-		echo '</td></tr>';
-		echo '</table>';
-
 		// Development & Debugging Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('🔧 Development & Debugging', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
@@ -1060,10 +1148,10 @@ final class Admin
 		echo '</td></tr>';
 		echo '</table>';
 
-		// Error Logging Section
+		// Error Logging & Diagnostics Section
 		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('📋 Error Logging & Diagnostics', 'flyover-gpx') . '</h3>';
 		echo '<table class="form-table" role="presentation">';
-		
+
 		$logStats = ErrorHandler::getLogStats();
 		echo '<tr><th scope="row">' . \esc_html__('Log Status', 'flyover-gpx') . '</th><td>';
 		if ($logStats['log_file_exists']) {
@@ -1073,7 +1161,7 @@ final class Admin
 			echo '<span style="color: #666;">—</span> ' . \esc_html__('No log file', 'flyover-gpx');
 		}
 		echo '</td></tr>';
-		
+
 		echo '<tr><th scope="row">' . \esc_html__('Log Actions', 'flyover-gpx') . '</th><td>';
 		if ($logStats['log_file_exists']) {
 			$downloadNonce = \wp_create_nonce('fgpx_download_logs');
@@ -1085,22 +1173,16 @@ final class Admin
 		}
 		echo '</td></tr>';
 		echo '</table>';
-		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save defaults', 'flyover-gpx') . '</button></p>';
-		echo '</form>';
 
-		echo '<hr />';
-		echo '<h2>' . \esc_html__('Player Theme (Custom CSS)', 'flyover-gpx') . '</h2>';
-		echo '<form method="post" action="' . $actionUrl . '">';
-		echo '<input type="hidden" name="action" value="fgpx_save_settings" />';
-		echo '<input type="hidden" name="fgpx_nonce" value="' . \esc_attr(\wp_create_nonce('fgpx_save_settings')) . '" />';
-		echo '<p>' . \esc_html__('Add custom CSS to override the player styles. These rules load after the default stylesheet.', 'flyover-gpx') . '</p>';
-		echo '<textarea name="fgpx_custom_css" rows="10" style="width:100%;font-family:monospace;">' . \esc_textarea($customCss) . '</textarea>';
-		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save CSS', 'flyover-gpx') . '</button></p>';
-		echo '</form>';
-		echo '<hr />';
-		echo '<h2>' . \esc_html__('Playback Statistics', 'flyover-gpx') . '</h2>';
+		// Playback Statistics Section
+		echo '<h3 style="margin-top: 30px; padding: 10px 0; border-bottom: 2px solid #ddd; color: #23282d;">' . \esc_html__('▶ Playback Statistics', 'flyover-gpx') . '</h3>';
 		echo '<p>' . \esc_html__('Clear all aggregated playback counters used by the statistics page and dashboard widgets.', 'flyover-gpx') . '</p>';
 		echo '<p><button type="button" class="button button-secondary" id="fgpx-clear-playback-stats" data-nonce="' . \esc_attr(\wp_create_nonce('fgpx_clear_playback_stats')) . '">' . \esc_html__('Clear Playback Statistics', 'flyover-gpx') . '</button></p>';
+		echo '</div>'; // Close advanced-content tab
+
+		// Form submission button
+		echo '<p class="submit"><button type="submit" class="button button-primary">' . \esc_html__('Save defaults', 'flyover-gpx') . '</button></p>';
+		echo '</form>';
 		echo '</div>';
 	}
 
@@ -1118,30 +1200,30 @@ final class Admin
 
 		echo '<div class="wrap">';
 		echo '<h1>' . \esc_html__('Add New Track', 'flyover-gpx') . '</h1>';
-		
+
 		if (!$hasPhpGpx) {
 			echo '<div class="notice notice-error"><p>' . \esc_html__('phpGPX library is missing. Please run composer install in the plugin directory before uploading GPX files.', 'flyover-gpx') . '</p></div>';
 		}
-		
+
 		echo '<div class="fgpx-upload-form">';
 		echo '<h3>' . \esc_html__('Upload GPX File', 'flyover-gpx') . '</h3>';
 		echo '<p>' . \esc_html__('Upload a GPX file to create a new track. The file will be processed and you will be redirected to edit the track details.', 'flyover-gpx') . '</p>';
-		
+
 		echo '<form method="post" action="' . $actionUrl . '" enctype="multipart/form-data">';
 		echo '<input type="hidden" name="action" value="fgpx_upload" />';
 		echo '<input type="hidden" name="fgpx_nonce" value="' . \esc_attr(\wp_create_nonce('fgpx_upload')) . '" />';
 		echo '<input type="hidden" name="redirect_to_edit" value="1" />';
-		
+
 		echo '<div class="file-input-wrapper">';
 		echo '<label for="fgpx_file"><strong>' . \esc_html__('Select a GPX file (max 20MB):', 'flyover-gpx') . '</strong></label>';
 		echo '<input type="file" id="fgpx_file" name="fgpx_file" accept=".gpx,application/gpx+xml,application/xml,text/xml" ' . (!$hasPhpGpx ? 'disabled' : 'required') . ' />';
 		echo '<p class="description">' . \esc_html__('Supported formats: .gpx files. After upload, you will be redirected to edit the track details.', 'flyover-gpx') . '</p>';
 		echo '</div>';
-		
+
 		echo '<p class="submit"><button type="submit" class="button button-primary" ' . (!$hasPhpGpx ? 'disabled' : '') . '>' . \esc_html__('Upload and Create Track', 'flyover-gpx') . '</button></p>';
 		echo '</form>';
 		echo '</div>';
-		
+
 		echo '</div>';
 	}
 
@@ -1199,186 +1281,186 @@ final class Admin
 
 			// Validate security: both capability and nonce
 			$this->validateSecurity('fgpx_upload', 'upload_files');
-			
+
 			// Also check edit_posts capability
 			$this->validateCapability('edit_posts');
 
 			if (!isset($_FILES['fgpx_file'])) {
-			$this->redirect_with_error(\esc_html__('No file provided.', 'flyover-gpx'));
-		}
-
-		$file = $_FILES['fgpx_file'];
-		if (!\is_array($file) || (int) ($file['error'] ?? 0) !== 0) {
-			$this->redirect_with_error(\esc_html__('Upload error.', 'flyover-gpx'));
-		}
-
-		$size = (int) ($file['size'] ?? 0);
-		$maxBytes = 20 * 1024 * 1024;
-		if ($size <= 0 || $size > $maxBytes) {
-			$this->redirect_with_error(\esc_html__('File is empty or exceeds 20MB.', 'flyover-gpx'));
-		}
-
-		$originalName = (string) ($file['name'] ?? '');
-		$ext = \strtolower((string) \pathinfo($originalName, PATHINFO_EXTENSION));
-		if ($ext !== 'gpx') {
-			$this->redirect_with_error(\esc_html__('Only .gpx files are allowed.', 'flyover-gpx'));
-		}
-
-		$allowedMimes = [
-			'gpx' => 'application/gpx+xml',
-			'xml' => 'application/xml',
-			'txtxml' => 'text/xml',
-		];
-
-		// Temporary change upload dir to uploads/flyover-gpx
-		$upload_dir_filter = static function (array $dirs): array {
-			$subdir = '/flyover-gpx';
-			$dirs['subdir'] = $subdir;
-			$dirs['path'] = rtrim($dirs['basedir'], '/') . $subdir;
-			$dirs['url'] = rtrim($dirs['baseurl'], '/') . $subdir;
-			return $dirs;
-		};
-
-		\add_filter('upload_dir', $upload_dir_filter);
-		$uploaded = \wp_handle_upload(
-			$file,
-			[
-				'test_form' => false,
-				'mimes' => $allowedMimes,
-				'unique_filename_callback' => static function (string $dir, string $name, string $ext): string {
-					// Remove extension from name if it's already included
-					$nameOnly = \sanitize_file_name($name);
-					if (\str_ends_with($nameOnly, $ext)) {
-						$nameOnly = \substr($nameOnly, 0, -\strlen($ext));
-					}
-					$prefix = \uniqid('fgpx_', true);
-					return $prefix . '-' . $nameOnly . $ext;
-				},
-			]
-		);
-		\remove_filter('upload_dir', $upload_dir_filter);
-
-		if (!\is_array($uploaded) || isset($uploaded['error'])) {
-			$message = isset($uploaded['error']) ? (string) $uploaded['error'] : \esc_html__('Upload failed.', 'flyover-gpx');
-			$this->redirect_with_error($message);
-		}
-
-		$filePath = (string) $uploaded['file']; // Absolute path
-		$gpxValidation = self::validate_gpx_upload_file($filePath);
-		if (\is_wp_error($gpxValidation)) {
-			if (\is_readable($filePath)) {
-				@\unlink($filePath);
+				$this->redirect_with_error(\esc_html__('No file provided.', 'flyover-gpx'));
 			}
-			$this->redirect_with_error($gpxValidation->get_error_message());
-		}
-		$fileName = \sanitize_file_name((string) \wp_basename($filePath));
-		
-		// Create a cleaner title by removing the unique prefix and extension
-		$cleanTitle = $fileName;
-		// Remove the unique prefix (fgpx_xxxxx-)
-		if (\preg_match('/^fgpx_[a-f0-9]+\.[a-f0-9]+-(.+)$/', $cleanTitle, $matches)) {
-			$cleanTitle = $matches[1];
-		}
-		// Remove .gpx extension if present
-		if (\str_ends_with($cleanTitle, '.gpx')) {
-			$cleanTitle = \substr($cleanTitle, 0, -4);
-		}
-		// Replace underscores with spaces and clean up
-		$cleanTitle = \str_replace('_', ' ', $cleanTitle);
-		$cleanTitle = \trim($cleanTitle);
 
-		// Create the track post
-		$postId = \wp_insert_post([
-			'post_title' => $cleanTitle,
-			'post_type' => 'fgpx_track',
-			'post_status' => 'publish',
-		], true);
-
-		if (\is_wp_error($postId)) {
-			// Clean up file if post creation fails
-			if (\is_readable($filePath)) {
-				@\unlink($filePath);
+			$file = $_FILES['fgpx_file'];
+			if (!\is_array($file) || (int) ($file['error'] ?? 0) !== 0) {
+				$this->redirect_with_error(\esc_html__('Upload error.', 'flyover-gpx'));
 			}
-			$this->redirect_with_error($postId->get_error_message());
-		}
 
-		// Parse GPX and compute stats
-		$parse = self::parse_gpx_and_stats($filePath);
-		if (\is_wp_error($parse)) {
-			if (\is_readable($filePath)) {
-				@\unlink($filePath);
+			$size = (int) ($file['size'] ?? 0);
+			$maxBytes = 20 * 1024 * 1024;
+			if ($size <= 0 || $size > $maxBytes) {
+				$this->redirect_with_error(\esc_html__('File is empty or exceeds 20MB.', 'flyover-gpx'));
 			}
-			$this->redirect_with_error($parse->get_error_message());
-		}
 
-		// Get geojson array for processing
-		$geojsonArray = $parse['geojson'];
-		
-		// Determine activity date: prefer GPX timestamp (earliest point), fallback to post creation date
-		// This ensures tracks are sorted chronologically by when the activity occurred, not when it was uploaded
-		$postDateGmt = (int) \strtotime((string) \get_post_field('post_date_gmt', $postId));
-		$activityDate = (int) ($parse['activity_date_unix'] ?? $postDateGmt);
-		
-		// Store initial meta (without wind data yet) using bulk update for better performance
-		$initialMeta = [
-			'fgpx_file_path' => $filePath,
-			'fgpx_stats' => $parse['stats'],
-			'fgpx_bounds' => $parse['bounds'],
-			'fgpx_points_count' => (int) $parse['points_count'],
-			// Numeric stats for sorting
-			'fgpx_total_distance_m' => (float) ($parse['stats']['total_distance_m'] ?? 0),
-			'fgpx_moving_time_s' => (float) ($parse['stats']['moving_time_s'] ?? 0),
-			'fgpx_elevation_gain_m' => (float) ($parse['stats']['elevation_gain_m'] ?? 0),
-			'fgpx_max_speed_m_s' => (float) ($parse['stats']['max_speed_m_s'] ?? 0),
-			// Activity date (earliest GPX timestamp or post date) for timeline sorting
-			'fgpx_activity_date_unix' => $activityDate,
-		];
-		DatabaseOptimizer::bulkUpdatePostMeta($postId, $initialMeta);
+			$originalName = (string) ($file['name'] ?? '');
+			$ext = \strtolower((string) \pathinfo($originalName, PATHINFO_EXTENSION));
+			if ($ext !== 'gpx') {
+				$this->redirect_with_error(\esc_html__('Only .gpx files are allowed.', 'flyover-gpx'));
+			}
 
-		// Store waypoints if any were extracted
-		if (!empty($parse['waypoints'] ?? [])) {
-			\update_post_meta($postId, 'fgpx_waypoints', $parse['waypoints']);
-		} else {
-			\delete_post_meta($postId, 'fgpx_waypoints');
-		}
+			$allowedMimes = [
+				'gpx' => 'application/gpx+xml',
+				'xml' => 'application/xml',
+				'txtxml' => 'text/xml',
+			];
 
-		// Enrich with weather data if enabled
-		self::enrichWithWeather($postId, \wp_json_encode($geojsonArray));
-		
-		// Interpolate wind data if enabled (after weather enrichment)
-		self::interpolateWindDataForTrack($postId, $geojsonArray);
-		
-		// Store final geojson with wind data
-		\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
-		// Invalidate any previous cached JSON for this post
-		// Purge new v2 cache key variants
-		$modified = (string) \strtotime((string) \get_post_field('post_modified_gmt', (int) $postId));
-		$cache_key_v2_prefix = 'fgpx_json_v2_' . (int) $postId . '_' . $modified;
-		$cache_key_v3_prefix = 'fgpx_json_v3_' . (int) $postId . '_' . $modified;
-		// Best-effort: delete exact keys used (host_post and simplify component can vary)
-		\delete_transient($cache_key_v2_prefix . '_hp_0_simp_0');
-		\delete_transient($cache_key_v3_prefix . '_hp_0_simp_0');
+			// Temporary change upload dir to uploads/flyover-gpx
+			$upload_dir_filter = static function (array $dirs): array {
+				$subdir = '/flyover-gpx';
+				$dirs['subdir'] = $subdir;
+				$dirs['path'] = rtrim($dirs['basedir'], '/') . $subdir;
+				$dirs['url'] = rtrim($dirs['baseurl'], '/') . $subdir;
+				return $dirs;
+			};
 
-		// Check if we should redirect to edit page (from Add New Track page)
-		$redirectToEdit = isset($_POST['redirect_to_edit']) && $_POST['redirect_to_edit'] === '1';
-		
-		if ($redirectToEdit) {
-			// Redirect to edit screen with success notice
-			$url = \add_query_arg([
-				'post' => (int) $postId,
-				'action' => 'edit',
-				'fgpx_msg' => 'uploaded',
-			], \admin_url('post.php'));
-			\wp_safe_redirect($url);
-		} else {
-			// Redirect to settings page with success notice (original behavior)
-			$url = \add_query_arg([
-				'page' => 'flyover-gpx',
-				'fgpx_msg' => 'uploaded',
-			], \admin_url('options-general.php'));
-			\wp_safe_redirect($url);
-		}
-		exit;
+			\add_filter('upload_dir', $upload_dir_filter);
+			$uploaded = \wp_handle_upload(
+				$file,
+				[
+					'test_form' => false,
+					'mimes' => $allowedMimes,
+					'unique_filename_callback' => static function (string $dir, string $name, string $ext): string {
+						// Remove extension from name if it's already included
+						$nameOnly = \sanitize_file_name($name);
+						if (\str_ends_with($nameOnly, $ext)) {
+							$nameOnly = \substr($nameOnly, 0, -\strlen($ext));
+						}
+						$prefix = \uniqid('fgpx_', true);
+						return $prefix . '-' . $nameOnly . $ext;
+					},
+				]
+			);
+			\remove_filter('upload_dir', $upload_dir_filter);
+
+			if (!\is_array($uploaded) || isset($uploaded['error'])) {
+				$message = isset($uploaded['error']) ? (string) $uploaded['error'] : \esc_html__('Upload failed.', 'flyover-gpx');
+				$this->redirect_with_error($message);
+			}
+
+			$filePath = (string) $uploaded['file']; // Absolute path
+			$gpxValidation = self::validate_gpx_upload_file($filePath);
+			if (\is_wp_error($gpxValidation)) {
+				if (\is_readable($filePath)) {
+					@\unlink($filePath);
+				}
+				$this->redirect_with_error($gpxValidation->get_error_message());
+			}
+			$fileName = \sanitize_file_name((string) \wp_basename($filePath));
+
+			// Create a cleaner title by removing the unique prefix and extension
+			$cleanTitle = $fileName;
+			// Remove the unique prefix (fgpx_xxxxx-)
+			if (\preg_match('/^fgpx_[a-f0-9]+\.[a-f0-9]+-(.+)$/', $cleanTitle, $matches)) {
+				$cleanTitle = $matches[1];
+			}
+			// Remove .gpx extension if present
+			if (\str_ends_with($cleanTitle, '.gpx')) {
+				$cleanTitle = \substr($cleanTitle, 0, -4);
+			}
+			// Replace underscores with spaces and clean up
+			$cleanTitle = \str_replace('_', ' ', $cleanTitle);
+			$cleanTitle = \trim($cleanTitle);
+
+			// Create the track post
+			$postId = \wp_insert_post([
+				'post_title' => $cleanTitle,
+				'post_type' => 'fgpx_track',
+				'post_status' => 'publish',
+			], true);
+
+			if (\is_wp_error($postId)) {
+				// Clean up file if post creation fails
+				if (\is_readable($filePath)) {
+					@\unlink($filePath);
+				}
+				$this->redirect_with_error($postId->get_error_message());
+			}
+
+			// Parse GPX and compute stats
+			$parse = self::parse_gpx_and_stats($filePath);
+			if (\is_wp_error($parse)) {
+				if (\is_readable($filePath)) {
+					@\unlink($filePath);
+				}
+				$this->redirect_with_error($parse->get_error_message());
+			}
+
+			// Get geojson array for processing
+			$geojsonArray = $parse['geojson'];
+
+			// Determine activity date: prefer GPX timestamp (earliest point), fallback to post creation date
+			// This ensures tracks are sorted chronologically by when the activity occurred, not when it was uploaded
+			$postDateGmt = (int) \strtotime((string) \get_post_field('post_date_gmt', $postId));
+			$activityDate = (int) ($parse['activity_date_unix'] ?? $postDateGmt);
+
+			// Store initial meta (without wind data yet) using bulk update for better performance
+			$initialMeta = [
+				'fgpx_file_path' => $filePath,
+				'fgpx_stats' => $parse['stats'],
+				'fgpx_bounds' => $parse['bounds'],
+				'fgpx_points_count' => (int) $parse['points_count'],
+				// Numeric stats for sorting
+				'fgpx_total_distance_m' => (float) ($parse['stats']['total_distance_m'] ?? 0),
+				'fgpx_moving_time_s' => (float) ($parse['stats']['moving_time_s'] ?? 0),
+				'fgpx_elevation_gain_m' => (float) ($parse['stats']['elevation_gain_m'] ?? 0),
+				'fgpx_max_speed_m_s' => (float) ($parse['stats']['max_speed_m_s'] ?? 0),
+				// Activity date (earliest GPX timestamp or post date) for timeline sorting
+				'fgpx_activity_date_unix' => $activityDate,
+			];
+			DatabaseOptimizer::bulkUpdatePostMeta($postId, $initialMeta);
+
+			// Store waypoints if any were extracted
+			if (!empty($parse['waypoints'] ?? [])) {
+				\update_post_meta($postId, 'fgpx_waypoints', $parse['waypoints']);
+			} else {
+				\delete_post_meta($postId, 'fgpx_waypoints');
+			}
+
+			// Enrich with weather data if enabled
+			self::enrichWithWeather($postId, \wp_json_encode($geojsonArray));
+
+			// Interpolate wind data if enabled (after weather enrichment)
+			self::interpolateWindDataForTrack($postId, $geojsonArray);
+
+			// Store final geojson with wind data
+			\update_post_meta($postId, 'fgpx_geojson', \wp_json_encode($geojsonArray));
+			// Invalidate any previous cached JSON for this post
+			// Purge new v2 cache key variants
+			$modified = (string) \strtotime((string) \get_post_field('post_modified_gmt', (int) $postId));
+			$cache_key_v2_prefix = 'fgpx_json_v2_' . (int) $postId . '_' . $modified;
+			$cache_key_v3_prefix = 'fgpx_json_v3_' . (int) $postId . '_' . $modified;
+			// Best-effort: delete exact keys used (host_post and simplify component can vary)
+			\delete_transient($cache_key_v2_prefix . '_hp_0_simp_0');
+			\delete_transient($cache_key_v3_prefix . '_hp_0_simp_0');
+
+			// Check if we should redirect to edit page (from Add New Track page)
+			$redirectToEdit = isset($_POST['redirect_to_edit']) && $_POST['redirect_to_edit'] === '1';
+
+			if ($redirectToEdit) {
+				// Redirect to edit screen with success notice
+				$url = \add_query_arg([
+					'post' => (int) $postId,
+					'action' => 'edit',
+					'fgpx_msg' => 'uploaded',
+				], \admin_url('post.php'));
+				\wp_safe_redirect($url);
+			} else {
+				// Redirect to settings page with success notice (original behavior)
+				$url = \add_query_arg([
+					'page' => 'flyover-gpx',
+					'fgpx_msg' => 'uploaded',
+				], \admin_url('options-general.php'));
+				\wp_safe_redirect($url);
+			}
+			exit;
 
 		} catch (\Throwable $e) {
 			// Handle any unexpected errors during upload
@@ -1412,7 +1494,9 @@ final class Admin
 		foreach ($columns as $key => $label) {
 			$ordered[$key] = $label;
 			if ($key === 'title') {
-				foreach ($insert as $k => $v) { $ordered[$k] = $v; }
+				foreach ($insert as $k => $v) {
+					$ordered[$k] = $v;
+				}
 			}
 		}
 		return $ordered;
@@ -1462,7 +1546,7 @@ final class Admin
 	{
 		$options = Options::getAll();
 		$weatherEnabled = $options['fgpx_weather_enabled'] === '1';
-		
+
 		if (!$weatherEnabled) {
 			echo '<span style="color: #666;" title="Weather enrichment is disabled in settings">—</span>';
 			return;
@@ -1470,7 +1554,7 @@ final class Admin
 
 		$weatherPoints = DatabaseOptimizer::getPostMeta($postId, 'fgpx_weather_points', true);
 		$weatherSummary = DatabaseOptimizer::getPostMeta($postId, 'fgpx_weather_summary', true);
-		
+
 		if (!$weatherPoints || !\is_string($weatherPoints) || $weatherPoints === '') {
 			echo '<span style="color: #d63638;" title="No weather data available">✗ None</span>';
 			return;
@@ -1528,7 +1612,7 @@ final class Admin
 		$options = Options::getAll();
 		$windAnalysisEnabled = $options['fgpx_wind_analysis_enabled'] === '1';
 		$weatherEnabled = $options['fgpx_weather_enabled'] === '1';
-		
+
 		if (!$windAnalysisEnabled) {
 			echo '<span style="color: #666;" title="Wind analysis is disabled in settings">—</span>';
 			return;
@@ -1563,9 +1647,15 @@ final class Admin
 		}
 
 		// Count non-null values
-		$speedCount = count(array_filter($windSpeeds, function($v) { return $v !== null; }));
-		$dirCount = count(array_filter($windDirections, function($v) { return $v !== null; }));
-		$impactCount = count(array_filter($windImpacts, function($v) { return $v !== null; }));
+		$speedCount = count(array_filter($windSpeeds, function ($v) {
+			return $v !== null;
+		}));
+		$dirCount = count(array_filter($windDirections, function ($v) {
+			return $v !== null;
+		}));
+		$impactCount = count(array_filter($windImpacts, function ($v) {
+			return $v !== null;
+		}));
 
 		if ($speedCount === 0 || $dirCount === 0 || $impactCount === 0) {
 			echo '<span style="color: #d63638;" title="Wind data arrays contain only null values">✗ Empty</span>';
@@ -1573,11 +1663,15 @@ final class Admin
 		}
 
 		// Calculate average wind speed for display
-		$validSpeeds = array_filter($windSpeeds, function($v) { return $v !== null && $v > 0; });
+		$validSpeeds = array_filter($windSpeeds, function ($v) {
+			return $v !== null && $v > 0;
+		});
 		$avgSpeed = count($validSpeeds) > 0 ? array_sum($validSpeeds) / count($validSpeeds) : 0;
 
 		// Calculate wind direction distribution for wind rose
-		$validDirections = array_filter($windDirections, function($v) { return $v !== null; });
+		$validDirections = array_filter($windDirections, function ($v) {
+			return $v !== null;
+		});
 		$directionCount = count($validDirections);
 		$uniqueDirections = count(array_unique($validDirections));
 
@@ -1589,7 +1683,9 @@ final class Admin
 				$windRoseSectors[$sector]++;
 			}
 		}
-		$activeSectors = count(array_filter($windRoseSectors, function($v) { return $v > 0; }));
+		$activeSectors = count(array_filter($windRoseSectors, function ($v) {
+			return $v > 0;
+		}));
 
 		$status = '✓ ' . $speedCount . ' pts';
 		$title = sprintf(
@@ -1625,9 +1721,11 @@ final class Admin
 	 */
 	public function handle_sorting(\WP_Query $q): void
 	{
-		if (!\is_admin() || $q->get('post_type') !== 'fgpx_track') { return; }
+		if (!\is_admin() || $q->get('post_type') !== 'fgpx_track') {
+			return;
+		}
 		$orderby = $q->get('orderby');
-		$allowed = ['fgpx_total_distance_m','fgpx_moving_time_s','fgpx_elevation_gain_m','fgpx_points_count'];
+		$allowed = ['fgpx_total_distance_m', 'fgpx_moving_time_s', 'fgpx_elevation_gain_m', 'fgpx_points_count'];
 		if (\in_array($orderby, $allowed, true)) {
 			$q->set('meta_key', $orderby);
 			$q->set('orderby', 'meta_value_num');
@@ -1639,10 +1737,12 @@ final class Admin
 	 */
 	public function row_actions(array $actions, \WP_Post $post): array
 	{
-		if ($post->post_type !== 'fgpx_track') { return $actions; }
+		if ($post->post_type !== 'fgpx_track') {
+			return $actions;
+		}
 		$short = '[flyover_gpx id="' . (int) $post->ID . '"]';
 		$actions['fgpx_copy'] = '<a href="#" onclick="navigator.clipboard.writeText(\'' . \esc_attr($short) . '\');return false;">' . \esc_html__('Copy Shortcode', 'flyover-gpx') . '</a>';
-		
+
 		// Add weather enrichment action
 		$nonce = \wp_create_nonce('fgpx_enrich_weather');
 		$actions['fgpx_enrich_weather'] = '<a href="#" class="fgpx-enrich-weather" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($nonce) . '">' . \esc_html__('Enrich Weather', 'flyover-gpx') . '</a>';
@@ -1659,7 +1759,7 @@ final class Admin
 		// Add clear cache action
 		$clearCacheNonce = \wp_create_nonce('fgpx_clear_cache');
 		$actions['fgpx_clear_cache'] = '<a href="#" class="fgpx-clear-cache" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($clearCacheNonce) . '">' . \esc_html__('Clear Cache', 'flyover-gpx') . '</a>';
-		
+
 		return $actions;
 	}
 
@@ -1675,55 +1775,60 @@ final class Admin
 	}
 
 	public function render_metabox_preview(\WP_Post $post): void
-{
-    // Avoid rendering during REST/AJAX requests (e.g., block editor save) to prevent output/noise
-    if ((\defined('REST_REQUEST') && REST_REQUEST) || (\defined('DOING_AJAX') && DOING_AJAX)) {
-        echo '<p>' . \esc_html__('Preview is unavailable during save operations.', 'flyover-gpx') . '</p>';
-        return;
-    }
+	{
+		// Avoid rendering during REST/AJAX requests (e.g., block editor save) to prevent output/noise
+		if ((\defined('REST_REQUEST') && REST_REQUEST) || (\defined('DOING_AJAX') && DOING_AJAX)) {
+			echo '<p>' . \esc_html__('Preview is unavailable during save operations.', 'flyover-gpx') . '</p>';
+			return;
+		}
 
-	// Lazily register and enqueue frontend assets for the preview only when actually rendering this box
-	try {
-		$plugin = new Plugin();
-		$plugin->register_assets();
-	} catch (\Throwable $e) { /* no-op */ }
-	\wp_enqueue_style('maplibre-gl-css');
-	\wp_enqueue_style('fgpx-front');
-	\wp_enqueue_script('maplibre-gl-js');
-	\wp_enqueue_script('chartjs');
-	\wp_enqueue_script('fgpx-front');
-	$options = Options::getAll();
-	$defStyle = $options['fgpx_default_style'];
-	$defStyleUrl = $options['fgpx_default_style_url'];
-	$defHeight = $options['fgpx_default_height'];
-	$defZoom = $options['fgpx_default_zoom'];
-	$defPrivacyEnabled = $options['fgpx_privacy_enabled'] === '1';
-	$defPrivacyKm = $options['fgpx_privacy_km'];
+		// Lazily register and enqueue frontend assets for the preview only when actually rendering this box
+		try {
+			$plugin = new Plugin();
+			$plugin->register_assets();
+		} catch (\Throwable $e) { /* no-op */
+		}
+		\wp_enqueue_style('maplibre-gl-css');
+		\wp_enqueue_style('fgpx-front');
+		\wp_enqueue_script('maplibre-gl-js');
+		\wp_enqueue_script('chartjs');
+		\wp_enqueue_script('fgpx-front');
+		$options = Options::getAll();
+		$defStyle = $options['fgpx_default_style'];
+		$defStyleUrl = $options['fgpx_default_style_url'];
+		$defHeight = $options['fgpx_default_height'];
+		$defZoom = $options['fgpx_default_zoom'];
+		$defPrivacyEnabled = $options['fgpx_privacy_enabled'] === '1';
+		$defPrivacyKm = $options['fgpx_privacy_km'];
 
-	$styleRaw = isset($_GET['fgpx_prev_style']) ? \sanitize_text_field((string) $_GET['fgpx_prev_style']) : $defStyle;
-	$style = \in_array($styleRaw, ['default', 'url', 'inline'], true) ? $styleRaw : $defStyle;
-	// Backward compat: convert old modes
-	if ($style === 'raster') { $style = 'default'; }
-	if ($style === 'vector') { $style = 'url'; }
-	$styleUrl = isset($_GET['fgpx_prev_style_url']) ? \esc_url_raw((string) $_GET['fgpx_prev_style_url']) : $defStyleUrl;
-	$height = isset($_GET['fgpx_prev_height']) ? \sanitize_text_field((string) $_GET['fgpx_prev_height']) : $defHeight;
-	$zoom = isset($_GET['fgpx_prev_zoom']) ? \sanitize_text_field((string) $_GET['fgpx_prev_zoom']) : $defZoom;
-	$privacy = isset($_GET['fgpx_prev_privacy']) ? (in_array(strtolower((string) $_GET['fgpx_prev_privacy']), ['1','true','yes','on'], true) ? 'true' : 'false') : ($defPrivacyEnabled ? 'true' : 'false');
-	$privacyKm = isset($_GET['fgpx_prev_privacy_km']) ? \sanitize_text_field((string) $_GET['fgpx_prev_privacy_km']) : $defPrivacyKm;
+		$styleRaw = isset($_GET['fgpx_prev_style']) ? \sanitize_text_field((string) $_GET['fgpx_prev_style']) : $defStyle;
+		$style = \in_array($styleRaw, ['default', 'url', 'inline'], true) ? $styleRaw : $defStyle;
+		// Backward compat: convert old modes
+		if ($style === 'raster') {
+			$style = 'default';
+		}
+		if ($style === 'vector') {
+			$style = 'url';
+		}
+		$styleUrl = isset($_GET['fgpx_prev_style_url']) ? \esc_url_raw((string) $_GET['fgpx_prev_style_url']) : $defStyleUrl;
+		$height = isset($_GET['fgpx_prev_height']) ? \sanitize_text_field((string) $_GET['fgpx_prev_height']) : $defHeight;
+		$zoom = isset($_GET['fgpx_prev_zoom']) ? \sanitize_text_field((string) $_GET['fgpx_prev_zoom']) : $defZoom;
+		$privacy = isset($_GET['fgpx_prev_privacy']) ? (in_array(strtolower((string) $_GET['fgpx_prev_privacy']), ['1', 'true', 'yes', 'on'], true) ? 'true' : 'false') : ($defPrivacyEnabled ? 'true' : 'false');
+		$privacyKm = isset($_GET['fgpx_prev_privacy_km']) ? \sanitize_text_field((string) $_GET['fgpx_prev_privacy_km']) : $defPrivacyKm;
 
-	// Controls (no nested form to avoid breaking the main post edit form)
-	echo '<div class="fgpx-preview-controls" style="margin-bottom:8px">';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style source', 'flyover-gpx') . ' <select id="fgpx_prev_style"><option value="default"' . selected($style, 'default', false) . '>Default (OSM)</option><option value="url"' . selected($style, 'url', false) . '>Remote URL</option><option value="inline"' . selected($style, 'inline', false) . '>Inline JSON</option></select></label>';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style URL', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_style_url" value="' . \esc_attr($styleUrl) . '" style="width:260px" /></label>';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Height', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_height" value="' . \esc_attr($height) . '" class="small-text" /></label>';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Zoom', 'flyover-gpx') . ' <input type="number" step="1" min="1" max="20" id="fgpx_prev_zoom" value="' . \esc_attr($zoom) . '" class="small-text" /></label>';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Privacy', 'flyover-gpx') . ' <select id="fgpx_prev_privacy"><option value="true"' . selected($privacy, 'true', false) . '>' . \esc_html__('on', 'flyover-gpx') . '</option><option value="false"' . selected($privacy, 'false', false) . '>' . \esc_html__('off', 'flyover-gpx') . '</option></select></label>';
-	echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Privacy km', 'flyover-gpx') . ' <input type="number" step="0.1" min="0" id="fgpx_prev_privacy_km" value="' . \esc_attr($privacyKm) . '" class="small-text" /></label>';
-	echo '<button type="button" class="button" id="fgpx_prev_refresh">' . \esc_html__('Update preview', 'flyover-gpx') . '</button>';
-	echo '</div>';
+		// Controls (no nested form to avoid breaking the main post edit form)
+		echo '<div class="fgpx-preview-controls" style="margin-bottom:8px">';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style source', 'flyover-gpx') . ' <select id="fgpx_prev_style"><option value="default"' . selected($style, 'default', false) . '>Default (OSM)</option><option value="url"' . selected($style, 'url', false) . '>Remote URL</option><option value="inline"' . selected($style, 'inline', false) . '>Inline JSON</option></select></label>';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Style URL', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_style_url" value="' . \esc_attr($styleUrl) . '" style="width:260px" /></label>';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Height', 'flyover-gpx') . ' <input type="text" id="fgpx_prev_height" value="' . \esc_attr($height) . '" class="small-text" /></label>';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Zoom', 'flyover-gpx') . ' <input type="number" step="1" min="1" max="20" id="fgpx_prev_zoom" value="' . \esc_attr($zoom) . '" class="small-text" /></label>';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Privacy', 'flyover-gpx') . ' <select id="fgpx_prev_privacy"><option value="true"' . selected($privacy, 'true', false) . '>' . \esc_html__('on', 'flyover-gpx') . '</option><option value="false"' . selected($privacy, 'false', false) . '>' . \esc_html__('off', 'flyover-gpx') . '</option></select></label>';
+		echo '<label style="display:inline-block;margin-right:8px">' . \esc_html__('Privacy km', 'flyover-gpx') . ' <input type="number" step="0.1" min="0" id="fgpx_prev_privacy_km" value="' . \esc_attr($privacyKm) . '" class="small-text" /></label>';
+		echo '<button type="button" class="button" id="fgpx_prev_refresh">' . \esc_html__('Update preview', 'flyover-gpx') . '</button>';
+		echo '</div>';
 
-	// Small script to rebuild URL with query args and reload, without nesting a <form>
-	echo '<script>(function(){
+		// Small script to rebuild URL with query args and reload, without nesting a <form>
+		echo '<script>(function(){
   var btn=document.getElementById("fgpx_prev_refresh"); if(!btn) return;
   btn.addEventListener("click", function(){
     try{
@@ -1741,78 +1846,80 @@ final class Admin
   });
 })();</script>';
 
-	$short = '[flyover_gpx id="' . (int) $post->ID . '"'
-		. ' style="' . \esc_attr($style) . '"'
-		. ($styleUrl !== '' ? ' style_url="' . \esc_attr($styleUrl) . '"' : '')
-		. ' height="' . \esc_attr($height) . '"'
-		. ' zoom="' . \esc_attr($zoom) . '"'
-		. ' privacy="' . \esc_attr($privacy) . '"'
-		. ' privacy_km="' . \esc_attr($privacyKm) . '"'
-		. ']';
+		$short = '[flyover_gpx id="' . (int) $post->ID . '"'
+			. ' style="' . \esc_attr($style) . '"'
+			. ($styleUrl !== '' ? ' style_url="' . \esc_attr($styleUrl) . '"' : '')
+			. ' height="' . \esc_attr($height) . '"'
+			. ' zoom="' . \esc_attr($zoom) . '"'
+			. ' privacy="' . \esc_attr($privacy) . '"'
+			. ' privacy_km="' . \esc_attr($privacyKm) . '"'
+			. ']';
 
-	// Render the actual front-end player in admin, buffer and suppress notices to avoid breaking saves
-	try {
-		ob_start();
-		$rendered = do_shortcode($short);
-		$buf = ob_get_clean();
-		if (is_string($buf) && $buf !== '') { echo $buf; }
-		echo $rendered;
-	} catch (\Throwable $e) {
-		// Show a lightweight message instead of failing hard
-		echo '<p style="color:#d63638;">' . \esc_html__('Failed to render preview in admin.', 'flyover-gpx') . '</p>';
+		// Render the actual front-end player in admin, buffer and suppress notices to avoid breaking saves
+		try {
+			ob_start();
+			$rendered = do_shortcode($short);
+			$buf = ob_get_clean();
+			if (is_string($buf) && $buf !== '') {
+				echo $buf;
+			}
+			echo $rendered;
+		} catch (\Throwable $e) {
+			// Show a lightweight message instead of failing hard
+			echo '<p style="color:#d63638;">' . \esc_html__('Failed to render preview in admin.', 'flyover-gpx') . '</p>';
+		}
+		// Show shortcode string for copy reference
+		echo '<p style="margin-top:6px"><code>' . \esc_html($short) . '</code></p>';
+
+		$previewNonce = \wp_create_nonce('fgpx_generate_preview');
+		$previewModeNonce = \wp_create_nonce('fgpx_save_preview_mode');
+		$previewAttachmentId = $this->get_track_preview_attachment_id((int) $post->ID);
+		$previewMode = $this->get_track_preview_mode((int) $post->ID);
+		$customAttachmentId = $this->get_track_preview_custom_attachment_id((int) $post->ID);
+		$customPreviewUrl = $customAttachmentId > 0 ? (string) \wp_get_attachment_image_url($customAttachmentId, 'medium_large') : '';
+		$currentSource = \sanitize_key((string) \get_post_meta((int) $post->ID, 'fgpx_preview_source', true));
+		$previewUrl = $previewAttachmentId > 0 ? (string) \wp_get_attachment_image_url($previewAttachmentId, 'medium_large') : '';
+		echo '<hr/>';
+		echo '<p><button type="button" class="button button-secondary fgpx-generate-preview" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewNonce) . '" data-track-title="' . \esc_attr((string) $post->post_title) . '">'
+			. ($previewAttachmentId > 0 ? \esc_html__('Regenerate Preview Image', 'flyover-gpx') : \esc_html__('Generate Preview Image', 'flyover-gpx'))
+			. '</button></p>';
+		echo '<div class="fgpx-preview-current-wrap"' . ($previewUrl === '' ? ' style="display:none"' : '') . '>';
+		echo '<p style="margin:8px 0 0">' . \esc_html__('Current gallery preview image:', 'flyover-gpx') . '</p>';
+		if ($previewUrl !== '') {
+			echo '<img data-fgpx-track-preview="1" src="' . \esc_url($previewUrl) . '" alt="' . \esc_attr__('Track preview image', 'flyover-gpx') . '" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />';
+		}
+		echo '</div>';
+
+		echo '<hr/>';
+		echo '<div class="fgpx-preview-mode-box" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewModeNonce) . '">';
+		echo '<p><strong>' . \esc_html__('Gallery Tile Image', 'flyover-gpx') . '</strong></p>';
+		echo '<p><label for="fgpx_preview_mode"><span class="screen-reader-text">' . \esc_html__('Preview mode', 'flyover-gpx') . '</span>';
+		echo '<select id="fgpx_preview_mode" class="fgpx-preview-mode-select">';
+		echo '<option value="auto"' . selected($previewMode, 'auto', false) . '>' . \esc_html__('Automatic (post image -> map snapshot -> icon)', 'flyover-gpx') . '</option>';
+		echo '<option value="post_featured"' . selected($previewMode, 'post_featured', false) . '>' . \esc_html__('Featured image of embedding post', 'flyover-gpx') . '</option>';
+		echo '<option value="map_snapshot"' . selected($previewMode, 'map_snapshot', false) . '>' . \esc_html__('Map snapshot only', 'flyover-gpx') . '</option>';
+		echo '<option value="custom"' . selected($previewMode, 'custom', false) . '>' . \esc_html__('Custom image', 'flyover-gpx') . '</option>';
+		echo '<option value="none"' . selected($previewMode, 'none', false) . '>' . \esc_html__('No image (use icon)', 'flyover-gpx') . '</option>';
+		echo '</select>';
+		echo '</label></p>';
+
+		$customDisplay = $previewMode === 'custom' ? 'block' : 'none';
+		echo '<div class="fgpx-preview-custom-wrap" style="display:' . \esc_attr($customDisplay) . '">';
+		echo '<input type="hidden" class="fgpx-preview-custom-id" value="' . (int) $customAttachmentId . '" />';
+		echo '<p><button type="button" class="button fgpx-preview-custom-select">' . \esc_html__('Select custom image', 'flyover-gpx') . '</button> '
+			. '<button type="button" class="button-link fgpx-preview-custom-clear">' . \esc_html__('Clear', 'flyover-gpx') . '</button></p>';
+		echo '<div class="fgpx-preview-custom-thumb"' . ($customPreviewUrl === '' ? ' style="display:none"' : '') . '>';
+		if ($customPreviewUrl !== '') {
+			echo '<img src="' . \esc_url($customPreviewUrl) . '" alt="' . \esc_attr__('Custom preview image', 'flyover-gpx') . '" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />';
+		}
+		echo '</div>';
+		echo '</div>';
+
+		echo '<p><button type="button" class="button button-primary fgpx-preview-mode-save">' . \esc_html__('Save preview mode', 'flyover-gpx') . '</button> '
+			. '<span class="fgpx-preview-mode-status" style="margin-left:8px;color:#646970"></span></p>';
+		echo '<p class="fgpx-preview-current-source" style="margin:4px 0 0;color:#646970">' . \esc_html__('Current source:', 'flyover-gpx') . ' <code>' . \esc_html($currentSource !== '' ? $currentSource : 'none') . '</code></p>';
+		echo '</div>';
 	}
-	// Show shortcode string for copy reference
-	echo '<p style="margin-top:6px"><code>' . \esc_html($short) . '</code></p>';
-
-	$previewNonce = \wp_create_nonce('fgpx_generate_preview');
-	$previewModeNonce = \wp_create_nonce('fgpx_save_preview_mode');
-	$previewAttachmentId = $this->get_track_preview_attachment_id((int) $post->ID);
-	$previewMode = $this->get_track_preview_mode((int) $post->ID);
-	$customAttachmentId = $this->get_track_preview_custom_attachment_id((int) $post->ID);
-	$customPreviewUrl = $customAttachmentId > 0 ? (string) \wp_get_attachment_image_url($customAttachmentId, 'medium_large') : '';
-	$currentSource = \sanitize_key((string) \get_post_meta((int) $post->ID, 'fgpx_preview_source', true));
-	$previewUrl = $previewAttachmentId > 0 ? (string) \wp_get_attachment_image_url($previewAttachmentId, 'medium_large') : '';
-	echo '<hr/>';
-	echo '<p><button type="button" class="button button-secondary fgpx-generate-preview" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewNonce) . '" data-track-title="' . \esc_attr((string) $post->post_title) . '">'
-		. ($previewAttachmentId > 0 ? \esc_html__('Regenerate Preview Image', 'flyover-gpx') : \esc_html__('Generate Preview Image', 'flyover-gpx'))
-		. '</button></p>';
-	echo '<div class="fgpx-preview-current-wrap"' . ($previewUrl === '' ? ' style="display:none"' : '') . '>';
-	echo '<p style="margin:8px 0 0">' . \esc_html__('Current gallery preview image:', 'flyover-gpx') . '</p>';
-	if ($previewUrl !== '') {
-		echo '<img data-fgpx-track-preview="1" src="' . \esc_url($previewUrl) . '" alt="' . \esc_attr__('Track preview image', 'flyover-gpx') . '" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />';
-	}
-	echo '</div>';
-
-	echo '<hr/>';
-	echo '<div class="fgpx-preview-mode-box" data-post-id="' . (int) $post->ID . '" data-nonce="' . \esc_attr($previewModeNonce) . '">';
-	echo '<p><strong>' . \esc_html__('Gallery Tile Image', 'flyover-gpx') . '</strong></p>';
-	echo '<p><label for="fgpx_preview_mode"><span class="screen-reader-text">' . \esc_html__('Preview mode', 'flyover-gpx') . '</span>';
-	echo '<select id="fgpx_preview_mode" class="fgpx-preview-mode-select">';
-	echo '<option value="auto"' . selected($previewMode, 'auto', false) . '>' . \esc_html__('Automatic (post image -> map snapshot -> icon)', 'flyover-gpx') . '</option>';
-	echo '<option value="post_featured"' . selected($previewMode, 'post_featured', false) . '>' . \esc_html__('Featured image of embedding post', 'flyover-gpx') . '</option>';
-	echo '<option value="map_snapshot"' . selected($previewMode, 'map_snapshot', false) . '>' . \esc_html__('Map snapshot only', 'flyover-gpx') . '</option>';
-	echo '<option value="custom"' . selected($previewMode, 'custom', false) . '>' . \esc_html__('Custom image', 'flyover-gpx') . '</option>';
-	echo '<option value="none"' . selected($previewMode, 'none', false) . '>' . \esc_html__('No image (use icon)', 'flyover-gpx') . '</option>';
-	echo '</select>';
-	echo '</label></p>';
-
-	$customDisplay = $previewMode === 'custom' ? 'block' : 'none';
-	echo '<div class="fgpx-preview-custom-wrap" style="display:' . \esc_attr($customDisplay) . '">';
-	echo '<input type="hidden" class="fgpx-preview-custom-id" value="' . (int) $customAttachmentId . '" />';
-	echo '<p><button type="button" class="button fgpx-preview-custom-select">' . \esc_html__('Select custom image', 'flyover-gpx') . '</button> '
-		. '<button type="button" class="button-link fgpx-preview-custom-clear">' . \esc_html__('Clear', 'flyover-gpx') . '</button></p>';
-	echo '<div class="fgpx-preview-custom-thumb"' . ($customPreviewUrl === '' ? ' style="display:none"' : '') . '>';
-	if ($customPreviewUrl !== '') {
-		echo '<img src="' . \esc_url($customPreviewUrl) . '" alt="' . \esc_attr__('Custom preview image', 'flyover-gpx') . '" style="max-width:100%;height:auto;border:1px solid #ccd0d4;border-radius:6px" />';
-	}
-	echo '</div>';
-	echo '</div>';
-
-	echo '<p><button type="button" class="button button-primary fgpx-preview-mode-save">' . \esc_html__('Save preview mode', 'flyover-gpx') . '</button> '
-		. '<span class="fgpx-preview-mode-status" style="margin-left:8px;color:#646970"></span></p>';
-	echo '<p class="fgpx-preview-current-source" style="margin:4px 0 0;color:#646970">' . \esc_html__('Current source:', 'flyover-gpx') . ' <code>' . \esc_html($currentSource !== '' ? $currentSource : 'none') . '</code></p>';
-	echo '</div>';
-}
 
 	private function get_track_preview_attachment_id(int $postId): int
 	{
@@ -2186,23 +2293,23 @@ final class Admin
 	 * Render weather data debug metabox.
 	 */
 	public function render_metabox_weather_debug(\WP_Post $post): void
-{
-    // Avoid rendering during REST/AJAX requests to prevent interfering with editor saves
-    if ((\defined('REST_REQUEST') && REST_REQUEST) || (\defined('DOING_AJAX') && DOING_AJAX)) {
-        echo '<p>' . \esc_html__('Weather debug is unavailable during save operations.', 'flyover-gpx') . '</p>';
-        return;
-    }
+	{
+		// Avoid rendering during REST/AJAX requests to prevent interfering with editor saves
+		if ((\defined('REST_REQUEST') && REST_REQUEST) || (\defined('DOING_AJAX') && DOING_AJAX)) {
+			echo '<p>' . \esc_html__('Weather debug is unavailable during save operations.', 'flyover-gpx') . '</p>';
+			return;
+		}
 		$options = Options::getAll();
 		$weatherEnabled = $options['fgpx_weather_enabled'] === '1';
 		$weatherPoints = \get_post_meta($post->ID, 'fgpx_weather_points', true);
 		$weatherSummary = \get_post_meta($post->ID, 'fgpx_weather_summary', true);
 
 		echo '<div style="font-family: monospace; font-size: 12px;">';
-		
+
 		// Weather settings status
 		echo '<h4>Settings Status</h4>';
 		echo '<p><strong>Weather Enabled:</strong> ' . ($weatherEnabled ? '✅ Yes' : '❌ No') . '</p>';
-		
+
 		if (!$weatherEnabled) {
 			echo '<p style="color: #d63638;">Weather enrichment is disabled in plugin settings.</p>';
 			echo '</div>';
@@ -2217,25 +2324,25 @@ final class Admin
 		} else {
 			$decodedWeather = \json_decode($weatherPoints, true);
 			$decodedSummary = \json_decode($weatherSummary, true);
-			
+
 			if (\is_array($decodedWeather) && isset($decodedWeather['features'])) {
 				$pointCount = count($decodedWeather['features']);
 				echo '<p style="color: #00a32a;"><strong>Status:</strong> ✅ Weather data available</p>';
 				echo '<p><strong>Points:</strong> ' . $pointCount . '</p>';
-				
+
 				if (\is_array($decodedSummary)) {
-					echo '<p><strong>Wet Points:</strong> ' . (int)($decodedSummary['wet_points'] ?? 0) . '</p>';
-					echo '<p><strong>Max Rain:</strong> ' . number_format((float)($decodedSummary['max_mm'] ?? 0), 1) . 'mm</p>';
-					echo '<p><strong>Avg Rain:</strong> ' . number_format((float)($decodedSummary['avg_mm'] ?? 0), 2) . 'mm</p>';
-					echo '<p><strong>Requested Samples:</strong> ' . (int)($decodedSummary['requested_samples'] ?? $pointCount) . '</p>';
-					echo '<p><strong>Used Samples:</strong> ' . (int)($decodedSummary['used_samples'] ?? $pointCount) . '</p>';
-					echo '<p><strong>Requested Coords:</strong> ' . (int)($decodedSummary['requested_unique_coords'] ?? 0) . '</p>';
-					echo '<p><strong>Used Coords:</strong> ' . (int)($decodedSummary['used_unique_coords'] ?? 0) . '</p>';
+					echo '<p><strong>Wet Points:</strong> ' . (int) ($decodedSummary['wet_points'] ?? 0) . '</p>';
+					echo '<p><strong>Max Rain:</strong> ' . number_format((float) ($decodedSummary['max_mm'] ?? 0), 1) . 'mm</p>';
+					echo '<p><strong>Avg Rain:</strong> ' . number_format((float) ($decodedSummary['avg_mm'] ?? 0), 2) . 'mm</p>';
+					echo '<p><strong>Requested Samples:</strong> ' . (int) ($decodedSummary['requested_samples'] ?? $pointCount) . '</p>';
+					echo '<p><strong>Used Samples:</strong> ' . (int) ($decodedSummary['used_samples'] ?? $pointCount) . '</p>';
+					echo '<p><strong>Requested Coords:</strong> ' . (int) ($decodedSummary['requested_unique_coords'] ?? 0) . '</p>';
+					echo '<p><strong>Used Coords:</strong> ' . (int) ($decodedSummary['used_unique_coords'] ?? 0) . '</p>';
 					if (!empty($decodedSummary['samples_truncated']) || !empty($decodedSummary['unique_coords_truncated'])) {
 						echo '<p style="color: #b32d2e;"><strong>Coverage Limited:</strong> sample or coordinate caps were applied to keep enrichment bounded.</p>';
 					}
 				}
-				
+
 				// Show sample weather points
 				if ($pointCount > 0) {
 					echo '<h4>Sample Weather Points</h4>';
@@ -2247,7 +2354,7 @@ final class Admin
 						$rain = $feature['properties']['rain_mm'] ?? 0;
 						$time = $feature['properties']['time_unix'] ?? 0;
 						$timeStr = $time > 0 ? date('Y-m-d H:i', $time) : 'N/A';
-						
+
 						echo '<div style="margin-bottom: 8px; padding: 4px; background: white; border: 1px solid #eee;">';
 						echo '<strong>Point ' . ($i + 1) . ':</strong><br>';
 						echo 'Coords: [' . number_format($coords[0], 4) . ', ' . number_format($coords[1], 4) . ']<br>';
@@ -2286,9 +2393,9 @@ final class Admin
 		}
 
 		$geojsonData = \get_post_meta($post->ID, 'fgpx_geojson', true);
-		
+
 		echo '<div style="font-family: monospace; font-size: 12px;">';
-		
+
 		// Wind data status
 		echo '<h4>Wind Data Status</h4>';
 		if (!$geojsonData || !\is_string($geojsonData) || $geojsonData === '') {
@@ -2296,25 +2403,25 @@ final class Admin
 			echo '<p><em>Upload a GPX file to see wind data.</em></p>';
 		} else {
 			$decodedGeojson = \json_decode($geojsonData, true);
-			
+
 			if (\is_array($decodedGeojson) && isset($decodedGeojson['properties'])) {
 				$props = $decodedGeojson['properties'];
 				$windSpeeds = $props['windSpeeds'] ?? [];
 				$windDirections = $props['windDirections'] ?? [];
 				$windImpacts = $props['windImpacts'] ?? [];
 				$trackBearings = $props['trackBearings'] ?? [];
-				
+
 				$windSpeedCount = \is_array($windSpeeds) ? count($windSpeeds) : 0;
 				$windDirectionCount = \is_array($windDirections) ? count($windDirections) : 0;
 				$windImpactCount = \is_array($windImpacts) ? count($windImpacts) : 0;
 				$trackBearingCount = \is_array($trackBearings) ? count($trackBearings) : 0;
-				
+
 				echo '<p style="color: #00a32a;"><strong>Status:</strong> ✅ Wind data available</p>';
 				echo '<p><strong>Wind Speeds:</strong> ' . $windSpeedCount . ' points</p>';
 				echo '<p><strong>Wind Directions:</strong> ' . $windDirectionCount . ' points</p>';
 				echo '<p><strong>Wind Impacts:</strong> ' . $windImpactCount . ' points</p>';
 				echo '<p><strong>Track Bearings:</strong> ' . $trackBearingCount . ' points</p>';
-				
+
 				// Show sample wind data
 				if ($windSpeedCount > 0 || $windDirectionCount > 0) {
 					echo '<h4>Sample Wind Data</h4>';
@@ -2325,7 +2432,7 @@ final class Admin
 						$windDirection = isset($windDirections[$i]) ? $windDirections[$i] : 'N/A';
 						$windImpact = isset($windImpacts[$i]) ? $windImpacts[$i] : 'N/A';
 						$trackBearing = isset($trackBearings[$i]) ? $trackBearings[$i] : 'N/A';
-						
+
 						echo '<div style="margin-bottom: 8px; padding: 4px; background: white; border: 1px solid #eee;">';
 						echo '<strong>Point ' . ($i + 1) . ':</strong><br>';
 						echo 'Wind Speed: ' . (\is_numeric($windSpeed) ? number_format($windSpeed, 1) . ' km/h' : $windSpeed) . '<br>';
@@ -2339,24 +2446,24 @@ final class Admin
 					}
 					echo '</div>';
 				}
-				
+
 				// Wind statistics
 				if ($windSpeedCount > 0) {
 					$avgWindSpeed = array_sum($windSpeeds) / $windSpeedCount;
 					$maxWindSpeed = max($windSpeeds);
 					$minWindSpeed = min($windSpeeds);
-					
+
 					echo '<h4>Wind Statistics</h4>';
 					echo '<p><strong>Avg Wind Speed:</strong> ' . number_format($avgWindSpeed, 1) . ' km/h</p>';
 					echo '<p><strong>Max Wind Speed:</strong> ' . number_format($maxWindSpeed, 1) . ' km/h</p>';
 					echo '<p><strong>Min Wind Speed:</strong> ' . number_format($minWindSpeed, 1) . ' km/h</p>';
 				}
-				
+
 				if ($windImpactCount > 0) {
 					$avgWindImpact = array_sum($windImpacts) / $windImpactCount;
 					$maxWindImpact = max($windImpacts);
 					$minWindImpact = min($windImpacts);
-					
+
 					echo '<p><strong>Avg Wind Impact:</strong> ' . number_format($avgWindImpact, 3) . '</p>';
 					echo '<p><strong>Max Wind Impact:</strong> ' . number_format($maxWindImpact, 3) . ' (tailwind)</p>';
 					echo '<p><strong>Min Wind Impact:</strong> ' . number_format($minWindImpact, 3) . ' (headwind)</p>';
@@ -2388,6 +2495,11 @@ final class Admin
 		$this->validateSecurity('fgpx_save_settings', 'manage_options');
 		$css = isset($_POST['fgpx_custom_css']) ? (string) $_POST['fgpx_custom_css'] : '';
 		$css = str_replace(["\r\n", "\r"], "\n", $css);
+		// Strip dangerous CSS patterns to prevent stored XSS
+		$css = (string) \preg_replace('/expression\s*\(/i', '', $css);
+		$css = (string) \preg_replace('/url\s*\(\s*["\']?\s*javascript:/i', 'url(#', $css);
+		$css = (string) \preg_replace('/@import\b/i', '/* @import removed */', $css);
+		$css = \str_replace("\0", '', $css);
 		\update_option('fgpx_custom_css', $css, true);
 		if (isset($_POST['fgpx_default_style'])) {
 			$rawStyle = \sanitize_text_field((string) $_POST['fgpx_default_style']);
@@ -2409,15 +2521,25 @@ final class Admin
 		if (isset($_POST['fgpx_default_style_json'])) {
 			$rawJson = (string) wp_unslash($_POST['fgpx_default_style_json']);
 			$trimmed = \trim($rawJson);
-			if ($trimmed === '' || (\json_decode($trimmed) !== null && \json_last_error() === JSON_ERROR_NONE)) {
+			if ($trimmed === '') {
 				\update_option('fgpx_default_style_json', $trimmed, true);
+			} else {
+				$decoded = \json_decode($trimmed, true);
+				// Must be a valid MapLibre style object with a numeric version key
+				if (\is_array($decoded) && isset($decoded['version']) && \is_numeric($decoded['version'])) {
+					\update_option('fgpx_default_style_json', $trimmed, true);
+				}
 			}
 		}
 		$mapSelectorDefaultRaw = isset($_POST['fgpx_map_selector_default']) ? (string) $_POST['fgpx_map_selector_default'] : 'satellite';
 		$mapSelectorDefault = \sanitize_key($mapSelectorDefaultRaw);
 		// Back-compat
-		if ($mapSelectorDefault === 'basic') { $mapSelectorDefault = 'satellite'; }
-		if ($mapSelectorDefault === 'basic_contours') { $mapSelectorDefault = 'satellite_contours'; }
+		if ($mapSelectorDefault === 'basic') {
+			$mapSelectorDefault = 'satellite';
+		}
+		if ($mapSelectorDefault === 'basic_contours') {
+			$mapSelectorDefault = 'satellite_contours';
+		}
 		if (!\in_array($mapSelectorDefault, ['satellite', 'satellite_contours'], true)) {
 			$mapSelectorDefault = 'satellite';
 		}
@@ -2479,12 +2601,14 @@ final class Admin
 			$smartTestUrlOverride = '';
 		}
 		\update_option('fgpx_smart_api_keys_test_url_override', $smartTestUrlOverride, true);
-		if (isset($_POST['fgpx_default_height'])) { \update_option('fgpx_default_height', sanitize_text_field((string) $_POST['fgpx_default_height']), true); }
+		if (isset($_POST['fgpx_default_height'])) {
+			\update_option('fgpx_default_height', sanitize_text_field((string) $_POST['fgpx_default_height']), true);
+		}
 		// Use type-safe validation helpers for numeric values
 		$zoom = $this->getValidInt('fgpx_default_zoom', 11, 1, 20);
 		$speed = $this->getValidInt('fgpx_default_speed', 25, 1, 250);
-		$pitch = $this->getValidInt('fgpx_default_pitch', 60, 0, 60);
-		
+		$pitch = $this->getValidInt('fgpx_default_pitch', 60, 0, 80);
+
 		\update_option('fgpx_default_zoom', (string) $zoom, true);
 		\update_option('fgpx_default_speed', (string) $speed, true);
 		\update_option('fgpx_default_pitch', (string) $pitch, true);
@@ -2509,9 +2633,10 @@ final class Admin
 		$galleryAutoSpeedThresholdKm = $this->getValidInt('fgpx_gallery_auto_speed_threshold_km', 200, 1, 99999);
 		\update_option('fgpx_gallery_auto_speed_threshold_km', (string) $galleryAutoSpeedThresholdKm, true);
 		$galleryAutoSpeedValues = ['1', '10', '25', '50', '100', '250'];
-		$rawAutoSpeedVal = isset($_POST['fgpx_gallery_auto_speed_value']) ? (string)(int)\sanitize_text_field(\wp_unslash($_POST['fgpx_gallery_auto_speed_value'])) : '100';
+		$rawAutoSpeedVal = isset($_POST['fgpx_gallery_auto_speed_value']) ? (string) (int) \sanitize_text_field(\wp_unslash($_POST['fgpx_gallery_auto_speed_value'])) : '100';
 		$galleryAutoSpeedVal = \in_array($rawAutoSpeedVal, $galleryAutoSpeedValues, true) ? $rawAutoSpeedVal : '100';
 		\update_option('fgpx_gallery_auto_speed_value', $galleryAutoSpeedVal, true);
+		\update_option('fgpx_gallery_share_include_ui_settings', $this->getValidBool('fgpx_gallery_share_include_ui_settings') ? '1' : '0', true);
 		$timelinePerPage = $this->getValidInt('fgpx_timeline_per_page', 20, 10, 50);
 		$timelineOrientation = isset($_POST['fgpx_timeline_orientation']) ? \sanitize_key((string) $_POST['fgpx_timeline_orientation']) : 'vertical';
 		if (!\in_array($timelineOrientation, ['vertical', 'horizontal'], true)) {
@@ -2540,7 +2665,7 @@ final class Admin
 		\update_option('fgpx_hud_enabled', $this->getValidBool('fgpx_hud_enabled') ? '1' : '0', true);
 		\update_option('fgpx_privacy_enabled', $this->getValidBool('fgpx_privacy_enabled') ? '1' : '0', true);
 		\update_option('fgpx_backend_simplify_enabled', $this->getValidBool('fgpx_backend_simplify_enabled') ? '1' : '0', true);
-		
+
 		// Use type-safe validation helpers for float and int values
 		$privacyKm = $this->getValidFloat('fgpx_privacy_km', 3.0, 0.0, 100.0);
 		$photoMaxDistance = $this->getValidInt('fgpx_photo_max_distance', 100, 1, 50000);
@@ -2549,7 +2674,7 @@ final class Admin
 			$photoOrderMode = 'geo_first';
 		}
 		$simplifyTarget = $this->getValidInt('fgpx_backend_simplify_target', 1200, 300, 2500);
-		
+
 		\update_option('fgpx_privacy_km', (string) $privacyKm, true);
 		\update_option('fgpx_photo_max_distance', (string) $photoMaxDistance, true);
 		\update_option('fgpx_photo_order_mode', $photoOrderMode, true);
@@ -2565,22 +2690,77 @@ final class Admin
 		\update_option('fgpx_system_weight_kg', (string) $this->getValidFloat('fgpx_system_weight_kg', 75.0, 40.0, 200.0), true);
 		\update_option('fgpx_chart_color_wind_impact', $this->getValidColor('fgpx_chart_color_wind_impact', '#ff6b35'), true);
 		\update_option('fgpx_chart_color_wind_rose', $this->getValidColor('fgpx_chart_color_wind_rose', '#4ecdc4'), true);
-		if (isset($_POST['fgpx_wind_rose_color_north'])) { \update_option('fgpx_wind_rose_color_north', \sanitize_hex_color($_POST['fgpx_wind_rose_color_north']), true); }
-		if (isset($_POST['fgpx_wind_rose_color_south'])) { \update_option('fgpx_wind_rose_color_south', \sanitize_hex_color($_POST['fgpx_wind_rose_color_south']), true); }
-		if (isset($_POST['fgpx_wind_rose_color_east'])) { \update_option('fgpx_wind_rose_color_east', \sanitize_hex_color($_POST['fgpx_wind_rose_color_east']), true); }
-		if (isset($_POST['fgpx_wind_rose_color_west'])) { \update_option('fgpx_wind_rose_color_west', \sanitize_hex_color($_POST['fgpx_wind_rose_color_west']), true); }
+		if (isset($_POST['fgpx_wind_rose_color_north'])) {
+			\update_option('fgpx_wind_rose_color_north', \sanitize_hex_color($_POST['fgpx_wind_rose_color_north']), true);
+		}
+		if (isset($_POST['fgpx_wind_rose_color_south'])) {
+			\update_option('fgpx_wind_rose_color_south', \sanitize_hex_color($_POST['fgpx_wind_rose_color_south']), true);
+		}
+		if (isset($_POST['fgpx_wind_rose_color_east'])) {
+			\update_option('fgpx_wind_rose_color_east', \sanitize_hex_color($_POST['fgpx_wind_rose_color_east']), true);
+		}
+		if (isset($_POST['fgpx_wind_rose_color_west'])) {
+			\update_option('fgpx_wind_rose_color_west', \sanitize_hex_color($_POST['fgpx_wind_rose_color_west']), true);
+		}
 		\update_option('fgpx_daynight_enabled', isset($_POST['fgpx_daynight_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_daynight_map_enabled', isset($_POST['fgpx_daynight_map_enabled']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_daynight_map_color'])) { \update_option('fgpx_daynight_map_color', \sanitize_hex_color($_POST['fgpx_daynight_map_color']), true); }
-		if (isset($_POST['fgpx_daynight_map_opacity'])) { \update_option('fgpx_daynight_map_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_daynight_map_opacity'])), true); }
+		\update_option('fgpx_daynight_visible_by_default', isset($_POST['fgpx_daynight_visible_by_default']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_daynight_map_color'])) {
+			\update_option('fgpx_daynight_map_color', \sanitize_hex_color($_POST['fgpx_daynight_map_color']), true);
+		}
+		if (isset($_POST['fgpx_daynight_map_opacity'])) {
+			\update_option('fgpx_daynight_map_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_daynight_map_opacity'])), true);
+		}
 		\update_option('fgpx_elevation_coloring', isset($_POST['fgpx_elevation_coloring']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_elevation_color_flat'])) { \update_option('fgpx_elevation_color_flat', sanitize_hex_color((string) $_POST['fgpx_elevation_color_flat']), true); }
-		if (isset($_POST['fgpx_elevation_color_steep'])) { \update_option('fgpx_elevation_color_steep', sanitize_hex_color((string) $_POST['fgpx_elevation_color_steep']), true); }
-		if (isset($_POST['fgpx_elevation_threshold_min'])) { \update_option('fgpx_elevation_threshold_min', (string) max(0, min(20, (float) $_POST['fgpx_elevation_threshold_min'])), true); }
-		if (isset($_POST['fgpx_elevation_threshold_max'])) { \update_option('fgpx_elevation_threshold_max', (string) max(1, min(50, (float) $_POST['fgpx_elevation_threshold_max'])), true); }
+		if (isset($_POST['fgpx_elevation_color_flat'])) {
+			\update_option('fgpx_elevation_color_flat', sanitize_hex_color((string) $_POST['fgpx_elevation_color_flat']), true);
+		}
+		if (isset($_POST['fgpx_elevation_color_steep'])) {
+			\update_option('fgpx_elevation_color_steep', sanitize_hex_color((string) $_POST['fgpx_elevation_color_steep']), true);
+		}
+		if (isset($_POST['fgpx_elevation_threshold_min'])) {
+			\update_option('fgpx_elevation_threshold_min', (string) max(0, min(20, (float) $_POST['fgpx_elevation_threshold_min'])), true);
+		}
+		if (isset($_POST['fgpx_elevation_threshold_max'])) {
+			\update_option('fgpx_elevation_threshold_max', (string) max(1, min(50, (float) $_POST['fgpx_elevation_threshold_max'])), true);
+		}
 		\update_option('fgpx_arrows_enabled', isset($_POST['fgpx_arrows_enabled']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_arrows_km'])) { \update_option('fgpx_arrows_km', (string) max(0.5, min(100, (float) $_POST['fgpx_arrows_km'])), true); }
-		
+		if (isset($_POST['fgpx_arrows_km'])) {
+			\update_option('fgpx_arrows_km', (string) max(0.5, min(100, (float) $_POST['fgpx_arrows_km'])), true);
+		}
+		\update_option('fgpx_speed_arrows_enabled', isset($_POST['fgpx_speed_arrows_enabled']) ? '1' : '0', true);
+		if (isset($_POST['fgpx_speed_arrows_threshold_low'])) {
+			\update_option('fgpx_speed_arrows_threshold_low', (string) max(1, min(120, (float) $_POST['fgpx_speed_arrows_threshold_low'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_threshold_high'])) {
+			\update_option('fgpx_speed_arrows_threshold_high', (string) max(2, min(160, (float) $_POST['fgpx_speed_arrows_threshold_high'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_low'])) {
+			\update_option('fgpx_speed_arrows_color_low', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_low']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_mid'])) {
+			\update_option('fgpx_speed_arrows_color_mid', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_mid']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_color_high'])) {
+			\update_option('fgpx_speed_arrows_color_high', sanitize_hex_color((string) $_POST['fgpx_speed_arrows_color_high']), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_spacing_low_km'])) {
+			\update_option('fgpx_speed_arrows_spacing_low_km', (string) max(0.3, min(25, (float) $_POST['fgpx_speed_arrows_spacing_low_km'])), true);
+		}
+		if (isset($_POST['fgpx_speed_arrows_spacing_high_km'])) {
+			\update_option('fgpx_speed_arrows_spacing_high_km', (string) max(0.1, min(10, (float) $_POST['fgpx_speed_arrows_spacing_high_km'])), true);
+		}
+		$speedArrowsThresholdLowSaved = (float) \get_option('fgpx_speed_arrows_threshold_low', '18');
+		$speedArrowsThresholdHighSaved = (float) \get_option('fgpx_speed_arrows_threshold_high', '35');
+		if ($speedArrowsThresholdHighSaved <= $speedArrowsThresholdLowSaved) {
+			\update_option('fgpx_speed_arrows_threshold_high', (string) min(160, $speedArrowsThresholdLowSaved + 1), true);
+		}
+		$speedArrowsSpacingLowSaved = (float) \get_option('fgpx_speed_arrows_spacing_low_km', '3.5');
+		$speedArrowsSpacingHighSaved = (float) \get_option('fgpx_speed_arrows_spacing_high_km', '0.8');
+		if ($speedArrowsSpacingHighSaved > $speedArrowsSpacingLowSaved) {
+			\update_option('fgpx_speed_arrows_spacing_high_km', (string) $speedArrowsSpacingLowSaved, true);
+		}
+
 		// Weather settings
 		\update_option('fgpx_weather_enabled', isset($_POST['fgpx_weather_enabled']) ? '1' : '0', true);
 		if (isset($_POST['fgpx_weather_sampling'])) {
@@ -2590,19 +2770,36 @@ final class Admin
 			}
 			\update_option('fgpx_weather_sampling', $weatherSampling, true);
 		}
-		if (isset($_POST['fgpx_weather_step_km'])) { \update_option('fgpx_weather_step_km', (string) max(5, min(20, (float) $_POST['fgpx_weather_step_km'])), true); }
-		if (isset($_POST['fgpx_weather_step_min'])) { \update_option('fgpx_weather_step_min', (string) max(5, min(60, (int) $_POST['fgpx_weather_step_min'])), true); }
-		if (isset($_POST['fgpx_weather_opacity'])) { \update_option('fgpx_weather_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_opacity'])), true); }
+		if (isset($_POST['fgpx_weather_step_km'])) {
+			\update_option('fgpx_weather_step_km', (string) max(5, min(20, (float) $_POST['fgpx_weather_step_km'])), true);
+		}
+		if (isset($_POST['fgpx_weather_step_min'])) {
+			\update_option('fgpx_weather_step_min', (string) max(5, min(60, (int) $_POST['fgpx_weather_step_min'])), true);
+		}
+		if (isset($_POST['fgpx_weather_opacity'])) {
+			\update_option('fgpx_weather_opacity', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_opacity'])), true);
+		}
 		\update_option('fgpx_weather_visible_by_default', isset($_POST['fgpx_weather_visible_by_default']) ? '1' : '0', true);
-		\update_option('fgpx_daynight_visible_by_default', isset($_POST['fgpx_daynight_visible_by_default']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_weather_heatmap_zoom0'])) { \update_option('fgpx_weather_heatmap_zoom0', (string) max(10, min(100, (int) $_POST['fgpx_weather_heatmap_zoom0'])), true); }
-		if (isset($_POST['fgpx_weather_heatmap_zoom9'])) { \update_option('fgpx_weather_heatmap_zoom9', (string) max(50, min(500, (int) $_POST['fgpx_weather_heatmap_zoom9'])), true); }
-		if (isset($_POST['fgpx_weather_heatmap_zoom12'])) { \update_option('fgpx_weather_heatmap_zoom12', (string) max(200, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom12'])), true); }
-		if (isset($_POST['fgpx_weather_heatmap_zoom14'])) { \update_option('fgpx_weather_heatmap_zoom14', (string) max(500, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom14'])), true); }
-		if (isset($_POST['fgpx_weather_heatmap_zoom15'])) { \update_option('fgpx_weather_heatmap_zoom15', (string) max(1000, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom15'])), true); }
+		if (isset($_POST['fgpx_weather_heatmap_zoom0'])) {
+			\update_option('fgpx_weather_heatmap_zoom0', (string) max(10, min(100, (int) $_POST['fgpx_weather_heatmap_zoom0'])), true);
+		}
+		if (isset($_POST['fgpx_weather_heatmap_zoom9'])) {
+			\update_option('fgpx_weather_heatmap_zoom9', (string) max(50, min(500, (int) $_POST['fgpx_weather_heatmap_zoom9'])), true);
+		}
+		if (isset($_POST['fgpx_weather_heatmap_zoom12'])) {
+			\update_option('fgpx_weather_heatmap_zoom12', (string) max(200, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom12'])), true);
+		}
+		if (isset($_POST['fgpx_weather_heatmap_zoom14'])) {
+			\update_option('fgpx_weather_heatmap_zoom14', (string) max(500, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom14'])), true);
+		}
+		if (isset($_POST['fgpx_weather_heatmap_zoom15'])) {
+			\update_option('fgpx_weather_heatmap_zoom15', (string) max(1000, min(10000, (int) $_POST['fgpx_weather_heatmap_zoom15'])), true);
+		}
 		\update_option('fgpx_weather_multi_point', isset($_POST['fgpx_weather_multi_point']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_weather_multi_point_distance'])) { \update_option('fgpx_weather_multi_point_distance', (string) max(1.0, min(20.0, (float) $_POST['fgpx_weather_multi_point_distance'])), true); }
-		
+		if (isset($_POST['fgpx_weather_multi_point_distance'])) {
+			\update_option('fgpx_weather_multi_point_distance', (string) max(1.0, min(20.0, (float) $_POST['fgpx_weather_multi_point_distance'])), true);
+		}
+
 		// Multi-weather visualization settings
 		if (isset($_POST['fgpx_weather_priority_order'])) {
 			$priorityOrderRaw = \strtolower(\sanitize_text_field((string) $_POST['fgpx_weather_priority_order']));
@@ -2623,11 +2820,21 @@ final class Admin
 			}
 			\update_option('fgpx_weather_priority_order', \implode(',', $priorityOrderList), true);
 		}
-		if (isset($_POST['fgpx_weather_fog_threshold'])) { \update_option('fgpx_weather_fog_threshold', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_fog_threshold'])), true); }
-		if (isset($_POST['fgpx_weather_rain_threshold'])) { \update_option('fgpx_weather_rain_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_rain_threshold'])), true); }
-		if (isset($_POST['fgpx_weather_snow_threshold'])) { \update_option('fgpx_weather_snow_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_snow_threshold'])), true); }
-		if (isset($_POST['fgpx_weather_wind_threshold'])) { \update_option('fgpx_weather_wind_threshold', (string) max(0.0, min(150.0, (float) $_POST['fgpx_weather_wind_threshold'])), true); }
-		if (isset($_POST['fgpx_weather_cloud_threshold'])) { \update_option('fgpx_weather_cloud_threshold', (string) max(0.0, min(100.0, (float) $_POST['fgpx_weather_cloud_threshold'])), true); }
+		if (isset($_POST['fgpx_weather_fog_threshold'])) {
+			\update_option('fgpx_weather_fog_threshold', (string) max(0.1, min(1.0, (float) $_POST['fgpx_weather_fog_threshold'])), true);
+		}
+		if (isset($_POST['fgpx_weather_rain_threshold'])) {
+			\update_option('fgpx_weather_rain_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_rain_threshold'])), true);
+		}
+		if (isset($_POST['fgpx_weather_snow_threshold'])) {
+			\update_option('fgpx_weather_snow_threshold', (string) max(0.0, min(20.0, (float) $_POST['fgpx_weather_snow_threshold'])), true);
+		}
+		if (isset($_POST['fgpx_weather_wind_threshold'])) {
+			\update_option('fgpx_weather_wind_threshold', (string) max(0.0, min(150.0, (float) $_POST['fgpx_weather_wind_threshold'])), true);
+		}
+		if (isset($_POST['fgpx_weather_cloud_threshold'])) {
+			\update_option('fgpx_weather_cloud_threshold', (string) max(0.0, min(100.0, (float) $_POST['fgpx_weather_cloud_threshold'])), true);
+		}
 		\update_option('fgpx_clouds_3d_enabled', isset($_POST['fgpx_clouds_3d_enabled']) ? '1' : '0', true);
 		if (isset($_POST['fgpx_clouds_3d_quality'])) {
 			$q = \sanitize_key((string) $_POST['fgpx_clouds_3d_quality']);
@@ -2639,17 +2846,23 @@ final class Admin
 		\update_option('fgpx_simulation_enabled', isset($_POST['fgpx_simulation_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_simulation_waypoints_enabled', isset($_POST['fgpx_simulation_waypoints_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_simulation_cities_enabled', isset($_POST['fgpx_simulation_cities_enabled']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_simulation_waypoint_window_km'])) { \update_option('fgpx_simulation_waypoint_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_waypoint_window_km'])), true); }
-		if (isset($_POST['fgpx_simulation_city_window_km'])) { \update_option('fgpx_simulation_city_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_city_window_km'])), true); }
+		if (isset($_POST['fgpx_simulation_waypoint_window_km'])) {
+			\update_option('fgpx_simulation_waypoint_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_waypoint_window_km'])), true);
+		}
+		if (isset($_POST['fgpx_simulation_city_window_km'])) {
+			\update_option('fgpx_simulation_city_window_km', (string) max(1, min(50, (int) $_POST['fgpx_simulation_city_window_km'])), true);
+		}
 		\update_option('fgpx_weather_color_snow', $this->getValidColor('fgpx_weather_color_snow', '#ff1493'), true);
 		\update_option('fgpx_weather_color_rain', $this->getValidColor('fgpx_weather_color_rain', '#4169e1'), true);
 		\update_option('fgpx_weather_color_fog', $this->getValidColor('fgpx_weather_color_fog', '#808080'), true);
 		\update_option('fgpx_weather_color_clouds', $this->getValidColor('fgpx_weather_color_clouds', '#d3d3d3'), true);
-		
+
 		// Wind analysis settings
 		\update_option('fgpx_wind_analysis_enabled', isset($_POST['fgpx_wind_analysis_enabled']) ? '1' : '0', true);
-		if (isset($_POST['fgpx_wind_interpolation_density'])) { \update_option('fgpx_wind_interpolation_density', (string) max(1, min(5, (int) $_POST['fgpx_wind_interpolation_density'])), true); }
-		
+		if (isset($_POST['fgpx_wind_interpolation_density'])) {
+			\update_option('fgpx_wind_interpolation_density', (string) max(1, min(5, (int) $_POST['fgpx_wind_interpolation_density'])), true);
+		}
+
 		\update_option('fgpx_prefetch_enabled', isset($_POST['fgpx_prefetch_enabled']) ? '1' : '0', true);
 		\update_option('fgpx_lazy_viewport', isset($_POST['fgpx_lazy_viewport']) ? '1' : '0', true);
 		\update_option('fgpx_asset_fallbacks_enabled', isset($_POST['fgpx_asset_fallbacks_enabled']) ? '1' : '0', true);
@@ -2730,7 +2943,7 @@ final class Admin
 					'used_samples' => \count($samples),
 				]);
 			}
-			
+
 			if (empty($samples)) {
 				return true; // No samples, but not an error
 			}
@@ -2771,11 +2984,15 @@ final class Admin
 			\update_post_meta($postId, 'fgpx_weather_points', wp_json_encode($weatherFeatureCollection));
 
 			// Generate summary stats
-			$rainValues = array_map(function($f) { return $f['properties']['rain_mm'] ?? 0; }, $weatherPoints);
+			$rainValues = array_map(function ($f) {
+				return $f['properties']['rain_mm'] ?? 0;
+			}, $weatherPoints);
 			$summary = [
 				'max_mm' => !empty($rainValues) ? max($rainValues) : 0,
 				'avg_mm' => !empty($rainValues) ? array_sum($rainValues) / count($rainValues) : 0,
-				'wet_points' => count(array_filter($rainValues, function($r) { return $r > 0; })),
+				'wet_points' => count(array_filter($rainValues, function ($r) {
+					return $r > 0;
+				})),
 				'total_points' => count($rainValues),
 				'requested_samples' => $requestedSampleCount,
 				'used_samples' => \count($samples),
@@ -2845,7 +3062,7 @@ final class Admin
 						}
 						$timestamp = $parsed;
 					}
-					
+
 					$samples[] = [
 						'lon' => $coord[0],
 						'lat' => $coord[1],
@@ -2853,7 +3070,7 @@ final class Admin
 						'index' => $i,
 						'sample_type' => 'distance'
 					];
-					
+
 					$nextDistance += $stepMeters;
 				}
 			}
@@ -2863,14 +3080,16 @@ final class Admin
 			$lastSampleTime = null;
 
 			for ($i = 0; $i < $coordCount; $i++) {
-				if (empty($timestamps[$i])) continue;
-				
+				if (empty($timestamps[$i]))
+					continue;
+
 				$timestamp = strtotime($timestamps[$i]);
-				if ($timestamp === false) continue;
+				if ($timestamp === false)
+					continue;
 
 				if ($lastSampleTime === null || ($timestamp - $lastSampleTime) >= $stepSeconds) {
 					$coord = $coordinates[$i];
-					
+
 					$samples[] = [
 						'lon' => $coord[0],
 						'lat' => $coord[1],
@@ -2878,7 +3097,7 @@ final class Admin
 						'index' => $i,
 						'sample_type' => 'time'
 					];
-					
+
 					$lastSampleTime = $timestamp;
 				}
 			}
@@ -2895,7 +3114,7 @@ final class Admin
 					}
 					$timestamp = $parsed;
 				}
-				
+
 				$samples[] = [
 					'lon' => $coord[0],
 					'lat' => $coord[1],
@@ -2920,21 +3139,21 @@ final class Admin
 	private static function addMultiPointSamples(array $samples, float $distanceKm): array
 	{
 		$allSamples = [];
-		
+
 		// Earth's radius in kilometers
 		$earthRadiusKm = 6371.0;
-		
+
 		foreach ($samples as $sample) {
 			// Add original sample
 			$allSamples[] = $sample;
-			
+
 			$lat = $sample['lat'];
 			$lon = $sample['lon'];
-			
+
 			// Convert distance to degrees (approximate)
 			$latOffset = $distanceKm / 111.0; // 1 degree latitude ≈ 111 km
 			$lonOffset = $distanceKm / (111.0 * cos(deg2rad($lat))); // Adjust for latitude
-			
+
 			// Generate 4 additional points: North, South, East, West
 			$additionalPoints = [
 				['lat' => $lat + $latOffset, 'lon' => $lon, 'direction' => 'N'], // North
@@ -2942,7 +3161,7 @@ final class Admin
 				['lat' => $lat, 'lon' => $lon + $lonOffset, 'direction' => 'E'], // East
 				['lat' => $lat, 'lon' => $lon - $lonOffset, 'direction' => 'W'], // West
 			];
-			
+
 			foreach ($additionalPoints as $point) {
 				$allSamples[] = [
 					'lon' => $point['lon'],
@@ -2954,7 +3173,7 @@ final class Admin
 				];
 			}
 		}
-		
+
 		return $allSamples;
 	}
 
@@ -2988,8 +3207,8 @@ final class Admin
 		// Use evenly distributed selection so the full route gets weather coverage.
 		if (count($uniqueCoords) > $maxUniqueCoords) {
 			$allCoordKeys = array_keys($uniqueCoords);
-			$totalCoords  = count($allCoordKeys);
-			$coordStep    = ($totalCoords - 1) / ($maxUniqueCoords - 1);
+			$totalCoords = count($allCoordKeys);
+			$coordStep = ($totalCoords - 1) / ($maxUniqueCoords - 1);
 			$selectedCoords = [];
 			for ($ci = 0; $ci < $maxUniqueCoords; $ci++) {
 				$key = $allCoordKeys[(int) round($ci * $coordStep)];
@@ -3015,7 +3234,7 @@ final class Admin
 		// Fetch weather for each unique coordinate
 		foreach ($uniqueCoords as $coordKey => $coord) {
 			$weatherData = self::fetchOpenMeteoData($coord['lat'], $coord['lon'], $startDate, $endDate);
-			
+
 			// Map weather data back to original samples
 			if ($weatherData && isset($coordToSamples[$coordKey])) {
 				foreach ($coordToSamples[$coordKey] as $sample) {
@@ -3024,17 +3243,17 @@ final class Admin
 					$temperature = self::getTemperatureForTimestamp($weatherData, $sample['time_unix']);
 					$windSpeed = self::getWindSpeedForTimestamp($weatherData, $sample['time_unix']);
 					$windDirection = self::getWindDirectionForTimestamp($weatherData, $sample['time_unix']);
-					
+
 					// NEW: Multi-weather parameters
 					$cloudCover = self::getCloudCoverForTimestamp($weatherData, $sample['time_unix']);
 					$snowfall = self::getSnowfallForTimestamp($weatherData, $sample['time_unix']);
 					$dewPoint = self::getDewPointForTimestamp($weatherData, $sample['time_unix']);
 					$temperature2m = self::getTemperature2mForTimestamp($weatherData, $sample['time_unix']);
 					$relativeHumidity = self::getRelativeHumidityForTimestamp($weatherData, $sample['time_unix']);
-					
+
 					// Calculate fog intensity using new parameters
 					$fogIntensity = self::calculateFogIntensity($temperature2m, $dewPoint, $relativeHumidity);
-					
+
 					$weatherPoints[] = [
 						'type' => 'Feature',
 						'geometry' => [
@@ -3082,7 +3301,7 @@ final class Admin
 	{
 		// Cache key with version for parameter changes (v2 adds cloud_cover, snowfall, fog detection)
 		$cacheKey = 'fgpx_wx_v2_' . round($lat, 1) . '_' . round($lon, 1) . '_' . $startDate . '_' . $endDate;
-		
+
 		// Check cache first
 		$cached = \get_transient($cacheKey);
 		if ($cached !== false) {
@@ -3429,19 +3648,19 @@ final class Admin
 		}
 
 		$tempDiff = $temperature_2m - $dewPoint_2m;
-		
+
 		// Fog occurs when temperature is close to dew point (< 2°C difference)
 		if ($tempDiff < 2.0) {
 			$baseFogIntensity = (2.0 - $tempDiff) / 2.0; // Linear scale: 0 to 1
-			
+
 			// Boost intensity if humidity is very high (> 90%)
 			if ($relativeHumidity !== null && $relativeHumidity > 90) {
 				$baseFogIntensity = min(1.0, $baseFogIntensity * 1.2);
 			}
-			
+
 			return max(0.0, min(1.0, $baseFogIntensity)); // Clamp to [0, 1]
 		}
-		
+
 		return 0.0;
 	}
 
@@ -3482,116 +3701,119 @@ final class Admin
 	 * Enqueue MapLibre in admin for fgpx screens.
 	 */
 	public function admin_enqueue(string $hook): void
-{
-	$screen = \get_current_screen();
-	if (!$screen) { return; }
-	
-	// Enqueue Chart.js on dashboard for playback widgets
-	if ($screen->id === 'dashboard') {
-		AssetManager::registerAssets();
-		\wp_enqueue_script('chartjs');
-	}
-	
-	// Enqueue admin.js and CSS on relevant pages
-	$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track', 'fgpx_track_page_fgpx-statistics'];
-	if (in_array($screen->id, $relevant_pages, true)) {
-		\wp_enqueue_script('jquery');
-		\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], FGPX_VERSION, true);
-		\wp_enqueue_style('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/css/admin.css', [], '1.0.2');
-		if ($screen->id === 'fgpx_track') {
-			\wp_enqueue_media();
+	{
+		$screen = \get_current_screen();
+		if (!$screen) {
+			return;
 		}
-		$options = Options::getAll();
-		$gmediaDetection = GMediaCaptionSync::detect();
-		\wp_localize_script('fgpx-admin', 'FGPXAdminPreview', [
-			'restBase' => \esc_url_raw(\site_url('/wp-json/fgpx/v1')),
-			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
-			'defaultStyle' => (string) ($options['fgpx_default_style'] ?? 'raster'),
-			'defaultStyleUrl' => (string) ($options['fgpx_default_style_url'] ?? ''),
-			'gmediaSyncAvailable' => !empty($gmediaDetection['active']),
-			'gmediaSyncReason' => (string) ($gmediaDetection['reason'] ?? ''),
-			'gmediaSyncDefaultOverwrite' => true,
-			'gmediaSyncConfirmRun' => (string) \__('Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.', 'flyover-gpx'),
-			'gmediaSyncConfirmOverwrite' => (string) \__('Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.', 'flyover-gpx'),
-			'gmediaSyncBatchSize' => 250,
-			'gmediaSyncPauseMs' => 80,
-			'snapshotWidth' => 1200,
-			'snapshotHeight' => 630,
-			'bulkMaxTracks' => 25,
-			'bulkPauseMs' => 200,
-		]);
-	}
 
-	if ($screen->id === 'fgpx_track_page_fgpx-statistics') {
-		$statistics = new Statistics();
-		$statistics->enqueue_assets();
-		$chartKeys = $this->get_statistics_chart_keys();
+		// Enqueue Chart.js on dashboard for playback widgets
+		if ($screen->id === 'dashboard') {
+			AssetManager::registerAssets();
+			\wp_enqueue_script('chartjs');
+		}
 
-		\wp_localize_script('fgpx-stats', 'FGPXStatsAdmin', [
-			'rootId' => 'fgpx-stats-admin-root',
-			'endpointUrl' => \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate')),
-			'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
-			'ajaxAction' => 'fgpx_stats',
-			'maxPoints' => 15000,
-			'charts' => $chartKeys,
-			'showHeatmap' => true,
-			'mapStyle' => '',
-			'strings' => [
-				'loading' => \esc_html__('Loading statistics...', 'flyover-gpx'),
-				'failed' => \esc_html__('Could not load statistics.', 'flyover-gpx'),
-				'tracks' => \esc_html__('Tracks', 'flyover-gpx'),
-				'distance' => \esc_html__('Distance', 'flyover-gpx'),
-				'elevation' => \esc_html__('Elevation gain', 'flyover-gpx'),
-				'avgSpeed' => \esc_html__('Avg speed', 'flyover-gpx'),
-				'maxSpeed' => \esc_html__('Max speed', 'flyover-gpx'),
-				'avgDistance' => \esc_html__('Avg distance', 'flyover-gpx'),
-				'maxDistance' => \esc_html__('Max distance', 'flyover-gpx'),
-				'avgElevation' => \esc_html__('Avg elevation', 'flyover-gpx'),
-				'maxElevation' => \esc_html__('Max elevation', 'flyover-gpx'),
-				'chartDistanceByMonth' => \esc_html__('Distance by Month', 'flyover-gpx'),
-				'chartTracksByMonth' => \esc_html__('Tracks by Month', 'flyover-gpx'),
-				'chartTracksByYear' => \esc_html__('Tracks by Year', 'flyover-gpx'),
-				'chartPlaybacksByMonth' => \esc_html__('Playbacks by Month', 'flyover-gpx'),
-				'chartPlaybacksByYear' => \esc_html__('Playbacks by Year', 'flyover-gpx'),
-				'chartDistanceByYear' => \esc_html__('Distance by Year', 'flyover-gpx'),
-				'chartElevationByMonth' => \esc_html__('Elevation by Month', 'flyover-gpx'),
-				'chartElevationByYear' => \esc_html__('Elevation by Year', 'flyover-gpx'),
-				'chartAvgSpeedByMonth' => \esc_html__('Average Speed by Month', 'flyover-gpx'),
-				'chartAvgSpeedByYear' => \esc_html__('Average Speed by Year', 'flyover-gpx'),
-				'chartTrackLengthHistogram' => \esc_html__('Track Length Distribution', 'flyover-gpx'),
-				'chartWeekdayDistribution' => \esc_html__('Weekday Distribution', 'flyover-gpx'),
-				'chartHourDistribution' => \esc_html__('Hour Distribution', 'flyover-gpx'),
-				'chartDistanceKm' => \esc_html__('Distance (km)', 'flyover-gpx'),
-				'chartElevationM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
-				'chartAvgSpeedKmh' => \esc_html__('Average speed (km/h)', 'flyover-gpx'),
-				'chartTracksCount' => \esc_html__('Track count', 'flyover-gpx'),
-				'chartPlaybacksCount' => \esc_html__('Playback count', 'flyover-gpx'),
-				'chartLengthBuckets' => \esc_html__('Distance buckets', 'flyover-gpx'),
-				'weekdaySun' => \esc_html__('Sun', 'flyover-gpx'),
-				'weekdayMon' => \esc_html__('Mon', 'flyover-gpx'),
-				'weekdayTue' => \esc_html__('Tue', 'flyover-gpx'),
-				'weekdayWed' => \esc_html__('Wed', 'flyover-gpx'),
-				'weekdayThu' => \esc_html__('Thu', 'flyover-gpx'),
-				'weekdayFri' => \esc_html__('Fri', 'flyover-gpx'),
-				'weekdaySat' => \esc_html__('Sat', 'flyover-gpx'),
-				'chartTracks' => \esc_html__('Tracks', 'flyover-gpx'),
-				'heatmapTitle' => \esc_html__('All Tracks Heatmap', 'flyover-gpx'),
-				'noTracks' => \esc_html__('No published tracks yet.', 'flyover-gpx'),
-				'noTrendData' => \esc_html__('No trend data available yet.', 'flyover-gpx'),
-				'noHeatmapData' => \esc_html__('No track points available for heatmap yet.', 'flyover-gpx'),
-			],
-		]);
+		// Enqueue admin.js and CSS on relevant pages
+		$relevant_pages = ['edit-fgpx_track', 'fgpx_track', 'settings_page_flyover-gpx', 'fgpx_track_page_fgpx-add-new-track', 'fgpx_track_page_fgpx-statistics'];
+		if (in_array($screen->id, $relevant_pages, true)) {
+			\wp_enqueue_script('jquery');
+			\wp_enqueue_script('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/js/admin.js', ['jquery'], FGPX_VERSION, true);
+			\wp_enqueue_style('fgpx-admin', \plugin_dir_url(__DIR__) . 'assets/css/admin.css', [], '1.0.2');
+			if ($screen->id === 'fgpx_track') {
+				\wp_enqueue_media();
+			}
+			$options = Options::getAll();
+			$gmediaDetection = GMediaCaptionSync::detect();
+			\wp_localize_script('fgpx-admin', 'FGPXAdminPreview', [
+				'restBase' => \esc_url_raw(\site_url('/wp-json/fgpx/v1')),
+				'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
+				'defaultStyle' => (string) ($options['fgpx_default_style'] ?? 'raster'),
+				'defaultStyleUrl' => (string) ($options['fgpx_default_style_url'] ?? ''),
+				'gmediaSyncAvailable' => !empty($gmediaDetection['active']),
+				'gmediaSyncReason' => (string) ($gmediaDetection['reason'] ?? ''),
+				'gmediaSyncDefaultOverwrite' => true,
+				'gmediaSyncConfirmRun' => (string) \__('Sync Grand Media titles into WordPress image captions now? This runs across all matching image attachments by filename.', 'flyover-gpx'),
+				'gmediaSyncConfirmOverwrite' => (string) \__('Overwrite existing captions? Click Cancel to keep existing captions and fill empty ones only.', 'flyover-gpx'),
+				'gmediaSyncBatchSize' => 250,
+				'gmediaSyncPauseMs' => 80,
+				'snapshotWidth' => 1200,
+				'snapshotHeight' => 630,
+				'bulkMaxTracks' => 25,
+				'bulkPauseMs' => 200,
+			]);
+		}
+
+		if ($screen->id === 'fgpx_track_page_fgpx-statistics') {
+			$statistics = new Statistics();
+			$statistics->enqueue_assets();
+			$chartKeys = $this->get_statistics_chart_keys();
+
+			\wp_localize_script('fgpx-stats', 'FGPXStatsAdmin', [
+				'rootId' => 'fgpx-stats-admin-root',
+				'endpointUrl' => \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate')),
+				'ajaxUrl' => \esc_url_raw(\admin_url('admin-ajax.php')),
+				'ajaxAction' => 'fgpx_stats',
+				'maxPoints' => 15000,
+				'charts' => $chartKeys,
+				'showHeatmap' => true,
+				'mapStyle' => '',
+				'strings' => [
+					'loading' => \esc_html__('Loading statistics...', 'flyover-gpx'),
+					'failed' => \esc_html__('Could not load statistics.', 'flyover-gpx'),
+					'tracks' => \esc_html__('Tracks', 'flyover-gpx'),
+					'distance' => \esc_html__('Distance', 'flyover-gpx'),
+					'elevation' => \esc_html__('Elevation gain', 'flyover-gpx'),
+					'avgSpeed' => \esc_html__('Avg speed', 'flyover-gpx'),
+					'maxSpeed' => \esc_html__('Max speed', 'flyover-gpx'),
+					'avgDistance' => \esc_html__('Avg distance', 'flyover-gpx'),
+					'maxDistance' => \esc_html__('Max distance', 'flyover-gpx'),
+					'avgElevation' => \esc_html__('Avg elevation', 'flyover-gpx'),
+					'maxElevation' => \esc_html__('Max elevation', 'flyover-gpx'),
+					'chartDistanceByMonth' => \esc_html__('Distance by Month', 'flyover-gpx'),
+					'chartTracksByMonth' => \esc_html__('Tracks by Month', 'flyover-gpx'),
+					'chartTracksByYear' => \esc_html__('Tracks by Year', 'flyover-gpx'),
+					'chartPlaybacksByMonth' => \esc_html__('Playbacks by Month', 'flyover-gpx'),
+					'chartPlaybacksByYear' => \esc_html__('Playbacks by Year', 'flyover-gpx'),
+					'chartDistanceByYear' => \esc_html__('Distance by Year', 'flyover-gpx'),
+					'chartElevationByMonth' => \esc_html__('Elevation by Month', 'flyover-gpx'),
+					'chartElevationByYear' => \esc_html__('Elevation by Year', 'flyover-gpx'),
+					'chartAvgSpeedByMonth' => \esc_html__('Average Speed by Month', 'flyover-gpx'),
+					'chartAvgSpeedByYear' => \esc_html__('Average Speed by Year', 'flyover-gpx'),
+					'chartTrackLengthHistogram' => \esc_html__('Track Length Distribution', 'flyover-gpx'),
+					'chartWeekdayDistribution' => \esc_html__('Weekday Distribution', 'flyover-gpx'),
+					'chartHourDistribution' => \esc_html__('Hour Distribution', 'flyover-gpx'),
+					'chartDistanceKm' => \esc_html__('Distance (km)', 'flyover-gpx'),
+					'chartElevationM' => \esc_html__('Elevation gain (m)', 'flyover-gpx'),
+					'chartAvgSpeedKmh' => \esc_html__('Average speed (km/h)', 'flyover-gpx'),
+					'chartTracksCount' => \esc_html__('Track count', 'flyover-gpx'),
+					'chartPlaybacksCount' => \esc_html__('Playback count', 'flyover-gpx'),
+					'chartLengthBuckets' => \esc_html__('Distance buckets', 'flyover-gpx'),
+					'weekdaySun' => \esc_html__('Sun', 'flyover-gpx'),
+					'weekdayMon' => \esc_html__('Mon', 'flyover-gpx'),
+					'weekdayTue' => \esc_html__('Tue', 'flyover-gpx'),
+					'weekdayWed' => \esc_html__('Wed', 'flyover-gpx'),
+					'weekdayThu' => \esc_html__('Thu', 'flyover-gpx'),
+					'weekdayFri' => \esc_html__('Fri', 'flyover-gpx'),
+					'weekdaySat' => \esc_html__('Sat', 'flyover-gpx'),
+					'chartTracks' => \esc_html__('Tracks', 'flyover-gpx'),
+					'heatmapTitle' => \esc_html__('All Tracks Heatmap', 'flyover-gpx'),
+					'noTracks' => \esc_html__('No published tracks yet.', 'flyover-gpx'),
+					'noTrendData' => \esc_html__('No trend data available yet.', 'flyover-gpx'),
+					'noHeatmapData' => \esc_html__('No track points available for heatmap yet.', 'flyover-gpx'),
+				],
+			]);
+		}
+
+		// Keep list-screen payload light: only MapLibre JS is needed for offscreen snapshot previews.
+		if ($screen->id === 'edit-fgpx_track') {
+			try {
+				$plugin = new Plugin();
+				$plugin->register_assets();
+			} catch (\Throwable $e) { /* no-op */
+			}
+			\wp_enqueue_script('maplibre-gl-js');
+		}
 	}
-	
-	// Keep list-screen payload light: only MapLibre JS is needed for offscreen snapshot previews.
-	if ($screen->id === 'edit-fgpx_track') {
-		try {
-			$plugin = new Plugin();
-			$plugin->register_assets();
-		} catch (\Throwable $e) { /* no-op */ }
-		\wp_enqueue_script('maplibre-gl-js');
-	}
-}
 
 	/**
 	 * Format seconds to HH:MM:SS.
@@ -3638,6 +3860,7 @@ final class Admin
 		$heartRates = [];
 		$cadences = [];
 		$temperatures = [];
+		$speeds = [];
 		$powers = [];
 		$pointsCount = 0;
 		$totalDistance = 0.0; // meters
@@ -3650,7 +3873,10 @@ final class Admin
 		$rawElevations = [];
 		$minActivityTimestamp = null; // Track earliest timestamp for activity date
 
-		$minLat = 90.0; $minLon = 180.0; $maxLat = -90.0; $maxLon = -180.0;
+		$minLat = 90.0;
+		$minLon = 180.0;
+		$maxLat = -90.0;
+		$maxLon = -180.0;
 
 		foreach ($file->tracks as $track) {
 			foreach ($track->segments as $segment) {
@@ -3659,30 +3885,62 @@ final class Admin
 					$lon = (float) $point->longitude;
 					$eleNullable = $point->elevation !== null ? (float) $point->elevation : null;
 					$time = $point->time ? (int) $point->time->getTimestamp() : null;
-					
+
 					// Extract heart rate, cadence, temperature, and power from extensions
 					$heartRate = null;
 					$cadence = null;
 					$temperature = null;
+					$speedKmh = null;
 					$power = null;
+					$pointVars = \is_object($point) ? \get_object_vars($point) : [];
+					if (\array_key_exists('speed', $pointVars) && \is_numeric($pointVars['speed'])) {
+						$pointSpeed = (float) $pointVars['speed'];
+						if ($pointSpeed >= 0.0) {
+							$speedKmh = $pointSpeed * 3.6;
+						}
+					}
 					if ($point->extensions && $point->extensions->trackPointExtension) {
 						$ext = $point->extensions->trackPointExtension;
 						$heartRate = $ext->hr ?? $ext->heartRate ?? null;
 						$cadence = $ext->cad ?? $ext->cadence ?? null;
 						$temperature = $ext->aTemp ?? $ext->avgTemperature ?? null;
+						if ($speedKmh === null) {
+							$extSpeed = $ext->speed ?? $ext->velocity ?? null;
+							if ($extSpeed !== null && \is_numeric($extSpeed)) {
+								$extSpeedMs = (float) $extSpeed;
+								if ($extSpeedMs >= 0.0) {
+									$speedKmh = $extSpeedMs * 3.6;
+								}
+							}
+						}
 						$power = $ext->power ?? $ext->watts ?? null;
+					}
+					if ($speedKmh !== null) {
+						$speedKmh = max(0.0, min(250.0, $speedKmh));
 					}
 
 					// Bounds
-					if ($lat < $minLat) { $minLat = $lat; }
-					if ($lat > $maxLat) { $maxLat = $lat; }
-					if ($lon < $minLon) { $minLon = $lon; }
-					if ($lon > $maxLon) { $maxLon = $lon; }
+					if ($lat < $minLat) {
+						$minLat = $lat;
+					}
+					if ($lat > $maxLat) {
+						$maxLat = $lat;
+					}
+					if ($lon < $minLon) {
+						$minLon = $lon;
+					}
+					if ($lon > $maxLon) {
+						$maxLon = $lon;
+					}
 
 					// Elevation stats
 					if ($eleNullable !== null) {
-						if ($minElev === null || $eleNullable < $minElev) { $minElev = $eleNullable; }
-						if ($maxElev === null || $eleNullable > $maxElev) { $maxElev = $eleNullable; }
+						if ($minElev === null || $eleNullable < $minElev) {
+							$minElev = $eleNullable;
+						}
+						if ($maxElev === null || $eleNullable > $maxElev) {
+							$maxElev = $eleNullable;
+						}
 					}
 
 					// Distance, moving time, elevation gain
@@ -3693,7 +3951,9 @@ final class Admin
 						$dt = ($time !== null && $prev['time'] !== null) ? max(0, $time - $prev['time']) : 0;
 						if ($dt > 0) {
 							$speed = $d / $dt; // m/s
-							if ($speed > $maxSpeedMs) { $maxSpeedMs = $speed; }
+							if ($speed > $maxSpeedMs) {
+								$maxSpeedMs = $speed;
+							}
 							if ($speed > 0.5) { // simple moving threshold
 								$movingTime += $dt;
 							}
@@ -3708,6 +3968,7 @@ final class Admin
 					$heartRates[] = $heartRate;
 					$cadences[] = $cadence;
 					$temperatures[] = $temperature;
+					$speeds[] = $speedKmh;
 					$powers[] = $power;
 					$pointsCount++;
 					$prev = ['lat' => $lat, 'lon' => $lon, 'ele' => $eleNullable, 'time' => $time];
@@ -3765,11 +4026,15 @@ final class Admin
 				if ($delta > 0) {
 					$segmentGain += $delta;
 				} else if ($delta < 0) {
-					if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
+					if ($segmentGain >= $climbThreshold) {
+						$totalElevationGain += $segmentGain;
+					}
 					$segmentGain = 0.0;
 				}
 			}
-			if ($segmentGain >= $climbThreshold) { $totalElevationGain += $segmentGain; }
+			if ($segmentGain >= $climbThreshold) {
+				$totalElevationGain += $segmentGain;
+			}
 		}
 
 		$geojson = [
@@ -3781,6 +4046,7 @@ final class Admin
 				'heartRates' => $heartRates,
 				'cadences' => $cadences,
 				'temperatures' => $temperatures,
+				'speeds' => $speeds,
 				'powers' => $powers,
 			],
 		];
@@ -3806,13 +4072,16 @@ final class Admin
 				$wpLon = (float) $wp->longitude;
 				// Validate waypoint is within track bounds (with 5km tolerance)
 				$tolerance = 0.05;
-				if ($wpLon < $minLon - $tolerance || $wpLon > $maxLon + $tolerance ||
-					$wpLat < $minLat - $tolerance || $wpLat > $maxLat + $tolerance) {
+				if (
+					$wpLon < $minLon - $tolerance || $wpLon > $maxLon + $tolerance ||
+					$wpLat < $minLat - $tolerance || $wpLat > $maxLat + $tolerance
+				) {
 					continue; // Skip waypoint far outside track
 				}
-				
+
 				$wpName = isset($wp->name) ? trim((string) $wp->name) : '';
-				if (empty($wpName)) $wpName = 'Waypoint';
+				if (empty($wpName))
+					$wpName = 'Waypoint';
 				$wpEle = $wp->elevation !== null ? (float) $wp->elevation : null;
 				$wpTime = $wp->time ? (int) $wp->time->getTimestamp() : null;
 
@@ -3843,7 +4112,8 @@ final class Admin
 					$wpTimeStr = gmdate('c', $wpTime);
 					// Find the closest track timestamp
 					foreach ($timestamps as $idx => $ts) {
-						if ($ts === null) continue;
+						if ($ts === null)
+							continue;
 						$trackTime = strtotime($ts);
 						if ($trackTime !== false && abs($trackTime - $wpTime) < abs(strtotime($waypointData['timeSeconds']) - $wpTime)) {
 							$waypointData['timeSeconds'] = $ts;
@@ -3974,7 +4244,7 @@ final class Admin
 		try {
 			$coordinates = $geojson['coordinates'] ?? [];
 			$timestamps = $geojson['properties']['timestamps'] ?? [];
-			
+
 			if (empty($coordinates) || empty($timestamps)) {
 				return true; // No data to process
 			}
@@ -4003,7 +4273,7 @@ final class Admin
 
 			// Get interpolation density setting
 			$density = (int) $options['fgpx_wind_interpolation_density'];
-			
+
 			$windSpeeds = [];
 			$windDirections = [];
 			$windImpacts = [];
@@ -4130,23 +4400,23 @@ final class Admin
 		// Calculate track bearing
 		$prevCoord = $coordinates[$index - 1];
 		$currCoord = $coordinates[$index];
-		
+
 		$trackBearing = self::calculateBearing($prevCoord[1], $prevCoord[0], $currCoord[1], $currCoord[0]);
-		
+
 		// Convert wind speed from km/h to m/s for calculations
 		$windSpeedMs = $windSpeed / 3.6;
-		
+
 		// Calculate relative wind angle
 		$relativeWindAngle = deg2rad($windDirection - $trackBearing);
-		
+
 		// Calculate wind component along track direction (positive = tailwind, negative = headwind)
 		$windComponent = $windSpeedMs * cos($relativeWindAngle);
-		
+
 		// Simple aerodynamic model: impact factor
 		// Assume base speed of 15 m/s (54 km/h) for cycling
 		$baseSpeed = 15.0;
 		$impactFactor = 1.0 + ($windComponent / $baseSpeed);
-		
+
 		return $impactFactor;
 	}
 
@@ -4322,7 +4592,7 @@ final class Admin
 			}
 			return;
 		}
-		
+
 		$msg = (string) $_GET['fgpx_msg'];
 		if ($msg === 'uploaded') {
 			echo '<div class="notice notice-success is-dismissible"><p>' . \esc_html__('GPX uploaded and parsed successfully.', 'flyover-gpx') . '</p></div>';
@@ -4372,7 +4642,9 @@ final class Admin
 	 */
 	public function invalidate_cache_on_save(int $postId, \WP_Post $post, bool $update): void
 	{
-		if ($post->post_type !== 'fgpx_track') { return; }
+		if ($post->post_type !== 'fgpx_track') {
+			return;
+		}
 		$modified = (string) \strtotime((string) $post->post_modified_gmt);
 		// Delete common v2 cache variants for this post
 		\delete_transient('fgpx_json_v2_' . (int) $postId . '_' . $modified . '_hp_0_simp_0');
@@ -4406,11 +4678,15 @@ final class Admin
 			'fgpx_preview_custom_attachment_id',
 			'fgpx_activity_date_unix', // Invalidate timeline cache on activity date changes
 		];
-		if ((int) $objectId <= 0 || !\in_array($metaKey, $trackedKeys, true)) { return; }
-		
+		if ((int) $objectId <= 0 || !\in_array($metaKey, $trackedKeys, true)) {
+			return;
+		}
+
 		$post = \get_post((int) $objectId);
-		if (!$post || $post->post_type !== 'fgpx_track') { return; }
-		
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			return;
+		}
+
 		// Invalidate timeline cache in addition to other track caches
 		\delete_transient('fgpx_timeline_tracks_v1');
 		self::clear_all_track_caches((int) $objectId);
@@ -4422,10 +4698,12 @@ final class Admin
 	public static function clear_all_track_caches(int $trackId): void
 	{
 		$post = \get_post($trackId);
-		if (!$post || $post->post_type !== 'fgpx_track') { return; }
-		
+		if (!$post || $post->post_type !== 'fgpx_track') {
+			return;
+		}
+
 		$modified = (string) \strtotime((string) $post->post_modified_gmt);
-		
+
 		// Clear all possible cache variants with all parameter combinations
 		$patterns = [
 			// Legacy format (backward compatibility)
@@ -4433,7 +4711,7 @@ final class Admin
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_1500',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500',
-			
+
 			// With weather status only (older format)
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1',
@@ -4443,7 +4721,7 @@ final class Admin
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_1',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_0',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1',
-			
+
 			// With weather + wind (current format)
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_0',
 			'fgpx_json_v2_' . $trackId . '_' . $modified . '_hp_0_simp_0_w_0_wind_1',
@@ -4482,7 +4760,7 @@ final class Admin
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_0_st_default',
 			'fgpx_json_v3_' . $trackId . '_' . $modified . '_hp_0_simp_1500_w_1_wind_1_st_default',
 		];
-		
+
 		foreach ($patterns as $pattern) {
 			\delete_transient($pattern);
 		}
@@ -4490,11 +4768,11 @@ final class Admin
 		// Clear dynamically generated variants (for example _rh_/_sm_ cache key segments).
 		self::delete_track_transients_by_prefix('fgpx_json_v2_' . $trackId . '_' . $modified . '_');
 		self::delete_track_transients_by_prefix('fgpx_json_v3_' . $trackId . '_' . $modified . '_');
-		
+
 		// Also clear any cached key stored in post meta
 		\delete_post_meta($trackId, 'fgpx_cached_key');
 		\update_post_meta($trackId, 'fgpx_photo_cache_version', (string) \time());
-		
+
 		// Clear old cache formats too
 		\delete_transient('fgpx_track_' . $trackId);
 		\delete_transient('fgpx_json_' . $trackId . '_' . $modified);
@@ -4631,7 +4909,7 @@ final class Admin
 		}
 
 		if ($doaction === 'fgpx_sync_gmedia_captions') {
-			$overwrite = !isset($_REQUEST['fgpx_sync_overwrite']) || (string) $_REQUEST['fgpx_sync_overwrite'] !== '0';
+			$overwrite = !isset($_POST['fgpx_sync_overwrite']) || (string) $_POST['fgpx_sync_overwrite'] !== '0';
 			try {
 				$sync = GMediaCaptionSync::syncCaptions($overwrite);
 			} catch (\Throwable $e) {
@@ -4839,7 +5117,7 @@ final class Admin
 			// Try to get detailed error from transient
 			$errorMsg = \get_transient('fgpx_weather_error_' . $post_id);
 			\delete_transient('fgpx_weather_error_' . $post_id);
-			
+
 			if ($errorMsg) {
 				\wp_send_json_error(['message' => 'Weather enrichment failed: ' . $errorMsg], 500);
 			} else {
@@ -5170,125 +5448,138 @@ final class Admin
 	private function render_playbacks_widget_async(string $chartKey, string $countLabel): void
 	{
 		$widgetId = 'fgpx-pw-' . \uniqid();
-		$restUrl  = \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate'));
-		$nonce    = \wp_create_nonce('wp_rest');
+		$restUrl = \esc_url_raw(\rest_url('fgpx/v1/stats/aggregate'));
+		$nonce = \wp_create_nonce('wp_rest');
 		?>
 		<div id="<?php echo \esc_attr($widgetId); ?>">
 			<div class="fgpx-pw-skeleton" aria-label="<?php \esc_attr_e('Loading…', 'flyover-gpx'); ?>" aria-busy="true">
-				<div style="position:relative;width:100%;height:220px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:4px;animation:fgpxSkeletonShimmer 1.4s infinite;"></div>
+				<div
+					style="position:relative;width:100%;height:220px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:4px;animation:fgpxSkeletonShimmer 1.4s infinite;">
+				</div>
 				<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:60%;animation:fgpxSkeletonShimmer 1.4s infinite;"></div>
-					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:80%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.1s;"></div>
-					<div style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:50%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.2s;"></div>
+					<div
+						style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:60%;animation:fgpxSkeletonShimmer 1.4s infinite;">
+					</div>
+					<div
+						style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:80%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.1s;">
+					</div>
+					<div
+						style="height:12px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;border-radius:3px;width:50%;animation:fgpxSkeletonShimmer 1.4s infinite;animation-delay:0.2s;">
+					</div>
 				</div>
 			</div>
 			<div class="fgpx-pw-content" style="display:none;"></div>
 		</div>
 		<style>
-		@keyframes fgpxSkeletonShimmer {
-			0%   { background-position: 200% 0; }
-			100% { background-position: -200% 0; }
-		}
+			@keyframes fgpxSkeletonShimmer {
+				0% {
+					background-position: 200% 0;
+				}
+
+				100% {
+					background-position: -200% 0;
+				}
+			}
 		</style>
 		<script>
-		(function() {
-			var widgetId  = <?php echo \wp_json_encode($widgetId); ?>;
-			var chartKey  = <?php echo \wp_json_encode($chartKey); ?>;
-			var countLabel = <?php echo \wp_json_encode($countLabel); ?>;
-			var restUrl   = <?php echo \wp_json_encode($restUrl); ?>;
-			var nonce     = <?php echo \wp_json_encode($nonce); ?>;
-			var statsUrl  = restUrl;
+							(function () 					{
+								var w		idgetId = <?php echo \wp_json_encode($widgetId); ?>;
+								var chartKey = <?php echo \wp_json_encode($chartKey); ?>;
+								var countLabel = <?php echo \wp_json_encode($countLabel); ?>;
+								var restUrl = <?php echo \wp_json_encode($restUrl); ?>;
+								var nonce = <?php echo \wp_json_encode($nonce); ?>;
+								var statsUrl = restUrl;
 
-			var root      = document.getElementById(widgetId);
-			var skeleton  = root.querySelector('.fgpx-pw-skeleton');
-			var content   = root.querySelector('.fgpx-pw-content');
+								var root = document.getElementById(widgetId);
+								var skeleton = root.querySelector('.fgpx-pw-skeleton');
+								var content = root.querySelector('.fgpx-pw-content');
 
-			function showError(msg) {
-				skeleton.style.display = 'none';
-				content.innerHTML = '<p style="color:#c00;">' + msg + '</p>';
-				content.style.display = '';
-			}
+								function showError(msg) {
+									skeleton.style.display = 'none';
+									content.innerHTML = '<p style="color:#c00;">' + msg + '</p>';
+									content.style.display = '';
+								}
 
-			function formatTable(rows, key) {
-				var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-				html += '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px 6px;">Period</th><th style="text-align:right;padding:4px 6px;">' + countLabel + '</th></tr>';
-				var reversed = rows.slice().reverse();
-				for (var i = 0; i < reversed.length; i++) {
-					html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">' + (reversed[i]['period'] || '') + '</td><td style="text-align:right;padding:4px 6px;">' + (parseInt(reversed[i][key], 10) || 0) + '</td></tr>';
-				}
-				html += '</table>';
-				return html;
-			}
+								function formatTable(rows, key) {
+									var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+									html += '<tr style="border-bottom:1px solid #ddd;"><th style="text-align:left;padding:4px 6px;">Period</th><th style="text-align:right;padding:4px 6px;">' + countLabel + '</th></tr>';
+									var reversed = rows.slice().reverse();
+									for (var i = 0; i < reversed.length; i++) {
+										html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">' + (reversed[i]['period'] || '') + '</td><td style="text-align:right;padding:4px 6px;">' + (parseInt(reversed[i][key], 10) || 0) + '</td></tr>';
+									}
+									html += '</table>';
+									return html;
+								}
 
-			function renderChart(canvasId, labels, data) {
-				function tryRender() {
-					var canvas = document.getElementById(canvasId);
-					if (!canvas || !window.Chart) { setTimeout(tryRender, 100); return; }
-					new window.Chart(canvas.getContext('2d'), {
-						type: 'line',
-						data: {
-							labels: labels,
-							datasets: [{
-								label: countLabel,
-								data: data,
-								borderColor: '#0f766e',
-								backgroundColor: 'rgba(15,118,110,0.15)',
-								fill: true,
-								tension: 0.25
-							}]
-						},
-						options: {
-							responsive: true,
-							maintainAspectRatio: false,
-							plugins: { legend: { display: true } }
-						}
-					});
-				}
-				tryRender();
-			}
+								function renderChart(canvasId, labels, data) {
+									function tryRender() {
+										var canvas = document.getElementById(canvasId);
+										if (!canvas || !window.Chart) { setTimeout(tryRender, 100); return; }
+										new window.Chart(canvas.getContext('2d'), {
+											type: 'line',
+											data: {
+												labels: labels,
+												datasets: [{
+													label: countLabel,
+													data: data,
+													borderColor: '#0f766e',
+													backgroundColor: 'rgba(15,118,110,0.15)',
+													fill: true,
+													tension: 0.25
+												}]
+											},
+											options: {
+												responsive: true,
+												maintainAspectRatio: false,
+												plugins: { legend: { display: true } }
+											}
+										});
+									}
+									tryRender();
+								}
 
-			function onDataLoaded(rows) {
-				var canvasId = widgetId + '-canvas';
-				var labels = rows.map(function(r) { return r['period'] || ''; });
-				var data   = rows.map(function(r) { return parseInt(r['playbackCount'] || r['trackCount'] || 0, 10); });
+								function onDataLoaded(rows) {
+									var canvasId = widgetId + '-canvas';
+									var labels = rows.map(function (r) { return r['period'] || ''; });
+									var data = rows.map(function (r) { return parseInt(r['playbackCount'] || r['trackCount'] || 0, 10); });
 
-				var tableHtml = formatTable(rows, 'playbackCount');
+									var tableHtml = formatTable(rows, 'playbackCount');
 
-				content.innerHTML =
-					'<div style="margin-bottom:15px;">'
-					+ '<div style="position:relative;width:100%;height:220px;">'
-					+ '<canvas id="' + canvasId + '" style="display:block;width:100%;height:100%;"></canvas>'
-					+ '</div>'
-					+ '</div>'
-					+ '<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:10px;">'
-					+ tableHtml
-					+ '</div>'
-					+ '<p style="margin:0;"><a href="<?php echo \esc_js(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')); ?>"><?php echo \esc_js(__('View Full Statistics →', 'flyover-gpx')); ?></a></p>';
+									content.innerHTML =
+										'<div style="margin-bottom:15px;">'
+										+ '<div style="position:relative;width:100%;height:220px;">'
+										+ '<canvas id="' + canvasId + '" style="display:block;width:100%;height:100%;"></canvas>'
+										+ '</div>'
+										+ '</div>'
+										+ '<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:10px;">'
+										+ tableHtml
+										+ '</div>'
+										+ '<p style="margin:0;"><a href="<?php echo \esc_js(\admin_url('edit.php?post_type=fgpx_track&page=fgpx-statistics')); ?>"><?php echo \esc_js(__('View Full Statistics →', 'flyover-gpx')); ?></a></p>';
 
-				skeleton.style.display = 'none';
-				content.style.display  = '';
-				renderChart(canvasId, labels, data);
-			}
+									skeleton.style.display = 'none';
+									content.style.display = '';
+									renderChart(canvasId, labels, data);
+								}
 
-			fetch(statsUrl, {
-				headers: {
-					'X-WP-Nonce': nonce,
-					'Accept': 'application/json'
-				}
-			})
-			.then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-			.then(function(payload) {
-				var charts = (payload && payload.charts) ? payload.charts : {};
-				var rows   = charts[chartKey] || [];
-				if (!rows.length) { showError('<?php echo \esc_js(__('No data available yet.', 'flyover-gpx')); ?>'); return; }
-				onDataLoaded(rows);
-			})
-			.catch(function() {
-				showError('<?php echo \esc_js(__('Could not load statistics.', 'flyover-gpx')); ?>');
-			});
-		})();
-		</script>
-		<?php
+								fetch(statsUrl, {
+									headers: {
+										'X-WP-Nonce': nonce,
+										'Accept': 'application/json'
+									}
+								})
+									.then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+									.then(function (payload) {
+										var charts = (payload && payload.charts) ? payload.charts : {};
+										var rows = charts[chartKey] || [];
+										if (!rows.length) { showError('<?php echo \esc_js(__('No data available yet.', 'flyover-gpx')); ?>'); return; }
+										onDataLoaded(rows);
+									})
+									.catch(function () {
+										showError('<?php echo \esc_js(__('Could not load statistics.', 'flyover-gpx')); ?>');
+									});
+							})();
+						</script>
+						<?php
 	}
 
 	/**

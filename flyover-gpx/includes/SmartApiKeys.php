@@ -52,6 +52,10 @@ final class SmartApiKeys
             if ($key === '') {
                 continue;
             }
+            // Reject suspiciously long keys (max 256 chars) to prevent abuse
+            if (\strlen($key) > 256) {
+                continue;
+            }
             if (isset($seen[$key])) {
                 continue;
             }

@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 
 // setup.js (configured in jest.config.js) defines IntersectionObserver globally.
-global.DBG = () => {}; // Debug logging stub
+var _noop = function () {};
+global.DBG = { isEnabled: function () { return false; }, log: _noop, warn: _noop, time: _noop, timeEnd: _noop };
 
 const TIMELINE_SRC = fs.readFileSync(
 	path.join(__dirname, '../../assets/js/timeline.js'),
